@@ -237,6 +237,12 @@ public final class Haplotype extends Allele {
     }
 
 
+    /**
+     * Returns part of the base's string.
+     * @param from 0-based index of the first base to include.
+     * @param to 0-based index of the first base not to include.
+     * @return never.
+     */
     public String getBaseString(final int from, final int to) {
         final byte[] bases = getBases();
         if (to < from) {
@@ -248,7 +254,7 @@ public final class Haplotype extends Allele {
         } else {
             final StringBuilder builder = new StringBuilder(to - from);
             for (int i = from; i < to; i++) {
-                builder.append(bases[i]);
+                builder.append((char) bases[i]);
             }
             return builder.toString();
         }
