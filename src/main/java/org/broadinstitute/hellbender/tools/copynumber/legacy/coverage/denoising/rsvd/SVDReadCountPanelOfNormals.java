@@ -1,16 +1,15 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
-import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.DenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.ReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
-import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.tools.exome.Target;
 
 import java.util.List;
 
 /**
- * Interface for the panel of normals for SVD-based coverage denoising.
+ * Interface for the panel of normals (PoN) for SVD-based coverage denoising.
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
@@ -21,48 +20,58 @@ public interface SVDReadCountPanelOfNormals extends ReadCountPanelOfNormals {
     double getVersion();
 
     /**
-     * Returns a modifiable copy of the list of intervals that were used to build this PoN
+     * Returns the number of eigensamples.
+     */
+    int getNumEigensamples();
+
+    /**
+     * Returns a modifiable copy of the list of the original intervals that were used to build this PoN
      * (no filtering will have been applied).
+     *
+     * TODO replace this with a list of SimpleIntervals.  See https://github.com/broadinstitute/gatk/issues/3246
      */
-    List<SimpleInterval> getAllIntervals();
+    List<Target> getOriginalIntervals();
 
     /**
-     * Returns a modifiable copy of the list of intervals contained in this PoN after all filtering has been applied.
+     * Returns a modifiable copy of the list of the intervals contained in this PoN after all filtering has been applied.
+     *
+     * TODO replace this with a list of SimpleIntervals.  See https://github.com/broadinstitute/gatk/issues/3246
      */
-    List<SimpleInterval> getPanelIntervals();
+    List<Target> getPanelIntervals();
 
     /**
-     * Returns a modifiable copy of an array containing the median (across all samples, before filtering)
-     * of the fractional coverage at each interval (in the same order as in {@link #getAllIntervals()}).
+     * Returns an array containing the median (across all samples, before filtering)
+     * of the fractional coverage at each panel interval (in the same order as in {@link #getPanelIntervals()}).
+     * This is used to standardize samples.
      */
-    double[] getAllIntervalFractionalMedians();
+    double[] getPanelIntervalFractionalMedians();
 
     /**
-     * Returns a matrix with dimensions {@code TxE}, where {@code T} is the number of panel targets (after filtering)
-     * and {@code E} is the number of eigensamples, to be used for denoising.
+     * Returns the singular values of the eigensamples in decreasing order.
      */
-    RealMatrix getRightSingularVectors();
+    double[] getSingularValues();
 
     /**
-     * Returns a pseudoinverse matrix with dimensions {@code ExT}, where {@code E} is the number of eigensamples
-     * and {@code T} is the number of panel targets (after filtering), to be used for denoising.
+     * Returns the matrix of right-singular vectors.
+     * This matrix has has dimensions {@code MxK},
+     * where {@code M} is the number of panel intervals (after filtering)
+     * and {@code K} is the number of eigensamples.
+     * Columns are sorted by singular value in decreasing order.
      */
-    RealMatrix getPanelPseudoinverse();
+    double[][] getRightSingular();
 
     /**
-     * Returns a modifiable copy of the list of read-count file names for samples that were used to build this PoN
-     * (no filtering will have been applied).
+     * Returns the pseudoinverse of the matrix of right-singular vectors returned by {@link #getRightSingular()}.
+     * This matrix has dimensions {@code KxM},
+     * where {@code K} is the number of eigensamples
+     * and {@code M} is the number of panel intervals (after filtering).
      */
-    List<String> getAllSampleFileNames();
-
-    /**
-     * Returns a modifiable copy of the list of read-count file names for samples contained in this PoN after
-     * all filtering has been applied.
-     */
-    List<String> getPanelSampleFileNames();
+    double[][] getRightSingularPseudoinverse();
 
     @Override
-    default DenoisedCopyRatioResult denoise(final ReadCountCollection readCounts, final JavaSparkContext ctx) {
-        return SVDDenoisingUtils.tangentNormalize(this, readCounts, ctx);
+    default DenoisedCopyRatioResult denoise(final ReadCountCollection readCounts,
+                                            final int numEigensamples,
+                                            final JavaSparkContext ctx) {
+        return SVDDenoisingUtils.denoise(this, readCounts, numEigensamples, ctx);
     }
 }

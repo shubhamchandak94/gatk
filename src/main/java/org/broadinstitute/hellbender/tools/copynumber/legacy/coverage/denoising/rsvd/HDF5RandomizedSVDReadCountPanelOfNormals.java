@@ -42,10 +42,10 @@ import java.util.stream.Collectors;
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
-public final class HDF5RandomizedSVDCoveragePoN implements SVDReadCountPanelOfNormals {
+public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCountPanelOfNormals {
     private final HDF5File file;
 
-    private static final Logger logger = LogManager.getLogger(HDF5RandomizedSVDCoveragePoN.class);
+    private static final Logger logger = LogManager.getLogger(HDF5RandomizedSVDReadCountPanelOfNormals.class);
 
     /**
      * The version number is a double where the integer part is the
@@ -103,7 +103,7 @@ public final class HDF5RandomizedSVDCoveragePoN implements SVDReadCountPanelOfNo
      * @param file the underlying HDF5 file.
      * @throws IllegalArgumentException if {@code file} is {@code null}.
      */
-    public HDF5RandomizedSVDCoveragePoN(final HDF5File file) {
+    public HDF5RandomizedSVDReadCountPanelOfNormals(final HDF5File file) {
         Utils.nonNull(file, "The input file cannot be null.");
         this.file = file;
         rawTargets  = new Lazy<>(() -> readTargets(file, RAW_TARGETS_PATH, RAW_TARGET_NAMES_PATH));
@@ -120,10 +120,10 @@ public final class HDF5RandomizedSVDCoveragePoN implements SVDReadCountPanelOfNo
      * @param logger    the logger to log the warning message with.
      * @throws IllegalArgumentException if {@code file} is {@code null}.
      */
-    public HDF5RandomizedSVDCoveragePoN(final HDF5File file, final Logger logger) {
+    public HDF5RandomizedSVDReadCountPanelOfNormals(final HDF5File file, final Logger logger) {
         this(file);
         if (getVersion() < CURRENT_PON_VERSION) {
-            logger.warn("The version of the specified PoN (" + getVersion() + ") is older than the latest version " +
+            logger.warn("The version of the specified panel of normals (" + getVersion() + ") is older than the latest version " +
                     "(" + CURRENT_PON_VERSION + ").");
         }
     }
@@ -221,7 +221,7 @@ public final class HDF5RandomizedSVDCoveragePoN implements SVDReadCountPanelOfNo
         Utils.nonNull(reduction);
         try (final HDF5File file = new HDF5File(outFile, openMode)) {
             logger.info("Creating " + outFile.getAbsolutePath() + "...");
-            final HDF5RandomizedSVDCoveragePoN pon = new HDF5RandomizedSVDCoveragePoN(file);
+            final HDF5RandomizedSVDReadCountPanelOfNormals pon = new HDF5RandomizedSVDReadCountPanelOfNormals(file);
 
             logger.info("Setting version number (" + CURRENT_PON_VERSION + ")...");
             pon.setVersion(CURRENT_PON_VERSION);
@@ -246,15 +246,15 @@ public final class HDF5RandomizedSVDCoveragePoN implements SVDReadCountPanelOfNo
             logger.info("Setting log-normalized counts (" + logNormalizedCounts.counts().getRowDimension() +
                     " x " + logNormalizedCounts.counts().getColumnDimension() + ") (T) ...");
             pon.setLogNormalizedCounts(logNormalizedCounts.counts());
-            logger.info("Setting log-normalized pseudoinverse (" + reduction.getPseudoInverse().getRowDimension() +
-                    " x " + reduction.getPseudoInverse().getColumnDimension() + ") ...");
-            pon.setLogNormalizedPInverseCounts(reduction.getPseudoInverse());
+            logger.info("Setting log-normalized pseudoinverse (" + reduction.getPseudoinverse().getRowDimension() +
+                    " x " + reduction.getPseudoinverse().getColumnDimension() + ") ...");
+            pon.setLogNormalizedPInverseCounts(reduction.getPseudoinverse());
             logger.info("Setting reduced panel counts (" + reduction.getReducedCounts().getRowDimension() +
                     " x " + reduction.getReducedCounts().getColumnDimension() + ") (T) ...");
             pon.setReducedPanelCounts(reduction.getReducedCounts());
-            logger.info("Setting reduced panel pseudoinverse (" + reduction.getReducedPseudoInverse().getRowDimension() +
-                    " x " + reduction.getReducedPseudoInverse().getColumnDimension() + ") ...");
-            pon.setReducedPanelPInverseCounts(reduction.getReducedPseudoInverse());
+            logger.info("Setting reduced panel pseudoinverse (" + reduction.getReducedPseudoinverse().getRowDimension() +
+                    " x " + reduction.getReducedPseudoinverse().getColumnDimension() + ") ...");
+            pon.setReducedPanelPInverseCounts(reduction.getReducedPseudoinverse());
 
             final List<String> targetNames = normalizedCounts.targets().stream().map(Target::getName).collect(Collectors.toList());
             final List<String> rawTargetNames = rawTargets.stream().map(Target::getName).collect(Collectors.toList());

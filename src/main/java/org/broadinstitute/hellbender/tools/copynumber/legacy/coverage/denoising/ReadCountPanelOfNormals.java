@@ -9,5 +9,7 @@ import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public interface ReadCountPanelOfNormals {
-    DenoisedCopyRatioResult denoise(final ReadCountCollection readCounts, final JavaSparkContext ctx);
+    int getNumEigensamples();
+
+    DenoisedCopyRatioResult denoise(ReadCountCollection readCounts, int numberOfEigensamples, JavaSparkContext ctx);
 }

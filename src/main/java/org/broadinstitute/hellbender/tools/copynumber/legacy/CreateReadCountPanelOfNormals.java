@@ -11,7 +11,6 @@ import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGrou
 import org.broadinstitute.hellbender.engine.spark.SparkCommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.pon.coverage.pca.HDF5PCACoveragePoN;
-import org.broadinstitute.hellbender.tools.pon.coverage.pca.HDF5PCACoveragePoNCreationUtils;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
@@ -19,7 +18,6 @@ import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.OptionalInt;
 import java.util.stream.DoubleStream;
 
 /**
@@ -78,7 +76,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private static final double DEFAULT_MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE = 5.0;
     private static final double DEFAULT_EXTREME_SAMPLE_MEDIAN_PERCENTILE = 2.5;
     private static final double DEFAULT_EXTREME_OUTLIER_TRUNCATION_PERCENTILE = 0.1;
-    private static final int DEFAULT_NUMBER_OF_EIGENSAMPLES = 20;
+    private static final int DEFAULT_NUMBER_OF_EIGENSAMPLES = 10;
 
     private static final String INTERVAL_WEIGHTS_FILE_SUFFIX = ".interval_weights.txt";
 
@@ -87,7 +85,8 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
                     "Intervals must be identical and in the same order for all samples.  " +
                     "Duplicate samples are not removed.",
             fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
-            shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME
+            shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME,
+            minElements = 1
     )
     private List<File> inputReadCountFiles = new ArrayList<>();
 
@@ -152,7 +151,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private double extremeOutlierTruncationPercentile = DEFAULT_EXTREME_OUTLIER_TRUNCATION_PERCENTILE;
 
     @Argument(
-            doc = "Number of eigensamples to use for SVD and to store in the panel of normals.  " +
+            doc = "Number of eigensamples to use for randomized SVD and to store in the panel of normals.  " +
                     "The number of samples retained after filtering will be used instead if it is smaller than this.",
             fullName = NUMBER_OF_EIGENSAMPLES_LONG_NAME,
             shortName = NUMBER_OF_EIGENSAMPLES_SHORT_NAME,
@@ -199,7 +198,6 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     }
 
     private void validateArguments() {
-        Utils.validate(!inputReadCountFiles.isEmpty(), "Must provide at least one read-count file as input.");
         Utils.validate(numberOfEigensamples <= inputReadCountFiles.size(),
                 String.format("Number of eigensamples cannot be greater than the number of input samples (%d).", inputReadCountFiles.size()));
     }

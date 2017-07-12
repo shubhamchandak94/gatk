@@ -1,6 +1,7 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
 import com.google.common.primitives.Doubles;
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.DefaultRealMatrixChangingVisitor;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.stat.descriptive.rank.Median;
@@ -10,186 +11,247 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.mllib.linalg.DenseMatrix;
 import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.mllib.linalg.distributed.RowMatrix;
+import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.DenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.spark.SparkConverter;
 
-import java.util.List;
+import java.util.HashSet;
 import java.util.stream.IntStream;
 
 /**
- * Utility class for package-private methods for performing tangent normalization (and related operations).
+ * Utility class for package-private methods for performing SVD-based denoising and related operations.
  *
- * Currently, only supports tangent normalization in the reduced hyperplane, not the logNormal hyperplane
+ * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class SVDDenoisingUtils {
     private static final Logger logger = LogManager.getLogger(SVDDenoisingUtils.class);
 
-    /**
-     * Minimum target normalized and column centered count possible.
-     *
-     * <p>
-     *     It must be small yet greater than 0 to avoid -Inf problems in the calculations.
-     * </p>
-     */
-    public static final double EPSILON = 1E-9;
+    public static final double EPSILON = 1E-30;
     private static final double INV_LN2 = GATKProtectedMathUtils.INV_LOG_2;
-    private static final double LOG_2_EPSILON = Math.log(EPSILON) * INV_LN2;
+    private static final double LN2_EPSILON = Math.log(EPSILON) * INV_LN2;
 
-    private static final int TN_NUM_SLICES_SPARK = 50;
+    private static final int NUM_SLICES_SPARK = 50;
 
     private SVDDenoisingUtils() {}
 
+    //TODO remove this method once ReadCountCollection is refactored to only store single sample, non-negative integer counts
+    public static void validateReadCounts(final ReadCountCollection readCountCollection) {
+        Utils.nonNull(readCountCollection);
+        if (readCountCollection.columnNames().size() != 1) {
+            throw new UserException.BadInput("Read-count file must contain counts for only a single sample.");
+        }
+        if (readCountCollection.targets().isEmpty()) {
+            throw new UserException.BadInput("Read-count file must contain counts for at least one genomic interval.");
+        }
+        final double[] readCounts = readCountCollection.counts().getColumn(0);
+        if (!IntStream.range(0, readCounts.length).allMatch(i -> (readCounts[i] >= 0) &&((int) readCounts[i] == readCounts[i]))) {
+            throw new UserException.BadInput("Read-count file must contain non-negative integer counts.");
+        }
+    }
+
     /**
-     * Target-factor normalizes a {@link RealMatrix} in-place given target factors..
+     * Perform SVD-based denoising of integer read counts for a single sample using a panel of normals.
+     * Only the eigensamples (which are sorted by singular value in decreasing order) specified by
+     * {@code numEigensamples} are used to denoise.
      */
-    static void factorNormalize(final RealMatrix input, final double[] targetFactors) {
-        Utils.nonNull(input, "Input matrix cannot be null.");
-        Utils.nonNull(targetFactors, "Target factors cannot be null.");
-        Utils.validateArg(targetFactors.length == input.getRowDimension(),
-                "Number of target factors does not correspond to the number of rows.");
-        // Divide all counts by the target factor for the row.
-        input.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+    static DenoisedCopyRatioResult denoise(final SVDReadCountPanelOfNormals panelOfNormals,
+                                           final ReadCountCollection readCounts,
+                                           final int numEigensamples,
+                                           final JavaSparkContext ctx) {
+        Utils.nonNull(panelOfNormals);
+        validateReadCounts(readCounts);
+        Utils.nonNull(ctx);
+        ParamUtils.isPositive(numEigensamples, "Number of eigensamples to use for denoising must be positive.");
+        Utils.validateArg(numEigensamples <= panelOfNormals.getNumEigensamples(),
+                "Number of eigensamples to use for denoising is greater than the number available in the panel of normals.");
+
+        logger.info("Validating sample intervals against original intervals used to build panel of normals...");
+        Utils.validateArg(panelOfNormals.getOriginalIntervals().equals(readCounts.targets()),
+                "Sample intervals must be identical to the original intervals used to build the panel of normals.");
+
+        logger.info("Subsetting sample intervals to post-filter panel intervals...");
+        final RealMatrix subsetReadCounts = readCounts.subsetTargets(new HashSet<>(panelOfNormals.getPanelIntervals())).counts();
+
+        logger.info("Standardizing sample read counts...");
+        final RealMatrix standardizedCounts = standardizeSample(subsetReadCounts, panelOfNormals.getPanelIntervalFractionalMedians());
+
+        final double fractionOfVariance = calculateFractionOfVariance(numEigensamples, panelOfNormals.getSingularValues());
+        logger.info(String.format("Using %d out of %d eigensamples (fraction of the total variance accounted for in the panel of normals = %.3f) to denoise...",
+                numEigensamples, panelOfNormals.getNumEigensamples(), fractionOfVariance));
+        logger.info("Subtracting projection onto space spanned by eigensamples...");
+        final RealMatrix denoisedCounts = subtractProjection(standardizedCounts,
+                panelOfNormals.getRightSingular(), panelOfNormals.getRightSingularPseudoinverse(), numEigensamples, ctx);
+
+        logger.info("Sample denoised.");
+
+        //construct the result
+        final ReadCountCollection standardizedProfile = new ReadCountCollection(readCounts.targets(), readCounts.columnNames(), standardizedCounts);
+        final ReadCountCollection denoisedProfile = new ReadCountCollection(readCounts.targets(), readCounts.columnNames(), denoisedCounts);
+
+        return new DenoisedCopyRatioResult(standardizedProfile, denoisedProfile);
+    }
+
+    /**
+     * Standardize read counts from a panel of normals.  This is performed in place to minimize memory footprint.
+     */
+    static void standardizePanel(final RealMatrix readCounts) {
+        //TODO add filtering, etc. and extract
+
+        logger.info("Transforming read counts to fractional coverage...");
+        final double[] sampleSums = GATKProtectedMathUtils.columnSums(readCounts);
+        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
-            public double visit(final int row, final int column, final double value) {
-                return value / targetFactors[row];
-            }
-        });
-    }
-
-    /**
-     *  Do the full tangent normalization process given a {@link SVDReadCountPanelOfNormals} and a proportional-coverage profile.
-     *
-     *  This includes:
-     *   <ul><li>normalization by target factors (optional)</li>
-     *   <li>projection of the normalized coverage profile into the hyperplane from the PoN</li>
-     *   </ul>
-     *
-     * @param pon -- never {@code null}
-     * @param profile -- never {@code null}.  Must contain data for at least one sample.
-     * @param ctx spark context.  Use {@code null} if no context is available
-     * @return never {@code null}
-     */
-    static SVDDenoisedCopyRatioProfile tangentNormalize(final SVDReadCountPanelOfNormals pon,
-                                                        final ReadCountCollection profile,
-                                                        final JavaSparkContext ctx) {
-        Utils.nonNull(pon, "PoN cannot be null.");
-        Utils.nonNull(profile, "Proportional coverages cannot be null.");
-        ParamUtils.isPositive(profile.columnNames().size(), "Column names cannot be an empty list.");
-
-        final ReadCountCollection factorNormalizedCoverage = mapTargetsToPoNAndFactorNormalize(profile, pon);
-
-        return tangentNormalize(factorNormalizedCoverage, pon.getPanelTargetNames(), pon.getReducedPanelCounts(), pon.getReducedPanelPInverseCounts(), ctx);
-    }
-
-    /**
-     * Returns a target-factor-normalized {@link ReadCountCollection} given a {@link SVDReadCountPanelOfNormals}..
-     */
-    private static ReadCountCollection mapTargetsToPoNAndFactorNormalize(final ReadCountCollection input, final SVDReadCountPanelOfNormals pon) {
-        final CaseToPoNTargetMapper targetMapper = new CaseToPoNTargetMapper(input.targets(), pon.getTargetNames());
-        final RealMatrix inputCounts = targetMapper.fromCaseToPoNCounts(input.counts());
-        factorNormalize(inputCounts, pon.getAllIntervalFractionalMedians());   //factor normalize in-place
-        return targetMapper.fromPoNtoCaseCountCollection(inputCounts, input.columnNames());
-    }
-
-    /**
-     * Tangent normalize given the raw PoN data.
-     *
-     *  Ahat^T = (C^T P^T) A^T
-     *  Therefore, C^T is the RowMatrix
-     *
-     *  pinv: P
-     *  panel: A
-     *  projection: Ahat
-     *  cases: C
-     *  betahat: C^T P^T
-     *  tangentNormalizedCounts: C - Ahat
-     */
-    private static SVDDenoisedCopyRatioProfile tangentNormalize(final ReadCountCollection targetFactorNormalizedCounts,
-                                                                final List<String> panelTargetNames,
-                                                                final RealMatrix reducedPanelCounts,
-                                                                final RealMatrix reducedPanelPInvCounts,
-                                                                final JavaSparkContext ctx) {
-        final CaseToPoNTargetMapper targetMapper = new CaseToPoNTargetMapper(targetFactorNormalizedCounts.targets(), panelTargetNames);
-
-        // The input counts with rows (targets) sorted so that they match the PoN's order.
-        final RealMatrix tangentNormalizationRawInputCounts = targetMapper.fromCaseToPoNCounts(targetFactorNormalizedCounts.counts());
-
-        // We prepare the counts for tangent normalization.
-        final RealMatrix tangentNormalizationInputCounts = composeTangentNormalizationInputMatrix(tangentNormalizationRawInputCounts);
-
-        // Make the C^T a distributed matrix (RowMatrix)
-        final RowMatrix caseTDistMat = SparkConverter.convertRealMatrixToSparkRowMatrix(
-                ctx, tangentNormalizationInputCounts.transpose(), TN_NUM_SLICES_SPARK);
-
-        // Spark local matrices (transposed)
-        final Matrix pinvTLocalMat = new DenseMatrix(
-                reducedPanelPInvCounts.getRowDimension(), reducedPanelPInvCounts.getColumnDimension(),
-                Doubles.concat(reducedPanelPInvCounts.getData()), true).transpose();
-        final Matrix panelTLocalMat = new DenseMatrix(
-                reducedPanelCounts.getRowDimension(), reducedPanelCounts.getColumnDimension(),
-                Doubles.concat(reducedPanelCounts.getData()), true).transpose();
-
-        // Calculate the projection transpose in a distributed matrix, then convert to Apache Commons matrix (not transposed)
-        final RowMatrix betahatDistMat = caseTDistMat.multiply(pinvTLocalMat);
-        final RowMatrix projectionTDistMat = betahatDistMat.multiply(panelTLocalMat);
-        final RealMatrix projection = SparkConverter.convertSparkRowMatrixToRealMatrix(
-                projectionTDistMat, tangentNormalizationInputCounts.transpose().getRowDimension()).transpose();
-
-        // Subtract the projection from the cases
-        final RealMatrix tangentNormalizedCounts = tangentNormalizationInputCounts.subtract(projection);
-
-        // Construct the result object and return it with the correct targets.
-        final ReadCountCollection tangentNormalized = targetMapper.fromPoNtoCaseCountCollection(
-                tangentNormalizedCounts, targetFactorNormalizedCounts.columnNames());
-        final ReadCountCollection preTangentNormalized = targetMapper.fromPoNtoCaseCountCollection(
-                tangentNormalizationInputCounts, targetFactorNormalizedCounts.columnNames());
-
-        return new SVDDenoisedCopyRatioProfile(tangentNormalized, preTangentNormalized);
-    }
-
-    /**
-     * Prepares the data to perform tangent normalization.
-     * <p>
-     * This is done by count group or column:
-     *   <ol>
-     *     </li>we divide counts by the column mean,</li>
-     *     </li>then we transform value to their log_2,</li>
-     *     </li>and finally we center them around the median.</li>
-     *   </ol>
-     * </p>
-     *
-     * @param matrix input matrix.
-     * @return never {@code null}.
-     */
-    private static RealMatrix composeTangentNormalizationInputMatrix(final RealMatrix matrix) {
-        final RealMatrix result = matrix.copy();
-
-        // step 1: divide by column means and log_2 transform
-        final double[] columnMeans = GATKProtectedMathUtils.columnMeans(matrix);
-        result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(final int row, final int column, final double value) {
-                return truncatedLog2(value / columnMeans[column]);
+            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+                return value / sampleSums[sampleIndex];
             }
         });
 
-        // step 2: subtract column medians
-        final double[] columnMedians = IntStream.range(0, matrix.getColumnDimension())
-                .mapToDouble(c -> new Median().evaluate(result.getColumn(c))).toArray();
-        result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+        //use interval fractional medians from panel of normals if provided, else calculate from provided read counts
+        logger.info("Dividing by interval medians...");
+        final double[] intervalMedians = IntStream.range(0, readCounts.getColumnDimension())
+                        .mapToDouble(intervalIndex -> new Median().evaluate(readCounts.getColumn(intervalIndex))).toArray();
+        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
-            public double visit(final int row, final int column, final double value) {
-                return value - columnMedians[column];
+            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+                return value / intervalMedians[intervalIndex];
             }
         });
+
+        logger.info("Dividing by sample means and transforming to log2 space...");
+        final double[] sampleMeans = GATKProtectedMathUtils.columnMeans(readCounts);
+        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+                return safeLog2(value / sampleMeans[sampleIndex]);
+            }
+        });
+
+        logger.info("Subtracting sample medians...");
+        final double[] sampleMedians = IntStream.range(0, readCounts.getRowDimension())
+                .mapToDouble(sampleIndex -> new Median().evaluate(readCounts.getColumn(sampleIndex))).toArray();
+        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+                return value - sampleMedians[sampleIndex];
+            }
+        });
+
+        logger.info("Panel read counts standardized.");
+    }
+
+    /**
+     * Standardize read counts for a single sample, using interval fractional medians from a panel of normals.
+     */
+    private static RealMatrix standardizeSample(final RealMatrix readCounts, final double[] intervalFractionalMedians) {
+        final RealMatrix result = readCounts.copy();
+
+        logger.info("Transforming read counts to fractional coverage...");
+        final double[] sampleSums = GATKProtectedMathUtils.columnSums(readCounts);
+        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+                return value / sampleSums[sampleIndex];
+            }
+        });
+
+        //use interval fractional medians from panel of normals if provided, else calculate from provided read counts
+        logger.info("Dividing by interval medians from the panel of normals...");
+        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+                return value / intervalFractionalMedians[intervalIndex];
+            }
+        });
+
+        logger.info("Dividing by sample mean and transforming to log2 space...");
+        final double[] sampleMeans = GATKProtectedMathUtils.columnMeans(readCounts);
+        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+                return safeLog2(value / sampleMeans[sampleIndex]);
+            }
+        });
+
+        logger.info("Subtracting sample median...");
+        final double[] sampleMedians = IntStream.range(0, readCounts.getRowDimension())
+                .mapToDouble(sampleIndex -> new Median().evaluate(readCounts.getColumn(sampleIndex))).toArray();
+        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+                return value - sampleMedians[sampleIndex];
+            }
+        });
+
+        logger.info("Sample read counts standardized.");
 
         return result;
     }
 
-    private static double truncatedLog2(final double x) {
-        return x < EPSILON ? LOG_2_EPSILON : Math.log(x) * INV_LN2;
+    private static double calculateFractionOfVariance(final double numEigensamples,
+                                                      final double[] singularValues) {
+        if (numEigensamples == singularValues.length) {
+            return 1.;
+        }
+        double varianceEigensamples = 0.;
+        double varianceNoise = 0.;
+        for (int i = 0; i < singularValues.length; i++) {
+            final double eigenvalue = singularValues[i] * singularValues[i];
+            if (i < numEigensamples) {
+                varianceEigensamples += eigenvalue;
+            } else {
+                varianceNoise += eigenvalue;
+            }
+        }
+        return varianceEigensamples / (varianceEigensamples + varianceNoise);
+    }
+
+    /**
+     * Given standardized read counts specified by a column vector S (dimensions {@code Mx1}),
+     * right-singular vectors V (dimensions {@code MxK}), and the pseudoinverse V<sup>+</sup> (dimensions {@code KxM}),
+     * returns s - V V<sup>+</sup> s.
+     */
+    private static RealMatrix subtractProjection(final RealMatrix standardizedProfile,
+                                                 final double[][] rightSingular,
+                                                 final double[][] rightSingularPseudoinverse,
+                                                 final int numEigensamples,
+                                                 final JavaSparkContext ctx) {
+        final int numIntervals = rightSingular.length;
+
+        logger.info("Distributing the standardized read counts...");
+        final RowMatrix standardizedProfileDistributedMatrix = SparkConverter.convertRealMatrixToSparkRowMatrix(
+                ctx, standardizedProfile.transpose(), NUM_SLICES_SPARK);
+
+        logger.info("Composing right-singular matrix and pseudoinverse for the requested number of eigensamples and transposing them...");
+        final RealMatrix rightSingularTruncatedMatrix = new Array2DRowRealMatrix(rightSingular)
+                .getSubMatrix(0, numIntervals, 0, numEigensamples);
+        final Matrix rightSingularTruncatedTransposedLocalMatrix = new DenseMatrix(numIntervals, numEigensamples,
+                Doubles.concat(rightSingularTruncatedMatrix.getData()))
+                .transpose();
+        final RealMatrix rightSingularPseudoinverseTruncatedMatrix = new Array2DRowRealMatrix(rightSingularPseudoinverse)
+                .getSubMatrix(0, numEigensamples, 0, numIntervals);
+        final Matrix rightSingularPseudoinverseTransposeLocalMatrix = new DenseMatrix(numEigensamples, numIntervals
+                Doubles.concat(rightSingularPseudoinverseTruncatedMatrix.getData()), true)
+                .transpose();
+
+        logger.info("Computing projection of transpose...");
+        final RowMatrix projectionTransposeDistributedMatrix = standardizedProfileDistributedMatrix
+                .multiply(rightSingularPseudoinverseTransposeLocalMatrix)
+                .multiply(rightSingularTruncatedTransposedLocalMatrix);
+
+        logger.info("Converting and transposing result...");
+        final int numRows = standardizedProfile.getRowDimension();
+        final RealMatrix projection = SparkConverter.convertSparkRowMatrixToRealMatrix(projectionTransposeDistributedMatrix, numRows)
+                .transpose();
+
+        logger.info("Subtracting projection...");
+        return standardizedProfile.subtract(projection);
+    }
+
+    private static double safeLog2(final double x) {
+        return x < EPSILON ? LN2_EPSILON : Math.log(x) * INV_LN2;
     }
 }

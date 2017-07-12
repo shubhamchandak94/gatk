@@ -13,14 +13,14 @@ import org.broadinstitute.hellbender.engine.spark.SparkCommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.DenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.ReadCountPanelOfNormals;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.HDF5RandomizedSVDCoveragePoN;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.HDF5RandomizedSVDReadCountPanelOfNormals;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDDenoisingUtils;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollectionUtils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.stream.IntStream;
 
 /**
  * Denoises read counts given the panel of normals (PoN) created by {@link CreateReadCountPanelOfNormals} to produce
@@ -50,6 +50,9 @@ import java.util.stream.IntStream;
 )
 @DocumentedFeature
 public final class DenoiseReadCounts extends SparkCommandLineProgram {
+    private static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
+    private static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
+
     @Argument(
             doc = "Input read-count file containing integer read counts in genomic intervals for a single case sample.",
             fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
@@ -62,7 +65,7 @@ public final class DenoiseReadCounts extends SparkCommandLineProgram {
             fullName = ExomeStandardArgumentDefinitions.PON_FILE_LONG_NAME,
             shortName = ExomeStandardArgumentDefinitions.PON_FILE_SHORT_NAME
     )
-    protected File inputPoNFile;
+    protected File inputPanelOfNormalsFile;
 
     @Argument(
             doc = "Output file for standardized (pre-tangent-normalized) copy-ratio profile.",
@@ -72,31 +75,46 @@ public final class DenoiseReadCounts extends SparkCommandLineProgram {
     protected File standardizedProfileFile;
 
     @Argument(
-            doc = "Output file for fully denoised (tangent-normalized) copy-ratio profile.",
+            doc = "Output file for denoised (tangent-normalized) copy-ratio profile.",
             fullName = ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_LONG_NAME,
             shortName = ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME
     )
     protected File denoisedProfileFile;
 
+    @Argument(
+            doc = "Number of eigensamples to use for denoising.  " +
+                    "If not specified or if the number of eigensamples available in the panel of normals " +
+                    "is smaller than this, all eigensamples will be used.",
+            fullName = NUMBER_OF_EIGENSAMPLES_LONG_NAME,
+            shortName = NUMBER_OF_EIGENSAMPLES_SHORT_NAME,
+            minValue = 1,
+            optional = true
+    )
+    protected Integer numEigensamples = null;
+
     @Override
     protected void runPipeline(final JavaSparkContext ctx) {
-        if (! new HDF5Library().load(null)){ //Note: passing null means using the default temp dir.
+        if (!new HDF5Library().load(null)) { //Note: passing null means using the default temp dir.
             throw new UserException.HardwareFeatureException("Cannot load the required HDF5 library. " +
                     "HDF5 is currently supported on x86-64 architecture and Linux or OSX systems.");
         }
 
         validateInputFiles();
 
-        try (final HDF5File hdf5PoNFile = new HDF5File(inputPoNFile)) {  //HDF5File implements AutoCloseable
+        try (final HDF5File hdf5PanelOfNormalsFile = new HDF5File(inputPanelOfNormalsFile)) {  //HDF5File implements AutoCloseable
             //load input files
-            final ReadCountCollection rcc = ReadCountCollectionUtils.parse(inputReadCountsFile);
-            final ReadCountPanelOfNormals pon = new HDF5RandomizedSVDCoveragePoN(hdf5PoNFile, logger);
+            final ReadCountCollection readCounts = ReadCountCollectionUtils.parse(inputReadCountsFile);
+            final ReadCountPanelOfNormals panelOfNormals = new HDF5RandomizedSVDReadCountPanelOfNormals(hdf5PanelOfNormalsFile, logger);
 
             //check that read-count collection contains single sample and integer counts
-            validateReadCounts(rcc);
+            SVDDenoisingUtils.validateReadCounts(readCounts);
 
             //perform denoising and write result
-            final DenoisedCopyRatioResult denoisedCopyRatioResult = pon.denoise(rcc, ctx);
+            final int numEigensamples =
+                    this.numEigensamples == null ?
+                            panelOfNormals.getNumEigensamples() :
+                            Math.min(panelOfNormals.getNumEigensamples(), this.numEigensamples);
+            final DenoisedCopyRatioResult denoisedCopyRatioResult = panelOfNormals.denoise(readCounts, numEigensamples, ctx);
             denoisedCopyRatioResult.write(standardizedProfileFile, denoisedProfileFile);
 
             logger.info("Read counts successfully denoised.");
@@ -106,21 +124,7 @@ public final class DenoiseReadCounts extends SparkCommandLineProgram {
     }
 
     private void validateInputFiles() {
-        IOUtils.canReadFile(inputPoNFile);
+        IOUtils.canReadFile(inputPanelOfNormalsFile);
         IOUtils.canReadFile(inputReadCountsFile);
-    }
-
-    //TODO remove these checks once ReadCountCollection is refactored to only store single sample, non-negative integer counts
-    private void validateReadCounts(final ReadCountCollection readCountCollection) {
-        if (readCountCollection.columnNames().size() != 1) {
-            throw new UserException.BadInput("Read-count file must contain counts for only a single sample.");
-        }
-        if (readCountCollection.targets().isEmpty()) {
-            throw new UserException.BadInput("Read-count file must contain counts for at least one genomic interval.");
-        }
-        final double[] readCounts = readCountCollection.counts().getColumn(0);
-        if (!IntStream.range(0, readCounts.length).allMatch(i -> (readCounts[i] >= 0) &&((int) readCounts[i] == readCounts[i]))) {
-            throw new UserException.BadInput("Read-count file must contain non-negative integer counts.");
-        }
     }
 }

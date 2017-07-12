@@ -30,10 +30,9 @@ import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 
 /**
- * This class contains utility methods for creating and writing the PCA coverage panel of normals to an {@link HDF5RandomizedSVDCoveragePoN}.
+ * This class contains utility methods for creating and writing the PCA coverage panel of normals to an {@link HDF5RandomizedSVDReadCountPanelOfNormals}.
  */
 public final class HDF5PCACoveragePoNCreationUtils {
-    public static final double JOLLIFES_RULE_MEAN_FACTOR = 0.7;
     public static final double EPSILON = 1E-9;
     private static final double INV_LN_2 = 1.0 / Math.log(2);
 
@@ -111,7 +110,7 @@ public final class HDF5PCACoveragePoNCreationUtils {
 
         // Write the PoN to HDF5 file
         if (!isDryRun) {
-            HDF5RandomizedSVDCoveragePoN.write(outputHDF5Filename, openMode, initialTargets.targets(), normalizedCounts, logNormalizedCounts, targetFactors, targetVariances, reduction);
+            HDF5RandomizedSVDReadCountPanelOfNormals.write(outputHDF5Filename, openMode, initialTargets.targets(), normalizedCounts, logNormalizedCounts, targetFactors, targetVariances, reduction);
         }
     }
 
@@ -284,14 +283,14 @@ public final class HDF5PCACoveragePoNCreationUtils {
         });
 
         // The Pseudo inverse comes nearly for free from having run the SVD decomposition.
-        final RealMatrix logNormalizedPseudoInverse = logNormalizedSVD.getPinv();
+        final RealMatrix logNormalizedPseudoinverse = logNormalizedSVD.getPinv();
 
         logger.info("Calculating the reduced PoN inverse matrix...");
         final long riStartTime = System.currentTimeMillis();
-        final RealMatrix reducedCountsPseudoInverse = SVDFactory.createSVD(reducedCounts, ctx).getPinv();
+        final RealMatrix reducedCountsPseudoinverse = SVDFactory.createSVD(reducedCounts, ctx).getPinv();
         final long riEndTime = System.currentTimeMillis();
         logger.info(String.format("Finished calculating the reduced PoN inverse matrix. Elapse of %d seconds", (riEndTime - riStartTime) / 1000));
-        return new ReductionResult(logNormalizedPseudoInverse, reducedCounts, reducedCountsPseudoInverse);
+        return new ReductionResult(logNormalizedPseudoinverse, reducedCounts, reducedCountsPseudoinverse);
     }
 
     /**
@@ -307,7 +306,7 @@ public final class HDF5PCACoveragePoNCreationUtils {
         Utils.nonNull(normalizedCounts);
         Utils.nonNull(reduction);
         final SVDDenoisedCopyRatioProfile allNormals =
-                SVDDenoisingUtils.tangentNormalizeNormalsInPoN(normalizedCounts, panelTargetNames, reduction.getReducedCounts(), reduction.getReducedPseudoInverse(), ctx);
+                SVDDenoisingUtils.tangentNormalizeNormalsInPoN(normalizedCounts, panelTargetNames, reduction.getReducedCounts(), reduction.getReducedPseudoinverse(), ctx);
         final RealMatrix allSampleProjectedTargets = allNormals.getTangentNormalized().counts();
 
         return MatrixSummaryUtils.getRowVariances(allSampleProjectedTargets);

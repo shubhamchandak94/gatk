@@ -18,7 +18,7 @@ public final class DenoisedCopyRatioResult {
     private final ReadCountCollection denoisedProfile;
 
     public DenoisedCopyRatioResult(final ReadCountCollection standardizedProfile,
-                                       final ReadCountCollection denoisedProfile) {
+                                   final ReadCountCollection denoisedProfile) {
         this.standardizedProfile = standardizedProfile;
         this.denoisedProfile = denoisedProfile;
     }
