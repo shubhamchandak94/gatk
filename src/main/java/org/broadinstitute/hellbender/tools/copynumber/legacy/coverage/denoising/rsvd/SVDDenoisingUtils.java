@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.pca;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
 import com.google.common.primitives.Doubles;
 import org.apache.commons.math3.linear.DefaultRealMatrixChangingVisitor;
@@ -10,7 +10,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.mllib.linalg.DenseMatrix;
 import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.mllib.linalg.distributed.RowMatrix;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.CaseToPoNTargetMapper;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -25,8 +24,8 @@ import java.util.stream.IntStream;
  *
  * Currently, only supports tangent normalization in the reduced hyperplane, not the logNormal hyperplane
  */
-public final class PCATangentNormalizationUtils {
-    private static final Logger logger = LogManager.getLogger(PCATangentNormalizationUtils.class);
+public final class SVDDenoisingUtils {
+    private static final Logger logger = LogManager.getLogger(SVDDenoisingUtils.class);
 
     /**
      * Minimum target normalized and column centered count possible.
@@ -41,7 +40,7 @@ public final class PCATangentNormalizationUtils {
 
     private static final int TN_NUM_SLICES_SPARK = 50;
 
-    private PCATangentNormalizationUtils() {}
+    private SVDDenoisingUtils() {}
 
     /**
      * Target-factor normalizes a {@link RealMatrix} in-place given target factors..
@@ -61,7 +60,7 @@ public final class PCATangentNormalizationUtils {
     }
 
     /**
-     *  Do the full tangent normalization process given a {@link PCACoveragePoN} and a proportional-coverage profile.
+     *  Do the full tangent normalization process given a {@link SVDReadCountPanelOfNormals} and a proportional-coverage profile.
      *
      *  This includes:
      *   <ul><li>normalization by target factors (optional)</li>
@@ -73,9 +72,9 @@ public final class PCATangentNormalizationUtils {
      * @param ctx spark context.  Use {@code null} if no context is available
      * @return never {@code null}
      */
-    static PCATangentNormalizationResult tangentNormalize(final PCACoveragePoN pon,
-                                                          final ReadCountCollection profile,
-                                                          final JavaSparkContext ctx) {
+    static SVDDenoisedCopyRatioProfile tangentNormalize(final SVDReadCountPanelOfNormals pon,
+                                                        final ReadCountCollection profile,
+                                                        final JavaSparkContext ctx) {
         Utils.nonNull(pon, "PoN cannot be null.");
         Utils.nonNull(profile, "Proportional coverages cannot be null.");
         ParamUtils.isPositive(profile.columnNames().size(), "Column names cannot be an empty list.");
@@ -86,12 +85,12 @@ public final class PCATangentNormalizationUtils {
     }
 
     /**
-     * Returns a target-factor-normalized {@link ReadCountCollection} given a {@link PCACoveragePoN}..
+     * Returns a target-factor-normalized {@link ReadCountCollection} given a {@link SVDReadCountPanelOfNormals}..
      */
-    private static ReadCountCollection mapTargetsToPoNAndFactorNormalize(final ReadCountCollection input, final PCACoveragePoN pon) {
+    private static ReadCountCollection mapTargetsToPoNAndFactorNormalize(final ReadCountCollection input, final SVDReadCountPanelOfNormals pon) {
         final CaseToPoNTargetMapper targetMapper = new CaseToPoNTargetMapper(input.targets(), pon.getTargetNames());
         final RealMatrix inputCounts = targetMapper.fromCaseToPoNCounts(input.counts());
-        factorNormalize(inputCounts, pon.getAllIntervalProportionalMedians());   //factor normalize in-place
+        factorNormalize(inputCounts, pon.getAllIntervalFractionalMedians());   //factor normalize in-place
         return targetMapper.fromPoNtoCaseCountCollection(inputCounts, input.columnNames());
     }
 
@@ -108,11 +107,11 @@ public final class PCATangentNormalizationUtils {
      *  betahat: C^T P^T
      *  tangentNormalizedCounts: C - Ahat
      */
-    private static PCATangentNormalizationResult tangentNormalize(final ReadCountCollection targetFactorNormalizedCounts,
-                                                                  final List<String> panelTargetNames,
-                                                                  final RealMatrix reducedPanelCounts,
-                                                                  final RealMatrix reducedPanelPInvCounts,
-                                                                  final JavaSparkContext ctx) {
+    private static SVDDenoisedCopyRatioProfile tangentNormalize(final ReadCountCollection targetFactorNormalizedCounts,
+                                                                final List<String> panelTargetNames,
+                                                                final RealMatrix reducedPanelCounts,
+                                                                final RealMatrix reducedPanelPInvCounts,
+                                                                final JavaSparkContext ctx) {
         final CaseToPoNTargetMapper targetMapper = new CaseToPoNTargetMapper(targetFactorNormalizedCounts.targets(), panelTargetNames);
 
         // The input counts with rows (targets) sorted so that they match the PoN's order.
@@ -148,7 +147,7 @@ public final class PCATangentNormalizationUtils {
         final ReadCountCollection preTangentNormalized = targetMapper.fromPoNtoCaseCountCollection(
                 tangentNormalizationInputCounts, targetFactorNormalizedCounts.columnNames());
 
-        return new PCATangentNormalizationResult(tangentNormalized, preTangentNormalized);
+        return new SVDDenoisedCopyRatioProfile(tangentNormalized, preTangentNormalized);
     }
 
     /**

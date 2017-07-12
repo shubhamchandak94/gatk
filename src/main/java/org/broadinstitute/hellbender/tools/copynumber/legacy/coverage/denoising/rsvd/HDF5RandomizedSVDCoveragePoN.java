@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.pca;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
 import com.google.common.collect.ImmutableMap;
 import htsjdk.samtools.util.Lazy;
@@ -42,10 +42,10 @@ import java.util.stream.Collectors;
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
-public final class HDF5PCACoveragePoN implements PCACoveragePoN {
+public final class HDF5RandomizedSVDCoveragePoN implements SVDReadCountPanelOfNormals {
     private final HDF5File file;
 
-    private static final Logger logger = LogManager.getLogger(HDF5PCACoveragePoN.class);
+    private static final Logger logger = LogManager.getLogger(HDF5RandomizedSVDCoveragePoN.class);
 
     /**
      * The version number is a double where the integer part is the
@@ -53,8 +53,7 @@ public final class HDF5PCACoveragePoN implements PCACoveragePoN {
      */
     public static final double CURRENT_PON_VERSION = 7.0;
 
-    private static final String VERSION_GROUP_NAME = "/version";
-    private static final String VERSION_PATH = VERSION_GROUP_NAME + "/values";
+    private static final String VERSION_PATH = "/version/values";
 
     //targets
     private static final String RAW_TARGETS_GROUP_NAME = "/raw_targets";
@@ -104,7 +103,7 @@ public final class HDF5PCACoveragePoN implements PCACoveragePoN {
      * @param file the underlying HDF5 file.
      * @throws IllegalArgumentException if {@code file} is {@code null}.
      */
-    public HDF5PCACoveragePoN(final HDF5File file) {
+    public HDF5RandomizedSVDCoveragePoN(final HDF5File file) {
         Utils.nonNull(file, "The input file cannot be null.");
         this.file = file;
         rawTargets  = new Lazy<>(() -> readTargets(file, RAW_TARGETS_PATH, RAW_TARGET_NAMES_PATH));
@@ -121,7 +120,7 @@ public final class HDF5PCACoveragePoN implements PCACoveragePoN {
      * @param logger    the logger to log the warning message with.
      * @throws IllegalArgumentException if {@code file} is {@code null}.
      */
-    public HDF5PCACoveragePoN(final HDF5File file, final Logger logger) {
+    public HDF5RandomizedSVDCoveragePoN(final HDF5File file, final Logger logger) {
         this(file);
         if (getVersion() < CURRENT_PON_VERSION) {
             logger.warn("The version of the specified PoN (" + getVersion() + ") is older than the latest version " +
@@ -140,7 +139,7 @@ public final class HDF5PCACoveragePoN implements PCACoveragePoN {
     }
 
     @Override
-    public double[] getAllIntervalProportionalMedians() {
+    public double[] getAllIntervalFractionalMedians() {
         final double[] values = file.readDoubleArray(TARGET_FACTORS_PATH);
         if (values.length != targetNames.get().size()) {
             throw new GATKException(String.format("Wrong number of elements in the target factors recovered " +
@@ -222,7 +221,7 @@ public final class HDF5PCACoveragePoN implements PCACoveragePoN {
         Utils.nonNull(reduction);
         try (final HDF5File file = new HDF5File(outFile, openMode)) {
             logger.info("Creating " + outFile.getAbsolutePath() + "...");
-            final HDF5PCACoveragePoN pon = new HDF5PCACoveragePoN(file);
+            final HDF5RandomizedSVDCoveragePoN pon = new HDF5RandomizedSVDCoveragePoN(file);
 
             logger.info("Setting version number (" + CURRENT_PON_VERSION + ")...");
             pon.setVersion(CURRENT_PON_VERSION);

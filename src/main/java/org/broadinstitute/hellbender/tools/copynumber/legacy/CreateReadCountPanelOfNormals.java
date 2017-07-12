@@ -37,7 +37,7 @@ import java.util.stream.DoubleStream;
  * </p>
  *
  * <pre>
- * gatk-launch --javaOptions "-Xmx4g" CreatePanelOfNormalsSpark \
+ * gatk-launch --javaOptions "-Xmx4g" CreateReadCountPanelOfNormals \
  *   --input gc_corrected_coverages.tsv \
  *   --output panel_of_normals.pon
  * </pre>
@@ -50,12 +50,12 @@ import java.util.stream.DoubleStream;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 @CommandLineProgramProperties(
-        summary = "Create a panel of normals (PoN) for copy-ratio denoising given the read counts for samples in the panel.",
+        summary = "Create a panel of normals for copy-ratio denoising given the read counts for samples in the panel.",
         oneLineSummary = "Create a panel of normals for copy-ratio denoising",
         programGroup = CopyNumberProgramGroup.class
 )
 @DocumentedFeature
-public class CreatePanelOfNormalsSpark extends SparkCommandLineProgram {
+public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     //parameter names
     private static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME = "minimumIntervalMedianPercentile";
     private static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME = "minIntervalMedPct";
@@ -78,14 +78,13 @@ public class CreatePanelOfNormalsSpark extends SparkCommandLineProgram {
     private static final double DEFAULT_MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE = 5.0;
     private static final double DEFAULT_EXTREME_SAMPLE_MEDIAN_PERCENTILE = 2.5;
     private static final double DEFAULT_EXTREME_OUTLIER_TRUNCATION_PERCENTILE = 0.1;
+    private static final int DEFAULT_NUMBER_OF_EIGENSAMPLES = 20;
 
-    private static final String INFER_NUMBER_OF_EIGENSAMPLES = "auto";
-    private static final String DEFAULT_NUMBER_OF_EIGENSAMPLES = INFER_NUMBER_OF_EIGENSAMPLES;
     private static final String INTERVAL_WEIGHTS_FILE_SUFFIX = ".interval_weights.txt";
 
     @Argument(
-            doc = "Input integer read-count files for all samples in the panel of normals.  " +
-                    "Intervals must be identical for all samples.  " +
+            doc = "Input read-count files containing integer read counts in genomic intervals for all samples in the panel of normals.  " +
+                    "Intervals must be identical and in the same order for all samples.  " +
                     "Duplicate samples are not removed.",
             fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME
@@ -101,7 +100,7 @@ public class CreatePanelOfNormalsSpark extends SparkCommandLineProgram {
     private File outputPanelOfNormalsFile;
 
     @Argument(
-            doc = "Genomic intervals with a median coverage (across samples) below this percentile are filtered out.  " +
+            doc = "Genomic intervals with a median (across samples) of fractional coverage below this percentile are filtered out.  " +
                     "(This is the first filter applied.)",
             fullName  = MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME,
             shortName = MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME,
@@ -131,7 +130,7 @@ public class CreatePanelOfNormalsSpark extends SparkCommandLineProgram {
     private double maximumZerosInIntervalPercentage = DEFAULT_MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE;
 
     @Argument(
-            doc = "Samples with a median of genomic-interval-median-normalized coverage " +
+            doc = "Samples with a median (across intervals) of fractional coverage normalized by genomic-interval medians  " +
                     "below this percentile or above the complementary percentile are filtered out.  " +
                     "(This is the fourth filter applied.)",
             fullName = EXTREME_SAMPLE_MEDIAN_PERCENTILE_LONG_NAME,
@@ -142,7 +141,7 @@ public class CreatePanelOfNormalsSpark extends SparkCommandLineProgram {
     private double extremeSampleMedianPercentile = DEFAULT_EXTREME_SAMPLE_MEDIAN_PERCENTILE;
 
     @Argument(
-            doc = "Genomic-interval-median-normalized coverages " +
+            doc = "Fractional coverages normalized by genomic-interval medians that are " +
                     "below this percentile or above the complementary percentile are set to the corresponding percentile value.  " +
                     "(This is applied after all filters.)",
             fullName = EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME,
@@ -153,19 +152,18 @@ public class CreatePanelOfNormalsSpark extends SparkCommandLineProgram {
     private double extremeOutlierTruncationPercentile = DEFAULT_EXTREME_OUTLIER_TRUNCATION_PERCENTILE;
 
     @Argument(
-            doc = "Number of eigensamples to use for denoising.  " +
-                    "By default, the number will be automatically inferred using Jolliffe's rule " +
-                    "(eigensamples that explain 70% of the total variance will be retained).",
+            doc = "Number of eigensamples to use for SVD and to store in the panel of normals.  " +
+                    "The number of samples retained after filtering will be used instead if it is smaller than this.",
             fullName = NUMBER_OF_EIGENSAMPLES_LONG_NAME,
             shortName = NUMBER_OF_EIGENSAMPLES_SHORT_NAME,
-            optional = true
+            minValue = 1
     )
-    private String numberOfEigensamplesString = DEFAULT_NUMBER_OF_EIGENSAMPLES;
+    private int numberOfEigensamples = DEFAULT_NUMBER_OF_EIGENSAMPLES;
 
     @Argument(
             doc = "Output file for the genomic-interval weights (given by the inverse variance of the denoised copy ratio)." +
                     "Output is given as a plain-text file.  " +
-                    "By default, " + INTERVAL_WEIGHTS_FILE_SUFFIX + " is appended to the PoN file name.",
+                    "By default, " + INTERVAL_WEIGHTS_FILE_SUFFIX + " is appended to the panel-of-normals filename.",
             shortName = INTERVAL_WEIGHTS_SHORT_NAME,
             fullName = INTERVAL_WEIGHTS_LONG_NAME,
             optional = true
@@ -179,50 +177,31 @@ public class CreatePanelOfNormalsSpark extends SparkCommandLineProgram {
                     "HDF5 is currently supported on x86-64 architecture and Linux or OSX systems.");
         }
 
-        //parse optional parameters
+        //validate parameters and parse optional parameters
+        validateArguments();
         if (outputIntervalWeightsFile == null) {
             outputIntervalWeightsFile = new File(outputPanelOfNormalsFile + INTERVAL_WEIGHTS_FILE_SUFFIX);
         }
-        final OptionalInt numberOfEigensamples = parseNumberOfEigensamples(numberOfEigensamplesString);
 
         //parse input read-count files
 
-        //perform optional GC correction
-
-        //create the PoN
-        logger.info("Creating the panel of normals...");
-        HDF5PCACoveragePoNCreationUtils.create(outputPanelOfNormalsFile, coverageMatrix,
-                minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
-                extremeSampleMedianPercentile, extremeOutlierTruncationPercentile, ctx);
-
-        //output a copy of the interval weights to file
-        logger.info("Writing interval-weights file to " + outputIntervalWeightsFile + "...");
-        writeIntervalWeightsFile(outputPanelOfNormalsFile, outputIntervalWeightsFile);
+//        //create the PoN
+//        logger.info("Creating the panel of normals...");
+//        HDF5PCACoveragePoNCreationUtils.create(outputPanelOfNormalsFile, getCommandLine(), coverageMatrix, gcAnnotatedIntervals,
+//                minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
+//                extremeSampleMedianPercentile, extremeOutlierTruncationPercentile, ctx);
+//
+//        //output a copy of the interval weights to file
+//        logger.info("Writing interval-weights file to " + outputIntervalWeightsFile + "...");
+//        writeIntervalWeightsFile(outputPanelOfNormalsFile, outputIntervalWeightsFile);
 
         logger.info("Panel of normals successfully created.");
     }
 
-    /**
-     * Composes the preferred number of eigenvalues optional given the user input and checks that this is
-     * not greater than the number of input samples, if necessary.
-     *
-     * @return an empty optional if the user elected to use the automatic/inferred value,
-     * otherwise a strictly positive integer.
-     */
-    private OptionalInt parseNumberOfEigensamples(final String numberOfEigensamplesString) {
-        if (numberOfEigensamplesString.equalsIgnoreCase(INFER_NUMBER_OF_EIGENSAMPLES)) {
-            return OptionalInt.empty();
-        } else {
-            try {
-                final int result = Integer.parseInt(numberOfEigensamplesString);
-                Utils.validate(result > 0, NUMBER_OF_EIGENSAMPLES_LONG_NAME + " must be positive.");
-                Utils.validate(result <= inputReadCountFiles.size(),
-                        String.format("Number of eigensamples cannot be greater than the number of input samples (%d).", inputReadCountFiles.size()));
-                return OptionalInt.of(result);
-            } catch (final NumberFormatException ex) {
-                throw new IllegalArgumentException(NUMBER_OF_EIGENSAMPLES_LONG_NAME + " must be either '" + INFER_NUMBER_OF_EIGENSAMPLES + "' or an integer value");
-            }
-        }
+    private void validateArguments() {
+        Utils.validate(!inputReadCountFiles.isEmpty(), "Must provide at least one read-count file as input.");
+        Utils.validate(numberOfEigensamples <= inputReadCountFiles.size(),
+                String.format("Number of eigensamples cannot be greater than the number of input samples (%d).", inputReadCountFiles.size()));
     }
 
     /**

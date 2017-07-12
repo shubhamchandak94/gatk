@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.pca;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
 import org.apache.commons.math3.linear.RealMatrix;
 

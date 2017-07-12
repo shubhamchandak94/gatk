@@ -1,19 +1,20 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.pca;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.CoveragePanelOfNormals;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.DenoisedCopyRatioResult;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.ReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 
 import java.util.List;
 
 /**
- * Interface for the panel of normals for PCA coverage denoising.
+ * Interface for the panel of normals for SVD-based coverage denoising.
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
-public interface PCACoveragePoN extends CoveragePanelOfNormals<PCATangentNormalizationResult> {
+public interface SVDReadCountPanelOfNormals extends ReadCountPanelOfNormals {
     /**
      * Returns the PoN version.
      */
@@ -31,16 +32,16 @@ public interface PCACoveragePoN extends CoveragePanelOfNormals<PCATangentNormali
     List<SimpleInterval> getPanelIntervals();
 
     /**
-     * Returns a modifiable copy of an array containing the median of the proportional coverage
-     * (calculated across all samples) at each interval (in the same order as in {@link #getAllIntervals()}).
+     * Returns a modifiable copy of an array containing the median (across all samples, before filtering)
+     * of the fractional coverage at each interval (in the same order as in {@link #getAllIntervals()}).
      */
-    double[] getAllIntervalProportionalMedians();
+    double[] getAllIntervalFractionalMedians();
 
     /**
      * Returns a matrix with dimensions {@code TxE}, where {@code T} is the number of panel targets (after filtering)
      * and {@code E} is the number of eigensamples, to be used for denoising.
      */
-    RealMatrix getPanel();
+    RealMatrix getRightSingularVectors();
 
     /**
      * Returns a pseudoinverse matrix with dimensions {@code ExT}, where {@code E} is the number of eigensamples
@@ -61,7 +62,7 @@ public interface PCACoveragePoN extends CoveragePanelOfNormals<PCATangentNormali
     List<String> getPanelSampleFileNames();
 
     @Override
-    default PCATangentNormalizationResult denoise(final ReadCountCollection readCounts, final JavaSparkContext ctx) {
-        return PCATangentNormalizationUtils.tangentNormalize(this, readCounts, ctx);
+    default DenoisedCopyRatioResult denoise(final ReadCountCollection readCounts, final JavaSparkContext ctx) {
+        return SVDDenoisingUtils.tangentNormalize(this, readCounts, ctx);
     }
 }

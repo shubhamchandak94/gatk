@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.pca;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
@@ -30,7 +30,7 @@ import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 
 /**
- * This class contains utility methods for creating and writing the PCA coverage panel of normals to an {@link HDF5PCACoveragePoN}.
+ * This class contains utility methods for creating and writing the PCA coverage panel of normals to an {@link HDF5RandomizedSVDCoveragePoN}.
  */
 public final class HDF5PCACoveragePoNCreationUtils {
     public static final double JOLLIFES_RULE_MEAN_FACTOR = 0.7;
@@ -91,7 +91,7 @@ public final class HDF5PCACoveragePoNCreationUtils {
         ReadCountCollection normalizedCounts = inputSubsetByUsableTargets.getLeft();
         normalizedCounts = normalizedCounts.subsetColumns(Sets.difference(new HashSet<>(normalizedCounts.columnNames()), new HashSet<>(sampleNameBlacklist)) );
         final double[] targetFactors = inputSubsetByUsableTargets.getRight();
-        PCATangentNormalizationUtils.factorNormalize(normalizedCounts.counts(), targetFactors);
+        SVDDenoisingUtils.factorNormalize(normalizedCounts.counts(), targetFactors);
 
         // Impute zeros as median values for columns and targets with too many zeros, remove targets with extreme medians, and truncate extreme counts
         final ReadCountCollection logNormalizedCounts = cleanNormalizedCounts(normalizedCounts, logger, maximumPercentageZeroColumns, maximumPercentageZeroTargets, extremeColumnMedianCountPercentileThreshold, countTruncatePercentile);
@@ -111,7 +111,7 @@ public final class HDF5PCACoveragePoNCreationUtils {
 
         // Write the PoN to HDF5 file
         if (!isDryRun) {
-            HDF5PCACoveragePoN.write(outputHDF5Filename, openMode, initialTargets.targets(), normalizedCounts, logNormalizedCounts, targetFactors, targetVariances, reduction);
+            HDF5RandomizedSVDCoveragePoN.write(outputHDF5Filename, openMode, initialTargets.targets(), normalizedCounts, logNormalizedCounts, targetFactors, targetVariances, reduction);
         }
     }
 
@@ -306,8 +306,8 @@ public final class HDF5PCACoveragePoNCreationUtils {
         Utils.nonNull(panelTargetNames);
         Utils.nonNull(normalizedCounts);
         Utils.nonNull(reduction);
-        final PCATangentNormalizationResult allNormals =
-                PCATangentNormalizationUtils.tangentNormalizeNormalsInPoN(normalizedCounts, panelTargetNames, reduction.getReducedCounts(), reduction.getReducedPseudoInverse(), ctx);
+        final SVDDenoisedCopyRatioProfile allNormals =
+                SVDDenoisingUtils.tangentNormalizeNormalsInPoN(normalizedCounts, panelTargetNames, reduction.getReducedCounts(), reduction.getReducedPseudoInverse(), ctx);
         final RealMatrix allSampleProjectedTargets = allNormals.getTangentNormalized().counts();
 
         return MatrixSummaryUtils.getRowVariances(allSampleProjectedTargets);
