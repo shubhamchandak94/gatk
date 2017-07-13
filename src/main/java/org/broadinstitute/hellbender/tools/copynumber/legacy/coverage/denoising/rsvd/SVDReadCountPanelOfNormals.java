@@ -1,8 +1,8 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
+import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.DenoisedCopyRatioResult;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.ReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.Target;
 
@@ -13,7 +13,7 @@ import java.util.List;
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
-public interface SVDReadCountPanelOfNormals extends ReadCountPanelOfNormals {
+public interface SVDReadCountPanelOfNormals {
     /**
      * Returns the PoN version.
      */
@@ -23,6 +23,12 @@ public interface SVDReadCountPanelOfNormals extends ReadCountPanelOfNormals {
      * Returns the number of eigensamples.
      */
     int getNumEigensamples();
+
+    /**
+     * Returns a modifiable copy of the original matrix of integer read-counts used to build the PoN
+     * (no filtering will have been applied).
+     */
+    RealMatrix getOriginalReadCounts();
 
     /**
      * Returns a modifiable copy of the list of the original intervals that were used to build this PoN
@@ -68,7 +74,6 @@ public interface SVDReadCountPanelOfNormals extends ReadCountPanelOfNormals {
      */
     double[][] getRightSingularPseudoinverse();
 
-    @Override
     default DenoisedCopyRatioResult denoise(final ReadCountCollection readCounts,
                                             final int numEigensamples,
                                             final JavaSparkContext ctx) {

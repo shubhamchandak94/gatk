@@ -191,6 +191,11 @@ public final class SVDDenoisingUtils {
         return result;
     }
 
+    /**
+     * Calculates the fraction of variance accounted for by the first {@code numEigensamples}
+     * eigensamples (which are sorted by their singular values in decreasing order) given the
+     * sorted list of singular values.
+     */
     private static double calculateFractionOfVariance(final double numEigensamples,
                                                       final double[] singularValues) {
         if (numEigensamples == singularValues.length) {
@@ -233,7 +238,7 @@ public final class SVDDenoisingUtils {
                 .transpose();
         final RealMatrix rightSingularPseudoinverseTruncatedMatrix = new Array2DRowRealMatrix(rightSingularPseudoinverse)
                 .getSubMatrix(0, numEigensamples, 0, numIntervals);
-        final Matrix rightSingularPseudoinverseTransposeLocalMatrix = new DenseMatrix(numEigensamples, numIntervals
+        final Matrix rightSingularPseudoinverseTransposeLocalMatrix = new DenseMatrix(numEigensamples, numIntervals,
                 Doubles.concat(rightSingularPseudoinverseTruncatedMatrix.getData()), true)
                 .transpose();
 

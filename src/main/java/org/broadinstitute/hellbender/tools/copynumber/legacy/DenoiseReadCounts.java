@@ -12,9 +12,9 @@ import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGrou
 import org.broadinstitute.hellbender.engine.spark.SparkCommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.DenoisedCopyRatioResult;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.ReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.HDF5RandomizedSVDReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDDenoisingUtils;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollectionUtils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
@@ -104,7 +104,7 @@ public final class DenoiseReadCounts extends SparkCommandLineProgram {
         try (final HDF5File hdf5PanelOfNormalsFile = new HDF5File(inputPanelOfNormalsFile)) {  //HDF5File implements AutoCloseable
             //load input files
             final ReadCountCollection readCounts = ReadCountCollectionUtils.parse(inputReadCountsFile);
-            final ReadCountPanelOfNormals panelOfNormals = new HDF5RandomizedSVDReadCountPanelOfNormals(hdf5PanelOfNormalsFile, logger);
+            final SVDReadCountPanelOfNormals panelOfNormals = new HDF5RandomizedSVDReadCountPanelOfNormals(hdf5PanelOfNormalsFile, logger);
 
             //check that read-count collection contains single sample and integer counts
             SVDDenoisingUtils.validateReadCounts(readCounts);

@@ -1,23 +1,32 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy;
 
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hdf5.HDF5Library;
+import org.broadinstitute.hellbender.cmdline.ExomeStandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
 import org.broadinstitute.hellbender.engine.spark.SparkCommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDDenoisingUtils;
+import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
+import org.broadinstitute.hellbender.tools.exome.ReadCountCollectionUtils;
+import org.broadinstitute.hellbender.tools.exome.Target;
 import org.broadinstitute.hellbender.tools.pon.coverage.pca.HDF5PCACoveragePoN;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.stream.DoubleStream;
 
 /**
@@ -55,6 +64,8 @@ import java.util.stream.DoubleStream;
 @DocumentedFeature
 public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     //parameter names
+    private static final String GC_ANNOTATED_INTERVAL_FILE_LONG_NAME = "gcAnnotatedIntervals";
+    private static final String GC_ANNOTATED_INTERVAL_FILE_SHORT_NAME = "gcAnnot";
     private static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME = "minimumIntervalMedianPercentile";
     private static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME = "minIntervalMedPct";
     private static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME = "maximumZerosInSamplePercentage";
@@ -89,6 +100,15 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             minElements = 1
     )
     private List<File> inputReadCountFiles = new ArrayList<>();
+
+    @Argument(
+            doc = "Input annotated-interval file containing annotations for GC content in genomic intervals (output of AnnotateTargets).  " +
+                    "Intervals must be identical to and in the same order as those in the input read-count files.",
+            fullName = GC_ANNOTATED_INTERVAL_FILE_LONG_NAME,
+            shortName = GC_ANNOTATED_INTERVAL_FILE_SHORT_NAME,
+            optional = true
+    )
+    private File inputGCAnnotatedIntervals = null;
 
     @Argument(
             doc = "Output file name for the panel of normals.  " +
@@ -178,11 +198,40 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
 
         //validate parameters and parse optional parameters
         validateArguments();
+        //TODO check for GC annotations
         if (outputIntervalWeightsFile == null) {
             outputIntervalWeightsFile = new File(outputPanelOfNormalsFile + INTERVAL_WEIGHTS_FILE_SUFFIX);
         }
 
-        //parse input read-count files
+        //load first read-count file to determine intervals
+        final ReadCountCollection firstSampleReadCounts;
+        try {
+            firstSampleReadCounts = ReadCountCollectionUtils.parse(inputReadCountFiles.get(0));
+        } catch (final IOException e) {
+            throw new UserException.CouldNotReadInputFile(inputReadCountFiles.get(0), "Could not read first read-count file.");
+        }
+        final List<Target> intervals = firstSampleReadCounts.targets();
+
+        //validate input read-count files (i.e., check intervals and that only integer counts are contained) and aggregate as a RealMatrix
+        logger.info("Validing and aggregating input read-count files...");
+        final int numSamples = inputReadCountFiles.size();
+        final int numIntervals = intervals.size();
+        final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(numSamples, numIntervals);
+        final ListIterator<File> inputReadCountFilesIterator = inputReadCountFiles.listIterator();
+        while (inputReadCountFilesIterator.hasNext()) {
+            final int sampleIndex = inputReadCountFilesIterator.nextIndex();
+            final File inputReadCountFile = inputReadCountFilesIterator.next();
+            final ReadCountCollection readCounts;
+            try {
+                readCounts = ReadCountCollectionUtils.parse(inputReadCountFile);
+            } catch (final IOException e) {
+                throw new UserException.CouldNotReadInputFile(inputReadCountFile, "Could not read read-count file.");
+            }
+            SVDDenoisingUtils.validateReadCounts(readCounts);
+            Utils.validateArg(readCounts.targets().equals(intervals),
+                    String.format("Intervals for read-count file %s do not match those in other read-count files.", inputReadCountFile));
+            readCountsMatrix.setColumn(sampleIndex, readCounts.getColumn(0));
+        }
 
 //        //create the PoN
 //        logger.info("Creating the panel of normals...");
@@ -202,16 +251,16 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
                 String.format("Number of eigensamples cannot be greater than the number of input samples (%d).", inputReadCountFiles.size()));
     }
 
-    /**
-     * Read interval variances from an HDF5 PoN file and write the corresponding weights
-     * to a file that can be read in by R CBS.
-     */
-    private static void writeIntervalWeightsFile(final File ponFile, final File outputFile) {
-        IOUtils.canReadFile(ponFile);
-        try (final HDF5File file = new HDF5File(ponFile, HDF5File.OpenMode.READ_ONLY)) {
-            final HDF5PCACoveragePoN pon = new HDF5PCACoveragePoN(file);
-            final double[] intervalWeights = DoubleStream.of(pon.getIntervalVariances()).map(v -> 1 / v).toArray();
-            ParamUtils.writeValuesToFile(intervalWeights, outputFile);
-        }
-    }
+//    /**
+//     * Read interval variances from an HDF5 PoN file and write the corresponding weights
+//     * to a file that can be read in by R CBS.
+//     */
+//    private static void writeIntervalWeightsFile(final File ponFile, final File outputFile) {
+//        IOUtils.canReadFile(ponFile);
+//        try (final HDF5File file = new HDF5File(ponFile, HDF5File.OpenMode.READ_ONLY)) {
+//            final HDF5PCACoveragePoN pon = new HDF5PCACoveragePoN(file);
+//            final double[] intervalWeights = DoubleStream.of(pon.getIntervalVariances()).map(v -> 1 / v).toArray();
+//            ParamUtils.writeValuesToFile(intervalWeights, outputFile);
+//        }
+//    }
 }
