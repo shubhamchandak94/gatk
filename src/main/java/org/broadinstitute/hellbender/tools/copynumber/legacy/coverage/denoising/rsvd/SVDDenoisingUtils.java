@@ -48,7 +48,7 @@ public final class SVDDenoisingUtils {
             throw new UserException.BadInput("Read-count file must contain counts for at least one genomic interval.");
         }
         final double[] readCounts = readCountCollection.counts().getColumn(0);
-        if (!IntStream.range(0, readCounts.length).allMatch(i -> (readCounts[i] >= 0) &&((int) readCounts[i] == readCounts[i]))) {
+        if (!IntStream.range(0, readCounts.length).allMatch(i -> (readCounts[i] >= 0) && ((int) readCounts[i] == readCounts[i]))) {
             throw new UserException.BadInput("Read-count file must contain non-negative integer counts.");
         }
     }
@@ -190,8 +190,8 @@ public final class SVDDenoisingUtils {
     }
 
     /**
-     * Given standardized read counts specified by a column vector S (dimensions {@code Mx1}),
-     * right-singular vectors V (dimensions {@code MxK}), and the pseudoinverse V<sup>+</sup> (dimensions {@code KxM}),
+     * Given standardized read counts specified by a column vector S (dimensions {@code M x 1}),
+     * right-singular vectors V (dimensions {@code M x K}), and the pseudoinverse V<sup>+</sup> (dimensions {@code K x M}),
      * returns s - V V<sup>+</sup> s.
      */
     private static RealMatrix subtractProjection(final RealMatrix standardizedProfile,

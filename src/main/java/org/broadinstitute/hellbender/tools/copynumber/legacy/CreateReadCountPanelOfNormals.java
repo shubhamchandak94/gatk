@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.copynumber.legacy;
 
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.logging.log4j.Logger;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
@@ -20,6 +21,7 @@ import org.broadinstitute.hellbender.utils.io.IOUtils;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 
@@ -90,8 +92,7 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
 
     @Argument(
             doc = "Input read-count files containing integer read counts in genomic intervals for all samples in the panel of normals.  " +
-                    "Intervals must be identical and in the same order for all samples.  " +
-                    "Duplicate samples are not removed.",
+                    "Intervals must be identical and in the same order for all samples.",
             fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME,
             minElements = 1
@@ -200,29 +201,13 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
         if (outputIntervalWeightsFile == null) {
             outputIntervalWeightsFile = new File(outputPanelOfNormalsFile + INTERVAL_WEIGHTS_FILE_SUFFIX);
         }
-        final List<Target> intervals = getIntervalsFromFirstReadCountFile();
 
-        //validate input read-count files (i.e., check intervals and that only integer counts are contained) and aggregate as a RealMatrix
-        logger.info("Validing and aggregating input read-count files...");
-        final int numSamples = inputReadCountFiles.size();
-        final int numIntervals = intervals.size();
-        final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(numSamples, numIntervals);
-        final ListIterator<File> inputReadCountFilesIterator = inputReadCountFiles.listIterator();
-        while (inputReadCountFilesIterator.hasNext()) {
-            final int sampleIndex = inputReadCountFilesIterator.nextIndex();
-            final File inputReadCountFile = inputReadCountFilesIterator.next();
-            logger.info(String.format("Aggregating read-count file %s (%d / %d)", inputReadCountFile, sampleIndex + 1, numSamples));
-            final ReadCountCollection readCounts;
-            try {
-                readCounts = ReadCountCollectionUtils.parse(inputReadCountFile);
-            } catch (final IOException e) {
-                throw new UserException.CouldNotReadInputFile(inputReadCountFile);
-            }
-            SVDDenoisingUtils.validateReadCounts(readCounts);
-            Utils.validateArg(readCounts.targets().equals(intervals),
-                    String.format("Intervals for read-count file %s do not match those in other read-count files.", inputReadCountFile));
-            readCountsMatrix.setRow(sampleIndex, readCounts.getColumn(0));
-        }
+        //get intervals from the first read-count file to use as the canonical list of intervals
+        final List<Target> intervals = getIntervalsFromFirstReadCountFile(logger, inputReadCountFiles);
+
+        //validate input read-count files (i.e., check intervals and that only integer counts are contained)
+        //and aggregate as a RealMatrix with dimensions numIntervals x numSamples
+        final RealMatrix readCountMatrix = constructReadCountMatrix(logger, inputReadCountFiles, intervals);
 
 //        //create the PoN
 //        logger.info("Creating the panel of normals...");
@@ -238,7 +223,19 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
         return "SUCCESS";
     }
 
-    private List<Target> getIntervalsFromFirstReadCountFile() {
+    private void validateArguments() {
+        Utils.validateArg(inputReadCountFiles.size() == new HashSet<>(inputReadCountFiles).size(),
+                "List of input read-count files cannot contain duplicates.");
+        inputReadCountFiles.forEach(IOUtils::canReadFile);
+        if (numberOfEigensamples <= inputReadCountFiles.size()) {
+            logger.warn("Number of eigensamples (%d) is greater than the number of input samples (%d); " +
+                            "the number of samples retained after filtering will be used instead.",
+                    numberOfEigensamples, inputReadCountFiles.size());
+        }
+    }
+
+    private static List<Target> getIntervalsFromFirstReadCountFile(final Logger logger,
+                                                                   final List<File> inputReadCountFiles) {
         final File firstReadCountFile = inputReadCountFiles.get(0);
         logger.info(String.format("Retrieving intervals from first read-count file (%s)...", firstReadCountFile));
         final ReadCountCollection firstSampleReadCounts;
@@ -250,10 +247,33 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
         return firstSampleReadCounts.targets();
     }
 
-    private void validateArguments() {
-        inputReadCountFiles.forEach(IOUtils::canReadFile);
-        Utils.validateArg(numberOfEigensamples <= inputReadCountFiles.size(),
-                String.format("Number of eigensamples cannot be greater than the number of input samples (%d).", inputReadCountFiles.size()));
+    private RealMatrix constructReadCountMatrix(final Logger logger,
+                                                final List<File> inputReadCountFiles,
+                                                final List<Target> intervals) {
+        logger.info("Validating and aggregating input read-count files...");
+        final int numSamples = inputReadCountFiles.size();
+        final int numIntervals = intervals.size();
+        final RealMatrix readCountMatrix = new Array2DRowRealMatrix(numSamples, numIntervals);
+        final ListIterator<File> inputReadCountFilesIterator = inputReadCountFiles.listIterator();
+        while (inputReadCountFilesIterator.hasNext()) {
+            final int sampleIndex = inputReadCountFilesIterator.nextIndex();
+            final File inputReadCountFile = inputReadCountFilesIterator.next();
+            logger.info(String.format("Aggregating read-count file %s (%d / %d)", inputReadCountFile, sampleIndex + 1, numSamples));
+            logger.info("Reading...");
+            final ReadCountCollection readCounts;
+            try {
+                readCounts = ReadCountCollectionUtils.parse(inputReadCountFile);
+            } catch (final IOException e) {
+                throw new UserException.CouldNotReadInputFile(inputReadCountFile);
+            }
+            logger.info("Validating...");
+            SVDDenoisingUtils.validateReadCounts(readCounts);
+            Utils.validateArg(readCounts.targets().equals(intervals),
+                    String.format("Intervals for read-count file %s do not match those in other read-count files.", inputReadCountFile));
+            logger.info("Adding to RealMatrix...");
+            readCountMatrix.setRow(sampleIndex, readCounts.getColumn(0));
+        }
+        return readCountMatrix;
     }
 
 //    /**

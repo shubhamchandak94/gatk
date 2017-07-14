@@ -26,13 +26,13 @@ public interface SVDReadCountPanelOfNormals {
 
     /**
      * Returns a modifiable copy of the original matrix of integer read-counts used to build the PoN
-     * (no filtering will have been applied).
+     * (no filtering will have been applied).  This matrix has has dimensions {@code M_original x N_original}
      */
     RealMatrix getOriginalReadCounts();
 
     /**
      * Returns a modifiable copy of the list of the original intervals that were used to build this PoN
-     * (no filtering will have been applied).
+     * (no filtering will have been applied).  This list has length {@code M_original}.
      *
      * TODO replace this with a list of SimpleIntervals.  See https://github.com/broadinstitute/gatk/issues/3246
      */
@@ -40,6 +40,7 @@ public interface SVDReadCountPanelOfNormals {
 
     /**
      * Returns a modifiable copy of the list of the intervals contained in this PoN after all filtering has been applied.
+     * This list has length {@code M}.
      *
      * TODO replace this with a list of SimpleIntervals.  See https://github.com/broadinstitute/gatk/issues/3246
      */
@@ -48,7 +49,7 @@ public interface SVDReadCountPanelOfNormals {
     /**
      * Returns an array containing the median (across all samples, before filtering)
      * of the fractional coverage at each panel interval (in the same order as in {@link #getPanelIntervals()}).
-     * This is used to standardize samples.
+     * This is used to standardize samples.  This array has length {@code M}.
      */
     double[] getPanelIntervalFractionalMedians();
 
@@ -59,7 +60,7 @@ public interface SVDReadCountPanelOfNormals {
 
     /**
      * Returns the matrix of right-singular vectors.
-     * This matrix has has dimensions {@code MxK},
+     * This matrix has has dimensions {@code M x K},
      * where {@code M} is the number of panel intervals (after filtering)
      * and {@code K} is the number of eigensamples.
      * Columns are sorted by singular value in decreasing order.
@@ -68,7 +69,7 @@ public interface SVDReadCountPanelOfNormals {
 
     /**
      * Returns the pseudoinverse of the matrix of right-singular vectors returned by {@link #getRightSingular()}.
-     * This matrix has dimensions {@code KxM},
+     * This matrix has dimensions {@code K x M},
      * where {@code K} is the number of eigensamples
      * and {@code M} is the number of panel intervals (after filtering).
      */
