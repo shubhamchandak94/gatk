@@ -2,32 +2,26 @@ package org.broadinstitute.hellbender.tools.copynumber.legacy;
 
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
-import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hdf5.HDF5Library;
-import org.broadinstitute.hellbender.cmdline.ExomeStandardArgumentDefinitions;
+import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
-import org.broadinstitute.hellbender.engine.spark.SparkCommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDDenoisingUtils;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollectionUtils;
 import org.broadinstitute.hellbender.tools.exome.Target;
-import org.broadinstitute.hellbender.tools.pon.coverage.pca.HDF5PCACoveragePoN;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
-import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.stream.DoubleStream;
 
 /**
  * //TODO
@@ -62,7 +56,10 @@ import java.util.stream.DoubleStream;
         programGroup = CopyNumberProgramGroup.class
 )
 @DocumentedFeature
-public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
+//public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
+public class CreateReadCountPanelOfNormals extends CommandLineProgram {
+    private static final long serialVersionUID = 1L;
+
     //parameter names
     private static final String GC_ANNOTATED_INTERVAL_FILE_LONG_NAME = "gcAnnotatedIntervals";
     private static final String GC_ANNOTATED_INTERVAL_FILE_SHORT_NAME = "gcAnnot";
@@ -190,7 +187,8 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private File outputIntervalWeightsFile = null;
 
     @Override
-    protected void runPipeline(final JavaSparkContext ctx) {
+//    protected void runPipeline(final JavaSparkContext ctx) {
+    protected Object doWork() {
         if (!new HDF5Library().load(null)) {  //Note: passing null means using the default temp dir.
             throw new UserException.HardwareFeatureException("Cannot load the required HDF5 library. " +
                     "HDF5 is currently supported on x86-64 architecture and Linux or OSX systems.");
@@ -202,15 +200,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         if (outputIntervalWeightsFile == null) {
             outputIntervalWeightsFile = new File(outputPanelOfNormalsFile + INTERVAL_WEIGHTS_FILE_SUFFIX);
         }
-
-        //load first read-count file to determine intervals
-        final ReadCountCollection firstSampleReadCounts;
-        try {
-            firstSampleReadCounts = ReadCountCollectionUtils.parse(inputReadCountFiles.get(0));
-        } catch (final IOException e) {
-            throw new UserException.CouldNotReadInputFile(inputReadCountFiles.get(0), "Could not read first read-count file.");
-        }
-        final List<Target> intervals = firstSampleReadCounts.targets();
+        final List<Target> intervals = getIntervalsFromFirstReadCountFile();
 
         //validate input read-count files (i.e., check intervals and that only integer counts are contained) and aggregate as a RealMatrix
         logger.info("Validing and aggregating input read-count files...");
@@ -221,16 +211,17 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         while (inputReadCountFilesIterator.hasNext()) {
             final int sampleIndex = inputReadCountFilesIterator.nextIndex();
             final File inputReadCountFile = inputReadCountFilesIterator.next();
+            logger.info(String.format("Aggregating read-count file %s (%d / %d)", inputReadCountFile, sampleIndex + 1, numSamples));
             final ReadCountCollection readCounts;
             try {
                 readCounts = ReadCountCollectionUtils.parse(inputReadCountFile);
             } catch (final IOException e) {
-                throw new UserException.CouldNotReadInputFile(inputReadCountFile, "Could not read read-count file.");
+                throw new UserException.CouldNotReadInputFile(inputReadCountFile);
             }
             SVDDenoisingUtils.validateReadCounts(readCounts);
             Utils.validateArg(readCounts.targets().equals(intervals),
                     String.format("Intervals for read-count file %s do not match those in other read-count files.", inputReadCountFile));
-            readCountsMatrix.setColumn(sampleIndex, readCounts.getColumn(0));
+            readCountsMatrix.setRow(sampleIndex, readCounts.getColumn(0));
         }
 
 //        //create the PoN
@@ -244,10 +235,24 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
 //        writeIntervalWeightsFile(outputPanelOfNormalsFile, outputIntervalWeightsFile);
 
         logger.info("Panel of normals successfully created.");
+        return "SUCCESS";
+    }
+
+    private List<Target> getIntervalsFromFirstReadCountFile() {
+        final File firstReadCountFile = inputReadCountFiles.get(0);
+        logger.info(String.format("Retrieving intervals from first read-count file (%s)...", firstReadCountFile));
+        final ReadCountCollection firstSampleReadCounts;
+        try {
+            firstSampleReadCounts = ReadCountCollectionUtils.parse(firstReadCountFile);
+        } catch (final IOException e) {
+            throw new UserException.CouldNotReadInputFile(firstReadCountFile);
+        }
+        return firstSampleReadCounts.targets();
     }
 
     private void validateArguments() {
-        Utils.validate(numberOfEigensamples <= inputReadCountFiles.size(),
+        inputReadCountFiles.forEach(IOUtils::canReadFile);
+        Utils.validateArg(numberOfEigensamples <= inputReadCountFiles.size(),
                 String.format("Number of eigensamples cannot be greater than the number of input samples (%d).", inputReadCountFiles.size()));
     }
 

@@ -1,60 +1,52 @@
-//package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
-//
-//import com.google.common.collect.ImmutableMap;
-//import htsjdk.samtools.util.Lazy;
-//import org.apache.commons.math3.linear.Array2DRowRealMatrix;
-//import org.apache.commons.math3.linear.RealMatrix;
-//import org.apache.logging.log4j.LogManager;
-//import org.apache.logging.log4j.Logger;
-//import org.broadinstitute.hdf5.HDF5File;
-//import org.broadinstitute.hellbender.exceptions.GATKException;
-//import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
-//import org.broadinstitute.hellbender.tools.exome.Target;
-//import org.broadinstitute.hellbender.tools.exome.TargetTableColumn;
-//import org.broadinstitute.hellbender.utils.SimpleInterval;
-//import org.broadinstitute.hellbender.utils.Utils;
-//
-//import java.io.File;
-//import java.util.*;
-//import java.util.function.IntPredicate;
-//import java.util.stream.Collectors;
-//
-///**
-// * HDF5 File backed coverage panel of normals data structure.
-// *
-// * Several attributes are stored transposed (in other words, the rows and columns are interchanged).
-// * This dodges a very slow write time in HDF5, since we usually have many more rows (targets) than columns (samples),
-// * and HDF5 writes matrices with few rows and many columns much faster than matrices with many rows and few columns.
-// *
-// * The following are stored as transposes:
-// *
-// * <ul>
-// *  <li>Normalized Counts</li>
-// *  <li>Log-Normalized Counts</li>
-// *  <li>Reduced Panel Counts</li>
-// *</ul>
-// *
-// * In these cases, the samples are the rows and the targets are the columns.  No transposing is performed for
-// * pseudoinverses since they already have dimensions of samples x targets.
-// *
-// * This is only for storage.  When saving/loading the above attributes, the transposing is handled transparently.
-// *
-// * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
-// * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
-// */
-//public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCountPanelOfNormals {
-//    private final HDF5File file;
-//
-//    private static final Logger logger = LogManager.getLogger(HDF5RandomizedSVDReadCountPanelOfNormals.class);
-//
-//    /**
-//     * The version number is a double where the integer part is the
-//     * major version and the decimal part is the minor version.
-//     */
-//    public static final double CURRENT_PON_VERSION = 7.0;
-//
-//    private static final String VERSION_PATH = "/version/values";
-//
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
+
+import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.broadinstitute.hdf5.HDF5File;
+import org.broadinstitute.hellbender.tools.exome.Target;
+import org.broadinstitute.hellbender.utils.Utils;
+
+import java.util.List;
+
+/**
+ * TODO
+ *
+ * HDF5 File backed coverage panel of normals data structure.
+ *
+ * Several attributes are stored transposed (in other words, the rows and columns are interchanged).
+ * This dodges a very slow write time in HDF5, since we usually have many more rows (targets) than columns (samples),
+ * and HDF5 writes matrices with few rows and many columns much faster than matrices with many rows and few columns.
+ *
+ * The following are stored as transposes:
+ *
+ * <ul>
+ *  <li>Normalized Counts</li>
+ *  <li>Log-Normalized Counts</li>
+ *  <li>Reduced Panel Counts</li>
+ *</ul>
+ *
+ * In these cases, the samples are the rows and the targets are the columns.  No transposing is performed for
+ * pseudoinverses since they already have dimensions of samples x targets.
+ *
+ * This is only for storage.  When saving/loading the above attributes, the transposing is handled transparently.
+ *
+ * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
+ * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
+ */
+public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCountPanelOfNormals {
+    private final HDF5File file;
+
+    private static final Logger logger = LogManager.getLogger(HDF5RandomizedSVDReadCountPanelOfNormals.class);
+
+    /**
+     * The version number is a double where the integer part is the
+     * major version and the decimal part is the minor version.
+     */
+    public static final double CURRENT_PON_VERSION = 7.0;
+
+    private static final String VERSION_PATH = "/version/values";
+
 //    //targets
 //    private static final String RAW_TARGETS_GROUP_NAME = "/raw_targets";
 //    private static final String RAW_TARGETS_PATH = RAW_TARGETS_GROUP_NAME + "/block0_values";
@@ -89,90 +81,90 @@
 //
 //    private Lazy<List<String>> sampleNames;
 //    private Lazy<List<String>> panelSampleNames;
-//
-//    /*===============================================================================================================*
-//     * METHODS                                                                                                       *
-//     *===============================================================================================================*/
-//
-//    /**
-//     * Create a new PoN interface to a HDF5 file.
-//     *
-//     * <p>DEV NOTE:  If you are adding attributes that are not RealMatrix nor a primitive,
-//     * you must follow the pattern in the constructor (i.e. the Lazy loading pattern).
-//     * See the targetNames private attribute.  Otherwise, some operations will hang.</p>
-//     * @param file the underlying HDF5 file.
-//     * @throws IllegalArgumentException if {@code file} is {@code null}.
-//     */
-//    public HDF5RandomizedSVDReadCountPanelOfNormals(final HDF5File file) {
-//        Utils.nonNull(file, "The input file cannot be null.");
-//        this.file = file;
+
+    /*===============================================================================================================*
+     * METHODS                                                                                                       *
+     *===============================================================================================================*/
+
+    /**
+     * Create a new PoN interface to a HDF5 file.
+     *
+     * <p>DEV NOTE:  If you are adding attributes that are not RealMatrix nor a primitive,
+     * you must follow the pattern in the constructor (i.e. the Lazy loading pattern).
+     * See the targetNames private attribute.  Otherwise, some operations will hang.</p>
+     * @param file the underlying HDF5 file.
+     * @throws IllegalArgumentException if {@code file} is {@code null}.
+     */
+    public HDF5RandomizedSVDReadCountPanelOfNormals(final HDF5File file) {
+        Utils.nonNull(file, "The input file cannot be null.");
+        this.file = file;
 //        rawTargets  = new Lazy<>(() -> readTargets(file, RAW_TARGETS_PATH, RAW_TARGET_NAMES_PATH));
 //        panelTargets = new Lazy<>(() -> readTargets(file, PANEL_TARGETS_PATH, PANEL_TARGET_NAMES_PATH));
 //        sampleNames = new Lazy<>(() -> readNames(file, SAMPLE_NAMES_PATH));
 //        panelSampleNames = new Lazy<>(() -> readNames(file, PANEL_SAMPLE_NAMES_PATH));
-//    }
-//
-//    /**
-//     * Create a new PoN interface to a HDF5 file.  A version check is performed and a warning message logged if the
-//     * PoN version number is not up to date.
-//     *
-//     * @param file      the underlying HDF5 file.
-//     * @param logger    the logger to log the warning message with.
-//     * @throws IllegalArgumentException if {@code file} is {@code null}.
-//     */
-//    public HDF5RandomizedSVDReadCountPanelOfNormals(final HDF5File file, final Logger logger) {
-//        this(file);
-//        if (getVersion() < CURRENT_PON_VERSION) {
-//            logger.warn("The version of the specified panel of normals (" + getVersion() + ") is older than the latest version " +
-//                    "(" + CURRENT_PON_VERSION + ").");
-//        }
-//    }
-//
-//    @Override
-//    public double getVersion() {
-//        return file.readDouble(VERSION_PATH);
-//    }
-//
-//    @Override
-//    public int getNumEigensamples() {
-//        return 0;
-//    }
-//
-//    @Override
-//    public RealMatrix getOriginalReadCounts() {
-//        return null;
-//    }
-//
-//    @Override
-//    public List<Target> getOriginalIntervals() {
-//        return null;
-//    }
-//
-//    @Override
-//    public List<Target> getPanelIntervals() {
-//        return panelTargets.get();
-//    }
-//
-//    @Override
-//    public double[] getPanelIntervalFractionalMedians() {
-//        return new double[0];
-//    }
-//
-//    @Override
-//    public double[] getSingularValues() {
-//        return new double[0];
-//    }
-//
-//    @Override
-//    public double[][] getRightSingular() {
-//        return new double[0][];
-//    }
-//
-//    @Override
-//    public double[][] getRightSingularPseudoinverse() {
-//        return new double[0][];
-//    }
-//
+    }
+
+    /**
+     * Create a new PoN interface to a HDF5 file.  A version check is performed and a warning message logged if the
+     * PoN version number is not up to date.
+     *
+     * @param file      the underlying HDF5 file.
+     * @param logger    the logger to log the warning message with.
+     * @throws IllegalArgumentException if {@code file} is {@code null}.
+     */
+    public HDF5RandomizedSVDReadCountPanelOfNormals(final HDF5File file, final Logger logger) {
+        this(file);
+        if (getVersion() < CURRENT_PON_VERSION) {
+            logger.warn("The version of the specified panel of normals (" + getVersion() + ") is older than the latest version " +
+                    "(" + CURRENT_PON_VERSION + ").");
+        }
+    }
+
+    @Override
+    public double getVersion() {
+        return file.readDouble(VERSION_PATH);
+    }
+
+    @Override
+    public int getNumEigensamples() {
+        return 0;
+    }
+
+    @Override
+    public RealMatrix getOriginalReadCounts() {
+        return null;
+    }
+
+    @Override
+    public List<Target> getOriginalIntervals() {
+        return null;
+    }
+
+    @Override
+    public List<Target> getPanelIntervals() {
+        return null;
+    }
+
+    @Override
+    public double[] getPanelIntervalFractionalMedians() {
+        return new double[0];
+    }
+
+    @Override
+    public double[] getSingularValues() {
+        return new double[0];
+    }
+
+    @Override
+    public double[][] getRightSingular() {
+        return new double[0][];
+    }
+
+    @Override
+    public double[][] getRightSingularPseudoinverse() {
+        return new double[0][];
+    }
+
 //    @Override
 //    public double[] getAllIntervalFractionalMedians() {
 //        final double[] values = file.readDoubleArray(TARGET_FACTORS_PATH);
@@ -468,4 +460,4 @@
 //        }
 //        return transpose;
 //    }
-//}
+}

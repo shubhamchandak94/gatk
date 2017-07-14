@@ -4,12 +4,18 @@ import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.QRDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.random.RandomGenerator;
+import org.apache.commons.math3.random.RandomGeneratorFactory;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.mllib.linalg.distributed.RowMatrix;
 import org.broadinstitute.hellbender.engine.spark.SparkContextFactory;
+import org.broadinstitute.hellbender.utils.spark.SparkConverter;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
+import java.util.Random;
 import java.util.stream.IntStream;
 
 
@@ -75,6 +81,28 @@ public final class SingularValueDecomposerUnitTest extends BaseTest {
         Assert.assertEquals(p.multiply(m).multiply(p), p);
         Assert.assertEquals(m.multiply(p).transpose(), m.multiply(p));
         Assert.assertEquals(p.multiply(m).transpose(), p.multiply(m));
+    }
+
+    @Test
+    public void test() {
+        final JavaSparkContext ctx = SparkContextFactory.getTestSparkContext();
+        final RandomGenerator rng = RandomGeneratorFactory.createRandomGenerator(new Random(42));
+        final int M = 100000;
+        final int N = 200;
+        final int numSlices = 50;
+        final double[][] data = new double[M][N];
+        System.out.println("Generating data.");
+        for (int i = 0; i < M; i++) {
+            for (int j = 0; j < N; j++) {
+                data[i][j] = rng.nextGaussian();
+            }
+        }
+        System.out.println("Data generated.");
+        final RealMatrix mat = MatrixUtils.createRealMatrix(data);
+        System.out.println("RealMatrix created.");
+        System.out.println("Computing SVD.");
+        SVDFactory.createSVD(mat);
+        System.out.println("Done.");
     }
 }
 

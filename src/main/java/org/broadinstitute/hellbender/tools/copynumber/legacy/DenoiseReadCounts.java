@@ -50,6 +50,8 @@ import java.io.IOException;
 )
 @DocumentedFeature
 public final class DenoiseReadCounts extends SparkCommandLineProgram {
+    private static final long serialVersionUID = 1L;
+
     private static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
     private static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
 

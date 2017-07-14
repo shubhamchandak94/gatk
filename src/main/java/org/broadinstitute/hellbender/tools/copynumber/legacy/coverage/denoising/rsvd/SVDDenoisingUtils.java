@@ -79,9 +79,7 @@ public final class SVDDenoisingUtils {
         logger.info("Standardizing sample read counts...");
         final RealMatrix standardizedCounts = standardizeSample(subsetReadCounts, panelOfNormals.getPanelIntervalFractionalMedians());
 
-        final double fractionOfVariance = calculateFractionOfVariance(numEigensamples, panelOfNormals.getSingularValues());
-        logger.info(String.format("Using %d out of %d eigensamples (fraction of the total variance accounted for in the panel of normals = %.3f) to denoise...",
-                numEigensamples, panelOfNormals.getNumEigensamples(), fractionOfVariance));
+        logger.info(String.format("Using %d out of %d eigensamples to denoise...", numEigensamples, panelOfNormals.getNumEigensamples()));
         logger.info("Subtracting projection onto space spanned by eigensamples...");
         final RealMatrix denoisedCounts = subtractProjection(standardizedCounts,
                 panelOfNormals.getRightSingular(), panelOfNormals.getRightSingularPseudoinverse(), numEigensamples, ctx);
@@ -189,29 +187,6 @@ public final class SVDDenoisingUtils {
         logger.info("Sample read counts standardized.");
 
         return result;
-    }
-
-    /**
-     * Calculates the fraction of variance accounted for by the first {@code numEigensamples}
-     * eigensamples (which are sorted by their singular values in decreasing order) given the
-     * sorted list of singular values.
-     */
-    private static double calculateFractionOfVariance(final double numEigensamples,
-                                                      final double[] singularValues) {
-        if (numEigensamples == singularValues.length) {
-            return 1.;
-        }
-        double varianceEigensamples = 0.;
-        double varianceNoise = 0.;
-        for (int i = 0; i < singularValues.length; i++) {
-            final double eigenvalue = singularValues[i] * singularValues[i];
-            if (i < numEigensamples) {
-                varianceEigensamples += eigenvalue;
-            } else {
-                varianceNoise += eigenvalue;
-            }
-        }
-        return varianceEigensamples / (varianceEigensamples + varianceNoise);
     }
 
     /**

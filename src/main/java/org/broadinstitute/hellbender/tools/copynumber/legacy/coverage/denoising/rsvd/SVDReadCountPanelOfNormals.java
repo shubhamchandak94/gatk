@@ -53,7 +53,7 @@ public interface SVDReadCountPanelOfNormals {
     double[] getPanelIntervalFractionalMedians();
 
     /**
-     * Returns the singular values of the eigensamples in decreasing order.
+     * Returns the singular values of the eigensamples in decreasing order.  This array has length {@code K}.
      */
     double[] getSingularValues();
 
