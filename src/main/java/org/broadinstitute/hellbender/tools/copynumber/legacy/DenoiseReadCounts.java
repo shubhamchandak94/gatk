@@ -106,7 +106,7 @@ public final class DenoiseReadCounts extends SparkCommandLineProgram {
         try (final HDF5File hdf5PanelOfNormalsFile = new HDF5File(inputPanelOfNormalsFile)) {  //HDF5File implements AutoCloseable
             //load input files
             final ReadCountCollection readCounts = ReadCountCollectionUtils.parse(inputReadCountsFile);
-            final SVDReadCountPanelOfNormals panelOfNormals = new HDF5RandomizedSVDReadCountPanelOfNormals(hdf5PanelOfNormalsFile, logger);
+            final SVDReadCountPanelOfNormals panelOfNormals = HDF5RandomizedSVDReadCountPanelOfNormals.read(hdf5PanelOfNormalsFile);
 
             //check that read-count collection contains single sample and integer counts
             SVDDenoisingUtils.validateReadCounts(readCounts);

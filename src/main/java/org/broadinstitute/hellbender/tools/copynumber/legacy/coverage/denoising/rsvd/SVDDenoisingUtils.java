@@ -99,54 +99,6 @@ public final class SVDDenoisingUtils {
     }
 
     /**
-     * Standardize read counts from a panel of normals.  This is performed in place to minimize memory footprint.
-     */
-    static void standardizePanel(final RealMatrix readCounts) {
-        //TODO add filtering, etc. and extract
-
-        logger.info("Transforming read counts to fractional coverage...");
-        final double[] sampleSums = GATKProtectedMathUtils.columnSums(readCounts);
-        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
-                return value / sampleSums[sampleIndex];
-            }
-        });
-
-        //use interval fractional medians from panel of normals if provided, else calculate from provided read counts
-        logger.info("Dividing by interval medians...");
-        final double[] intervalMedians = IntStream.range(0, readCounts.getColumnDimension())
-                        .mapToDouble(intervalIndex -> new Median().evaluate(readCounts.getColumn(intervalIndex))).toArray();
-        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
-                return value / intervalMedians[intervalIndex];
-            }
-        });
-
-        logger.info("Dividing by sample means and transforming to log2 space...");
-        final double[] sampleMeans = GATKProtectedMathUtils.columnMeans(readCounts);
-        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
-                return safeLog2(value / sampleMeans[sampleIndex]);
-            }
-        });
-
-        logger.info("Subtracting sample medians...");
-        final double[] sampleMedians = IntStream.range(0, readCounts.getRowDimension())
-                .mapToDouble(sampleIndex -> new Median().evaluate(readCounts.getColumn(sampleIndex))).toArray();
-        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
-                return value - sampleMedians[sampleIndex];
-            }
-        });
-
-        logger.info("Panel read counts standardized.");
-    }
-
-    /**
      * Standardize read counts for a single sample, using interval fractional medians from a panel of normals.
      */
     private static RealMatrix standardizeSample(final RealMatrix readCounts, final double[] intervalFractionalMedians) {
@@ -236,7 +188,7 @@ public final class SVDDenoisingUtils {
         return standardizedProfile.subtract(projection);
     }
 
-    private static double safeLog2(final double x) {
+    static double safeLog2(final double x) {
         return x < EPSILON ? LN2_EPSILON : Math.log(x) * INV_LN2;
     }
 }

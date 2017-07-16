@@ -3,18 +3,19 @@ package org.broadinstitute.hellbender.tools.copynumber.legacy;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.barclay.argparser.Argument;
+import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hdf5.HDF5Library;
-import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
+import org.broadinstitute.hellbender.engine.spark.SparkCommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.HDF5RandomizedSVDReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDDenoisingUtils;
-import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
-import org.broadinstitute.hellbender.tools.exome.ReadCountCollectionUtils;
-import org.broadinstitute.hellbender.tools.exome.Target;
+import org.broadinstitute.hellbender.tools.exome.*;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
@@ -60,13 +61,10 @@ import java.util.stream.Collectors;
         programGroup = CopyNumberProgramGroup.class
 )
 @DocumentedFeature
-//public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
-public class CreateReadCountPanelOfNormals extends CommandLineProgram {
+public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private static final long serialVersionUID = 1L;
 
     //parameter names
-    private static final String GC_ANNOTATED_INTERVAL_FILE_LONG_NAME = "gcAnnotatedIntervals";
-    private static final String GC_ANNOTATED_INTERVAL_FILE_SHORT_NAME = "gcAnnot";
     private static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME = "minimumIntervalMedianPercentile";
     private static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME = "minIntervalMedPct";
     private static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME = "maximumZerosInSamplePercentage";
@@ -101,14 +99,11 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
     )
     private List<File> inputReadCountFiles = new ArrayList<>();
 
-    @Argument(
+    @ArgumentCollection(
             doc = "Input annotated-interval file containing annotations for GC content in genomic intervals (output of AnnotateTargets).  " +
-                    "Intervals must be identical to and in the same order as those in the input read-count files.",
-            fullName = GC_ANNOTATED_INTERVAL_FILE_LONG_NAME,
-            shortName = GC_ANNOTATED_INTERVAL_FILE_SHORT_NAME,
-            optional = true
+                    "Intervals must be identical to and in the same order as those in the input read-count files."
     )
-    private File inputGCAnnotatedIntervals = null;
+    protected TargetArgumentCollection annotatedIntervalArguments = new TargetArgumentCollection();
 
     @Argument(
             doc = "Output file name for the panel of normals.  " +
@@ -190,8 +185,7 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
     private File outputIntervalWeightsFile = null;
 
     @Override
-//    protected void runPipeline(final JavaSparkContext ctx) {
-    protected Object doWork() {
+    protected void runPipeline(final JavaSparkContext ctx) {
         if (!new HDF5Library().load(null)) {  //Note: passing null means using the default temp dir.
             throw new UserException.HardwareFeatureException("Cannot load the required HDF5 library. " +
                     "HDF5 is currently supported on x86-64 architecture and Linux or OSX systems.");
@@ -199,30 +193,36 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
 
         //validate parameters and parse optional parameters
         validateArguments();
-        //TODO check for GC annotations
         if (outputIntervalWeightsFile == null) {
             outputIntervalWeightsFile = new File(outputPanelOfNormalsFile + INTERVAL_WEIGHTS_FILE_SUFFIX);
         }
 
+        //get sample filenames
+        final List<String> sampleFilenames = inputReadCountFiles.stream().map(File::getAbsolutePath).collect(Collectors.toList());
+
         //get intervals from the first read-count file to use as the canonical list of intervals
         final List<SimpleInterval> intervals = getIntervalsFromFirstReadCountFile(logger, inputReadCountFiles);
+
+        //get GC content (null if not provided)
+        final double[] intervalGCContent = getIntervalGCContent(logger, intervals,
+                annotatedIntervalArguments.readTargetCollection(true));
 
         //validate input read-count files (i.e., check intervals and that only integer counts are contained)
         //and aggregate as a RealMatrix with dimensions numIntervals x numSamples
         final RealMatrix readCountMatrix = constructReadCountMatrix(logger, inputReadCountFiles, intervals);
 
-//        //create the PoN
-//        logger.info("Creating the panel of normals...");
-//        HDF5PCACoveragePoNCreationUtils.create(outputPanelOfNormalsFile, getCommandLine(), coverageMatrix, gcAnnotatedIntervals,
-//                minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
-//                extremeSampleMedianPercentile, extremeOutlierTruncationPercentile, ctx);
+        //create the PoN
+        logger.info("Creating the panel of normals...");
+        HDF5RandomizedSVDReadCountPanelOfNormals.create(outputPanelOfNormalsFile, getCommandLine(),
+                readCountMatrix, sampleFilenames, intervals, intervalGCContent,
+                minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
+                extremeSampleMedianPercentile, extremeOutlierTruncationPercentile, ctx);
 //
 //        //output a copy of the interval weights to file
 //        logger.info("Writing interval-weights file to " + outputIntervalWeightsFile + "...");
 //        writeIntervalWeightsFile(outputPanelOfNormalsFile, outputIntervalWeightsFile);
 
         logger.info("Panel of normals successfully created.");
-        return "SUCCESS";
     }
 
     private void validateArguments() {
@@ -236,6 +236,18 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
         }
     }
 
+    private static double[] getIntervalGCContent(final Logger logger,
+                                                 final List<SimpleInterval> intervals,
+                                                 final TargetCollection<Target> annotatedIntervals) {
+        logger.info("Validating and reading GC-content annotations for intervals...");
+        Utils.validateArg(annotatedIntervals.targets().stream().map(Target::getInterval).equals(intervals),
+                "Annotated intervals do not match intervals from first read-count file.");
+        if (!annotatedIntervals.targets().stream().allMatch(t -> t.getAnnotations().hasAnnotation(TargetAnnotation.GC_CONTENT))) {
+            throw new UserException.BadInput("At least one interval is missing a GC-content annotation.");
+        }
+        return annotatedIntervals.targets().stream().mapToDouble(t -> t.getAnnotations().getDouble(TargetAnnotation.GC_CONTENT)).toArray();
+    }
+
     private static List<SimpleInterval> getIntervalsFromFirstReadCountFile(final Logger logger,
                                                                            final List<File> inputReadCountFiles) {
         final File firstReadCountFile = inputReadCountFiles.get(0);
@@ -246,12 +258,16 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
         } catch (final IOException e) {
             throw new UserException.CouldNotReadInputFile(firstReadCountFile);
         }
+        if (firstSampleReadCounts.targets().isEmpty()) {
+            throw new UserException.BadInput("First read-count file contains no intervals.");
+        }
         return firstSampleReadCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList());
     }
 
     private RealMatrix constructReadCountMatrix(final Logger logger,
                                                 final List<File> inputReadCountFiles,
                                                 final List<SimpleInterval> intervals) {
+        //TODO CombineReadCounts does this with parallel Buffers, which may be faster
         logger.info("Validating and aggregating input read-count files...");
         final int numSamples = inputReadCountFiles.size();
         final int numIntervals = intervals.size();
