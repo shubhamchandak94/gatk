@@ -5,6 +5,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.DenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.Target;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
 
 import java.util.List;
 
@@ -33,18 +34,14 @@ public interface SVDReadCountPanelOfNormals {
     /**
      * Returns a modifiable copy of the list of the original intervals that were used to build this PoN
      * (no filtering will have been applied).  This list has length {@code M_original}.
-     *
-     * TODO replace this with a list of SimpleIntervals.  See https://github.com/broadinstitute/gatk/issues/3246
      */
-    List<Target> getOriginalIntervals();
+    List<SimpleInterval> getOriginalIntervals();
 
     /**
      * Returns a modifiable copy of the list of the intervals contained in this PoN after all filtering has been applied.
      * This list has length {@code M}.
-     *
-     * TODO replace this with a list of SimpleIntervals.  See https://github.com/broadinstitute/gatk/issues/3246
      */
-    List<Target> getPanelIntervals();
+    List<SimpleInterval> getPanelIntervals();
 
     /**
      * Returns an array containing the median (across all samples, before filtering)

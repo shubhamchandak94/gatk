@@ -15,6 +15,7 @@ import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollectionUtils;
 import org.broadinstitute.hellbender.tools.exome.Target;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.stream.Collectors;
 
 /**
  * //TODO
@@ -203,7 +205,7 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
         }
 
         //get intervals from the first read-count file to use as the canonical list of intervals
-        final List<Target> intervals = getIntervalsFromFirstReadCountFile(logger, inputReadCountFiles);
+        final List<SimpleInterval> intervals = getIntervalsFromFirstReadCountFile(logger, inputReadCountFiles);
 
         //validate input read-count files (i.e., check intervals and that only integer counts are contained)
         //and aggregate as a RealMatrix with dimensions numIntervals x numSamples
@@ -234,8 +236,8 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
         }
     }
 
-    private static List<Target> getIntervalsFromFirstReadCountFile(final Logger logger,
-                                                                   final List<File> inputReadCountFiles) {
+    private static List<SimpleInterval> getIntervalsFromFirstReadCountFile(final Logger logger,
+                                                                           final List<File> inputReadCountFiles) {
         final File firstReadCountFile = inputReadCountFiles.get(0);
         logger.info(String.format("Retrieving intervals from first read-count file (%s)...", firstReadCountFile));
         final ReadCountCollection firstSampleReadCounts;
@@ -244,12 +246,12 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
         } catch (final IOException e) {
             throw new UserException.CouldNotReadInputFile(firstReadCountFile);
         }
-        return firstSampleReadCounts.targets();
+        return firstSampleReadCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList());
     }
 
     private RealMatrix constructReadCountMatrix(final Logger logger,
                                                 final List<File> inputReadCountFiles,
-                                                final List<Target> intervals) {
+                                                final List<SimpleInterval> intervals) {
         logger.info("Validating and aggregating input read-count files...");
         final int numSamples = inputReadCountFiles.size();
         final int numIntervals = intervals.size();
@@ -268,7 +270,7 @@ public class CreateReadCountPanelOfNormals extends CommandLineProgram {
             }
             logger.info("Validating...");
             SVDDenoisingUtils.validateReadCounts(readCounts);
-            Utils.validateArg(readCounts.targets().equals(intervals),
+            Utils.validateArg(readCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList()).equals(intervals),
                     String.format("Intervals for read-count file %s do not match those in other read-count files.", inputReadCountFile));
             logger.info("Adding to RealMatrix...");
             readCountMatrix.setRow(sampleIndex, readCounts.getColumn(0));

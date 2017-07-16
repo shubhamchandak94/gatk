@@ -14,12 +14,14 @@ import org.apache.spark.mllib.linalg.distributed.RowMatrix;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.DenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
+import org.broadinstitute.hellbender.tools.exome.Target;
 import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.spark.SparkConverter;
 
 import java.util.HashSet;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -70,11 +72,14 @@ public final class SVDDenoisingUtils {
                 "Number of eigensamples to use for denoising is greater than the number available in the panel of normals.");
 
         logger.info("Validating sample intervals against original intervals used to build panel of normals...");
-        Utils.validateArg(panelOfNormals.getOriginalIntervals().equals(readCounts.targets()),
+        Utils.validateArg(panelOfNormals.getOriginalIntervals().equals(readCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList())),
                 "Sample intervals must be identical to the original intervals used to build the panel of normals.");
 
         logger.info("Subsetting sample intervals to post-filter panel intervals...");
-        final RealMatrix subsetReadCounts = readCounts.subsetTargets(new HashSet<>(panelOfNormals.getPanelIntervals())).counts();
+        final int[] subsetIntervalIndices = IntStream.range(0, readCounts.targets().size())
+                .filter(i -> panelOfNormals.getPanelIntervals().contains(readCounts.targets().get(i).getInterval()))
+                .toArray();
+        final RealMatrix subsetReadCounts = readCounts.counts().getSubMatrix(subsetIntervalIndices, new int[]{0});
 
         logger.info("Standardizing sample read counts...");
         final RealMatrix standardizedCounts = standardizeSample(subsetReadCounts, panelOfNormals.getPanelIntervalFractionalMedians());
