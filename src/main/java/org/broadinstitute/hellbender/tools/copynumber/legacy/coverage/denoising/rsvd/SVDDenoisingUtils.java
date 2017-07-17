@@ -16,11 +16,13 @@ import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.Target;
 import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.spark.SparkConverter;
 
 import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -75,19 +77,13 @@ public final class SVDDenoisingUtils {
         Utils.validateArg(panelOfNormals.getOriginalIntervals().equals(readCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList())),
                 "Sample intervals must be identical to the original intervals used to build the panel of normals.");
 
-        logger.info("Subsetting sample intervals to post-filter panel intervals...");
-        final int[] subsetIntervalIndices = IntStream.range(0, readCounts.targets().size())
-                .filter(i -> panelOfNormals.getPanelIntervals().contains(readCounts.targets().get(i).getInterval()))
-                .toArray();
-        final RealMatrix subsetReadCounts = readCounts.counts().getSubMatrix(subsetIntervalIndices, new int[]{0});
-
         logger.info("Standardizing sample read counts...");
-        final RealMatrix standardizedCounts = standardizeSample(subsetReadCounts, panelOfNormals.getPanelIntervalFractionalMedians());
+        final RealMatrix standardizedCounts = preprocessAndStandardizeSample(panelOfNormals, readCounts.counts());
 
         logger.info(String.format("Using %d out of %d eigensamples to denoise...", numEigensamples, panelOfNormals.getNumEigensamples()));
         logger.info("Subtracting projection onto space spanned by eigensamples...");
         final RealMatrix denoisedCounts = subtractProjection(standardizedCounts,
-                panelOfNormals.getRightSingular(), panelOfNormals.getRightSingularPseudoinverse(), numEigensamples, ctx);
+                panelOfNormals.getLeftSingular(), panelOfNormals.getLeftSingularPseudoinverse(), numEigensamples, ctx);
 
         logger.info("Sample denoised.");
 
@@ -100,31 +96,41 @@ public final class SVDDenoisingUtils {
 
     /**
      * Standardize read counts for a single sample, using interval fractional medians from a panel of normals.
+     * The original {@code readCounts} has dimensions intervals x 1 and is not modified.
      */
-    private static RealMatrix standardizeSample(final RealMatrix readCounts, final double[] intervalFractionalMedians) {
-        final RealMatrix result = readCounts.copy();
+    private static RealMatrix preprocessAndStandardizeSample(final SVDReadCountPanelOfNormals panelOfNormals,
+                                                             final RealMatrix readCounts) {
+        RealMatrix result = readCounts.copy();
 
         logger.info("Transforming read counts to fractional coverage...");
-        final double[] sampleSums = GATKProtectedMathUtils.columnSums(readCounts);
-        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+        final double[] sampleSums = GATKProtectedMathUtils.rowSums(readCounts);
+        result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(final int intervalIndex, final int sampleIndex, final double value) {
                 return value / sampleSums[sampleIndex];
             }
         });
 
+        logger.info("Subsetting sample intervals to post-filter panel intervals...");
+        final Set<SimpleInterval> panelIntervals = new HashSet<>(panelOfNormals.getPanelIntervals());
+        final int[] subsetIntervalIndices = IntStream.range(0, panelOfNormals.getOriginalIntervals().size())
+                .filter(i -> panelIntervals.contains(panelOfNormals.getOriginalIntervals().get(i)))
+                .toArray();
+        result = readCounts.getSubMatrix(subsetIntervalIndices, new int[]{0});
+
         //use interval fractional medians from panel of normals if provided, else calculate from provided read counts
         logger.info("Dividing by interval medians from the panel of normals...");
-        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+        final double[] intervalMedians = panelOfNormals.getPanelIntervalFractionalMedians();
+        result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(final int intervalIndex, final int sampleIndex, final double value) {
-                return value / intervalFractionalMedians[intervalIndex];
+                return value / intervalMedians[intervalIndex];
             }
         });
 
         logger.info("Dividing by sample mean and transforming to log2 space...");
         final double[] sampleMeans = GATKProtectedMathUtils.columnMeans(readCounts);
-        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+        result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(final int intervalIndex, final int sampleIndex, final double value) {
                 return safeLog2(value / sampleMeans[sampleIndex]);
@@ -132,9 +138,9 @@ public final class SVDDenoisingUtils {
         });
 
         logger.info("Subtracting sample median...");
-        final double[] sampleMedians = IntStream.range(0, readCounts.getRowDimension())
+        final double[] sampleMedians = IntStream.range(0, readCounts.getColumnDimension())
                 .mapToDouble(sampleIndex -> new Median().evaluate(readCounts.getColumn(sampleIndex))).toArray();
-        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+        result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(final int intervalIndex, final int sampleIndex, final double value) {
                 return value - sampleMedians[sampleIndex];
@@ -148,40 +154,39 @@ public final class SVDDenoisingUtils {
 
     /**
      * Given standardized read counts specified by a column vector S (dimensions {@code M x 1}),
-     * right-singular vectors V (dimensions {@code M x K}), and the pseudoinverse V<sup>+</sup> (dimensions {@code K x M}),
-     * returns s - V V<sup>+</sup> s.
+     * left-singular vectors U (dimensions {@code M x K}), and the pseudoinverse U<sup>+</sup> (dimensions {@code K x M}),
+     * returns s - U U<sup>+</sup> s.
      */
     private static RealMatrix subtractProjection(final RealMatrix standardizedProfile,
-                                                 final double[][] rightSingular,
-                                                 final double[][] rightSingularPseudoinverse,
+                                                 final double[][] leftSingular,
+                                                 final double[][] leftSingularPseudoinverse,
                                                  final int numEigensamples,
                                                  final JavaSparkContext ctx) {
-        final int numIntervals = rightSingular.length;
+        final int numIntervals = leftSingular.length;
 
         logger.info("Distributing the standardized read counts...");
         final RowMatrix standardizedProfileDistributedMatrix = SparkConverter.convertRealMatrixToSparkRowMatrix(
                 ctx, standardizedProfile.transpose(), NUM_SLICES_SPARK);
 
-        logger.info("Composing right-singular matrix and pseudoinverse for the requested number of eigensamples and transposing them...");
-        final RealMatrix rightSingularTruncatedMatrix = new Array2DRowRealMatrix(rightSingular)
-                .getSubMatrix(0, numIntervals, 0, numEigensamples);
-        final Matrix rightSingularTruncatedTransposedLocalMatrix = new DenseMatrix(numIntervals, numEigensamples,
-                Doubles.concat(rightSingularTruncatedMatrix.getData()))
+        logger.info("Composing left-singular matrix and pseudoinverse for the requested number of eigensamples and transposing them...");
+        final RealMatrix leftSingularTruncatedMatrix = new Array2DRowRealMatrix(leftSingular)
+                .getSubMatrix(0, numIntervals - 1, 0, numEigensamples - 1);
+        final Matrix leftSingularTruncatedTransposedLocalMatrix = new DenseMatrix(numIntervals, numEigensamples,
+                Doubles.concat(leftSingularTruncatedMatrix.getData()))
                 .transpose();
-        final RealMatrix rightSingularPseudoinverseTruncatedMatrix = new Array2DRowRealMatrix(rightSingularPseudoinverse)
-                .getSubMatrix(0, numEigensamples, 0, numIntervals);
-        final Matrix rightSingularPseudoinverseTransposeLocalMatrix = new DenseMatrix(numEigensamples, numIntervals,
-                Doubles.concat(rightSingularPseudoinverseTruncatedMatrix.getData()), true)
+        final RealMatrix leftSingularPseudoinverseTruncatedMatrix = new Array2DRowRealMatrix(leftSingularPseudoinverse)
+                .getSubMatrix(0, numEigensamples - 1, 0, numIntervals - 1);
+        final Matrix leftSingularPseudoinverseTransposeLocalMatrix = new DenseMatrix(numEigensamples, numIntervals,
+                Doubles.concat(leftSingularPseudoinverseTruncatedMatrix.getData()), true)
                 .transpose();
 
         logger.info("Computing projection of transpose...");
         final RowMatrix projectionTransposeDistributedMatrix = standardizedProfileDistributedMatrix
-                .multiply(rightSingularPseudoinverseTransposeLocalMatrix)
-                .multiply(rightSingularTruncatedTransposedLocalMatrix);
+                .multiply(leftSingularPseudoinverseTransposeLocalMatrix)
+                .multiply(leftSingularTruncatedTransposedLocalMatrix);
 
         logger.info("Converting and transposing result...");
-        final int numRows = standardizedProfile.getRowDimension();
-        final RealMatrix projection = SparkConverter.convertSparkRowMatrixToRealMatrix(projectionTransposeDistributedMatrix, numRows)
+        final RealMatrix projection = SparkConverter.convertSparkRowMatrixToRealMatrix(projectionTransposeDistributedMatrix, 1)
                 .transpose();
 
         logger.info("Subtracting projection...");

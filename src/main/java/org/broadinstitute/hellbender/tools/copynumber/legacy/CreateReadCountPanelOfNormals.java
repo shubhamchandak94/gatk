@@ -65,20 +65,20 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private static final long serialVersionUID = 1L;
 
     //parameter names
-    private static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME = "minimumIntervalMedianPercentile";
-    private static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME = "minIntervalMedPct";
-    private static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME = "maximumZerosInSamplePercentage";
-    private static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME = "maxZerosInSamplePct";
-    private static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_LONG_NAME = "maximumZerosInIntervalPercentage";
-    private static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME = "maxZerosInIntervalPct";
-    private static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_LONG_NAME = "extremeSampleMedianPercentile";
-    private static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_SHORT_NAME = "extSampleMedPct";
-    private static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME = "extremeOutlierTruncationPercentile";
-    private static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_SHORT_NAME = "extOutTruncPct";
-    private static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
-    private static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
-    private static final String INTERVAL_WEIGHTS_LONG_NAME = "intervalWeights";
-    private static final String INTERVAL_WEIGHTS_SHORT_NAME = "weights";
+    static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME = "minimumIntervalMedianPercentile";
+    static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME = "minIntervalMedPct";
+    static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME = "maximumZerosInSamplePercentage";
+    static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME = "maxZerosInSamplePct";
+    static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_LONG_NAME = "maximumZerosInIntervalPercentage";
+    static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME = "maxZerosInIntervalPct";
+    static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_LONG_NAME = "extremeSampleMedianPercentile";
+    static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_SHORT_NAME = "extSampleMedPct";
+    static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME = "extremeOutlierTruncationPercentile";
+    static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_SHORT_NAME = "extOutTruncPct";
+    static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
+    static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
+    static final String INTERVAL_WEIGHTS_LONG_NAME = "intervalWeights";
+    static final String INTERVAL_WEIGHTS_SHORT_NAME = "weights";
 
     //default values for filtering (taken from ReCapSeg)
     private static final double DEFAULT_MINIMUM_INTERVAL_MEDIAN_PERCENTILE = 25.0;
@@ -103,7 +103,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             doc = "Input annotated-interval file containing annotations for GC content in genomic intervals (output of AnnotateTargets).  " +
                     "Intervals must be identical to and in the same order as those in the input read-count files."
     )
-    protected TargetArgumentCollection annotatedIntervalArguments = new TargetArgumentCollection();
+    private TargetArgumentCollection annotatedIntervalArguments = new TargetArgumentCollection();
 
     @Argument(
             doc = "Output file name for the panel of normals.  " +
@@ -229,16 +229,20 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         Utils.validateArg(inputReadCountFiles.size() == new HashSet<>(inputReadCountFiles).size(),
                 "List of input read-count files cannot contain duplicates.");
         inputReadCountFiles.forEach(IOUtils::canReadFile);
-        if (numberOfEigensamples <= inputReadCountFiles.size()) {
-            logger.warn("Number of eigensamples (%d) is greater than the number of input samples (%d); " +
+        if (numberOfEigensamples > inputReadCountFiles.size()) {
+            logger.warn(String.format("Number of eigensamples (%d) is greater than the number of input samples (%d); " +
                             "the number of samples retained after filtering will be used instead.",
-                    numberOfEigensamples, inputReadCountFiles.size());
+                    numberOfEigensamples, inputReadCountFiles.size()));
         }
     }
 
     private static double[] getIntervalGCContent(final Logger logger,
                                                  final List<SimpleInterval> intervals,
                                                  final TargetCollection<Target> annotatedIntervals) {
+        if (annotatedIntervals == null) {
+            logger.info("No GC-content annotations for intervals found; explicit GC-bias correction will not be performed...");
+            return null;
+        }
         logger.info("Validating and reading GC-content annotations for intervals...");
         Utils.validateArg(annotatedIntervals.targets().stream().map(Target::getInterval).equals(intervals),
                 "Annotated intervals do not match intervals from first read-count file.");
@@ -271,7 +275,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         logger.info("Validating and aggregating input read-count files...");
         final int numSamples = inputReadCountFiles.size();
         final int numIntervals = intervals.size();
-        final RealMatrix readCountMatrix = new Array2DRowRealMatrix(numSamples, numIntervals);
+        final RealMatrix readCountMatrix = new Array2DRowRealMatrix(numIntervals, numSamples);
         final ListIterator<File> inputReadCountFilesIterator = inputReadCountFiles.listIterator();
         while (inputReadCountFilesIterator.hasNext()) {
             final int sampleIndex = inputReadCountFilesIterator.nextIndex();
@@ -289,7 +293,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             Utils.validateArg(readCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList()).equals(intervals),
                     String.format("Intervals for read-count file %s do not match those in other read-count files.", inputReadCountFile));
             logger.info("Adding to RealMatrix...");
-            readCountMatrix.setRow(sampleIndex, readCounts.getColumn(0));
+            readCountMatrix.setColumn(sampleIndex, readCounts.getColumn(0));
         }
         return readCountMatrix;
     }

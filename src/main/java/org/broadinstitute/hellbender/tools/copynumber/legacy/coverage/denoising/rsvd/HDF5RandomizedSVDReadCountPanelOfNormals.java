@@ -10,7 +10,6 @@ import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
-import org.broadinstitute.hellbender.utils.MatrixSummaryUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.svd.SVD;
@@ -54,25 +53,28 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     /**
      * The version number is a double where the integer part is the
      * major version and the decimal part is the minor version.
+     * The minor version should be only a single digit.
      */
     private static final double CURRENT_PON_VERSION = 7.0;
 
-    private static final String VERSION_PATH = "/version/values";
-    private static final String COMMAND_LINE_PATH = "/command_line";
+
+    private static final String VERSION_PATH = "/version/value";    //note that full path names must include a top-level group name ("version" here)
+    private static final String COMMAND_LINE_PATH = "/command_line/value";
     private static final String ORIGINAL_DATA_GROUP_NAME = "/original_data";
     private static final String ORIGINAL_READ_COUNTS_PATH = ORIGINAL_DATA_GROUP_NAME + "/read_counts";
     private static final String ORIGINAL_SAMPLE_FILENAMES_PATH = ORIGINAL_DATA_GROUP_NAME + "/sample_filenames";
     private static final String ORIGINAL_INTERVALS_PATH = ORIGINAL_DATA_GROUP_NAME + "/intervals";
+    private static final String ORIGINAL_INTERVAL_GC_CONTENT_PATH = ORIGINAL_DATA_GROUP_NAME + "/interval_gc_content";
 
     private static final String PANEL_GROUP_NAME = "/panel";
     private static final String PANEL_SAMPLE_FILENAMES_PATH = PANEL_GROUP_NAME + "/sample_filenames";
     private static final String PANEL_INTERVALS_PATH = PANEL_GROUP_NAME + "/intervals";
     private static final String PANEL_INTERVAL_FRACTIONAL_MEDIANS_PATH = PANEL_GROUP_NAME + "/interval_fractional_medians";
     private static final String PANEL_SINGULAR_VALUES_PATH = PANEL_GROUP_NAME + "/singular_values";
-    private static final String PANEL_RIGHT_SINGULAR_PATH = PANEL_GROUP_NAME + "/right_singular";
-    private static final String PANEL_RIGHT_SINGULAR_PSEUDOINVERSE_PATH = PANEL_GROUP_NAME + "/right_singular_pseudoinverse";
+    private static final String PANEL_LEFT_SINGULAR_PATH = PANEL_GROUP_NAME + "/left_singular";
+    private static final String PANEL_LEFT_SINGULAR_PSEUDOINVERSE_PATH = PANEL_GROUP_NAME + "/left_singular_pseudoinverse";
 
-    private static final String NUM_COLUMNS_PATH = "/num_columns";
+    private static final String NUM_INTERVAL_COLUMNS_PATH = "/num_interval_columns/value";
 
     private enum IntervalColumn {
         CONTIG (0),
@@ -87,8 +89,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     }
     private static final int NUM_INTERVAL_COLUMNS = IntervalColumn.values().length;
 
-    private Lazy<List<SimpleInterval>> originalIntervals;
-    private Lazy<List<SimpleInterval>> panelIntervals;
+    private final Lazy<List<SimpleInterval>> originalIntervals;
+    private final Lazy<List<SimpleInterval>> panelIntervals;
 
     /**
      * <p>DEV NOTE:  If you are adding attributes that are neither RealMatrix nor a primitive,
@@ -98,10 +100,10 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     private HDF5RandomizedSVDReadCountPanelOfNormals(final HDF5File file) {
         Utils.nonNull(file);
         this.file = file;
-        originalIntervals  = new Lazy<>(() -> readIntervals(file, ORIGINAL_INTERVALS_PATH));
+        originalIntervals = new Lazy<>(() -> readIntervals(file, ORIGINAL_INTERVALS_PATH));
         panelIntervals = new Lazy<>(() -> readIntervals(file, PANEL_INTERVALS_PATH));
     }
-
+    
     @Override
     public double getVersion() {
         return file.readDouble(VERSION_PATH);
@@ -123,6 +125,15 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     }
 
     @Override
+    public double[] getOriginalIntervalGCContent() {
+        try {
+            return file.readDoubleArray(ORIGINAL_INTERVAL_GC_CONTENT_PATH);
+        } catch (final IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    @Override
     public List<SimpleInterval> getPanelIntervals() {
         return panelIntervals.get();
     }
@@ -134,17 +145,17 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
     @Override
     public double[] getSingularValues() {
-        return file.readDoubleArray(PANEL_SINGULAR_VALUES_PATH)
+        return file.readDoubleArray(PANEL_SINGULAR_VALUES_PATH);
     }
 
     @Override
-    public double[][] getRightSingular() {
-        return file.readDoubleMatrix(PANEL_RIGHT_SINGULAR_PATH);
+    public double[][] getLeftSingular() {
+        return file.readDoubleMatrix(PANEL_LEFT_SINGULAR_PATH);
     }
 
     @Override
-    public double[][] getRightSingularPseudoinverse() {
-        return file.readDoubleMatrix(PANEL_RIGHT_SINGULAR_PSEUDOINVERSE_PATH);
+    public double[][] getLeftSingularPseudoinverse() {
+        return file.readDoubleMatrix(PANEL_LEFT_SINGULAR_PSEUDOINVERSE_PATH);
     }
 
     /**
@@ -162,6 +173,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
     /**
      * Create the panel of normals and write it to an HDF5 file.  All inputs are assumed to be valid.
+     * The dimensions of {@code originalReadCounts} should be samples x intervals.
      * To reduce memory footprint, {@code originalReadCounts} is modified in place.
      * If {@code intervalGCContent} is null, GC-bias correction will not be performed.
      */
@@ -181,22 +193,28 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             logger.info("Creating " + outFile.getAbsolutePath() + "...");
             final HDF5RandomizedSVDReadCountPanelOfNormals pon = new HDF5RandomizedSVDReadCountPanelOfNormals(file);
 
-            logger.info(String.format("Writing version number (%f)...", CURRENT_PON_VERSION));
-            pon.setVersion(CURRENT_PON_VERSION);
+            logger.info(String.format("Writing version number (%.1f)...", CURRENT_PON_VERSION));
+            pon.writeVersion(CURRENT_PON_VERSION);
 
             logger.info("Writing command line...");
-            pon.setCommandLine(commandLine);
+            pon.writeCommandLine(commandLine);
 
-            logger.info("Writing original read counts ( x )...");
-            pon.setOriginalReadCountsPath(originalReadCounts);
+            logger.info(String.format("Writing original read counts (%d x %d)...", originalReadCounts.getRowDimension(), originalReadCounts.getColumnDimension()));
+            pon.writeOriginalReadCountsPath(originalReadCounts);
 
             logger.info(String.format("Writing original sample filenames (%d)...", originalSampleFilenames.size()));
-            pon.setOriginalSampleFilenames(originalSampleFilenames);
+            pon.writeOriginalSampleFilenames(originalSampleFilenames);
 
             logger.info(String.format("Writing original intervals (%d)...", originalIntervals.size()));
-            pon.setOriginalIntervals(originalIntervals);
+            pon.writeOriginalIntervals(originalIntervals);
+
+            if (intervalGCContent != null) {
+                logger.info(String.format("Writing GC-content annotations for original intervals (%d)...", intervalGCContent.length));
+                pon.writeOriginalIntervalGCContent(intervalGCContent);
+            }
 
             //preprocess and standardize read counts and determine filters
+            logger.info("Preprocessing and standardizing read counts...");
             final PreprocessedStandardizedResult preprocessedStandardizedResult =
                     preprocessAndStandardize(originalReadCounts, intervalGCContent,
                     minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
@@ -211,55 +229,57 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
                     .mapToObj(originalIntervals::get).collect(Collectors.toList());
 
             logger.info(String.format("Writing panel sample filenames (%d)...", panelSampleFilenames.size()));
-            pon.setPanelSampleFilenames(panelSampleFilenames);
+            pon.writePanelSampleFilenames(panelSampleFilenames);
 
             logger.info(String.format("Writing panel intervals (%d)...", panelIntervals.size()));
-            pon.setPanelIntervals(panelIntervals);
+            pon.writePanelIntervals(panelIntervals);
 
             //get panel interval fractional medians (calculated as an intermediate result during preprocessing)
             final double[] panelIntervalFractionalMedians = preprocessedStandardizedResult.panelIntervalFractionalMedians;
 
             logger.info(String.format("Writing panel interval fractional medians (%d)...", panelIntervalFractionalMedians.length));
-            pon.setPanelIntervalFractionalMedians(panelIntervalFractionalMedians);
+            pon.writePanelIntervalFractionalMedians(panelIntervalFractionalMedians);
 
+            logger.info("Performing SVD...");
             final SVD svd = SVDFactory.createSVD(preprocessedStandardizedResult.preprocessedStandardizedReadCounts, ctx);
             final double[] singularValues = svd.getSingularValues();
-            final double[][] rightSingular = svd.getV().getData();
-            final double[][] rightSingularPseudoinverse = svd.getPinv().getData();
+            final double[][] leftSingular = svd.getU().getData();
+            final double[][] leftSingularPseudoinverse = svd.getPinv().getData();
 
             logger.info(String.format("Writing singular values (%d)...", singularValues.length));
-            pon.setSingularValues(singularValues);
+            pon.writeSingularValues(singularValues);
 
-            logger.info(String.format("Writing right-singular matrix (%d x %d)...", rightSingular.length, rightSingular[0].length));
-            pon.setRightSingular(rightSingular);
+            logger.info(String.format("Writing left-singular matrix (%d x %d)...", leftSingular.length, leftSingular[0].length));
+            pon.writeLeftSingular(leftSingular);
 
-            logger.info(String.format("Writing right-singular pseudoinverse (%d x %d)...", rightSingularPseudoinverse.length, rightSingularPseudoinverse[0].length));
-            pon.setPanelRightSingularPseudoinverse(rightSingularPseudoinverse);
+            logger.info(String.format("Writing left-singular pseudoinverse (%d x %d)...", leftSingularPseudoinverse.length, leftSingularPseudoinverse[0].length));
+            pon.writePanelLeftSingularPseudoinverse(leftSingularPseudoinverse);
         }
         logger.info(String.format("Read-count panel of normals written to %s.", outFile));
     }
 
-    private final class PreprocessedStandardizedResult {
+    private static final class PreprocessedStandardizedResult {
         private final RealMatrix preprocessedStandardizedReadCounts;
         private final double[] panelIntervalFractionalMedians;
-        private final boolean[] filterSamples;
         private final boolean[] filterIntervals;
+        private final boolean[] filterSamples;
 
         private PreprocessedStandardizedResult(final RealMatrix preprocessedStandardizedReadCounts,
                                                final double[] panelIntervalFractionalMedians,
-                                               final boolean[] filterSamples,
-                                               final boolean[] filterIntervals) {
+                                               final boolean[] filterIntervals,
+                                               final boolean[] filterSamples) {
             this.preprocessedStandardizedReadCounts = preprocessedStandardizedReadCounts;
             this.panelIntervalFractionalMedians = panelIntervalFractionalMedians;
-            this.filterSamples = filterSamples;
             this.filterIntervals = filterIntervals;
+            this.filterSamples = filterSamples;
         }
     }
 
     /**
      * Preprocess (i.e., filter, impute, and truncate) and standardize read counts from a panel of normals.
      * All inputs are assumed to be valid.
-     * To reduce memory footprint, {@code originalReadCounts} is modified in place.
+     * The dimensions of {@code readCounts} should be intervals x samples.
+     * To reduce memory footprint, {@code readCounts} is modified in place.
      * If {@code intervalGCContent} is null, GC-bias correction will not be performed.
      */
     private static PreprocessedStandardizedResult preprocessAndStandardize(final RealMatrix readCounts,
@@ -269,8 +289,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
                                                                            final double maximumZerosInIntervalPercentage,
                                                                            final double extremeSampleMedianPercentile,
                                                                            final double extremeOutlierTruncationPercentile) {
-        final boolean[] filterSamples = new boolean[readCounts.getRowDimension()];
-        final boolean[] filterIntervals = new boolean[readCounts.getColumnDimension()];
+        final boolean[] filterIntervals = new boolean[readCounts.getRowDimension()];
+        final boolean[] filterSamples = new boolean[readCounts.getColumnDimension()];
 
         logger.info("Transforming read counts to fractional coverage...");
         final double[] sampleSums = GATKProtectedMathUtils.columnSums(readCounts);
@@ -283,8 +303,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
         //use interval fractional medians from panel of normals if provided, else calculate from provided read counts
         logger.info("Dividing by interval medians...");
-        final double[] intervalMedians = IntStream.range(0, readCounts.getColumnDimension())
-                .mapToDouble(intervalIndex -> new Median().evaluate(readCounts.getColumn(intervalIndex))).toArray();
+        final double[] intervalMedians = IntStream.range(0, readCounts.getRowDimension())
+                .mapToDouble(intervalIndex -> new Median().evaluate(readCounts.getRow(intervalIndex))).toArray();
         readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(final int intervalIndex, final int sampleIndex, final double value) {
@@ -302,7 +322,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
         });
 
         logger.info("Subtracting sample medians...");
-        final double[] sampleMedians = IntStream.range(0, readCounts.getRowDimension())
+        final double[] sampleMedians = IntStream.range(0, readCounts.getColumnDimension())
                 .mapToDouble(sampleIndex -> new Median().evaluate(readCounts.getColumn(sampleIndex))).toArray();
         readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
@@ -313,63 +333,65 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
         logger.info("Panel read counts standardized.");
 
-        readCounts.getSubMatrix()
-        return new PreprocessedStandardizedResult()
+//        readCounts.getSubMatrix()
+        return new PreprocessedStandardizedResult(readCounts, intervalMedians, filterIntervals, filterSamples);
     }
 
-    //PRIVATE SETTERS (write values to HDF5 file and set internally held, lazily loaded fields to them)
+    //PRIVATE WRITERS (write values to HDF5 file)
     //these are private to prevent fields from being written individually, which could leave the file in a bad state
 
-    private void setVersion(final double version) {
+    private void writeVersion(final double version) {
         file.makeDouble(VERSION_PATH, version);
     }
 
-    private void setCommandLine(final String commandLine) {
+    private void writeCommandLine(final String commandLine) {
         file.makeStringArray(COMMAND_LINE_PATH, commandLine);
     }
 
-    private void setOriginalReadCountsPath(final RealMatrix originalReadCounts) {
+    private void writeOriginalReadCountsPath(final RealMatrix originalReadCounts) {
         file.makeDoubleMatrix(ORIGINAL_READ_COUNTS_PATH, originalReadCounts.getData());
     }
 
-    private void setOriginalSampleFilenames(final List<String> originalSampleFilenames) {
+    private void writeOriginalSampleFilenames(final List<String> originalSampleFilenames) {
         file.makeStringArray(ORIGINAL_SAMPLE_FILENAMES_PATH, originalSampleFilenames.toArray(new String[originalSampleFilenames.size()]));
     }
 
-    private void setOriginalIntervals(final List<SimpleInterval> originalIntervals) {
+    private void writeOriginalIntervals(final List<SimpleInterval> originalIntervals) {
         writeIntervals(file, ORIGINAL_INTERVALS_PATH, originalIntervals);
-        this.originalIntervals = new Lazy<>(() -> readIntervals(file, ORIGINAL_INTERVALS_PATH));
     }
 
-    private void setPanelSampleFilenames(final List<String> panelSampleFilenames) {
+    private void writeOriginalIntervalGCContent(final double[] originalIntervalGCContent) {
+        file.makeDoubleArray(ORIGINAL_INTERVAL_GC_CONTENT_PATH, originalIntervalGCContent);
+    }
+
+    private void writePanelSampleFilenames(final List<String> panelSampleFilenames) {
         file.makeStringArray(PANEL_SAMPLE_FILENAMES_PATH, panelSampleFilenames.toArray(new String[panelSampleFilenames.size()]));
     }
 
-    private void setPanelIntervals(final List<SimpleInterval> panelIntervals) {
+    private void writePanelIntervals(final List<SimpleInterval> panelIntervals) {
         writeIntervals(file, PANEL_INTERVALS_PATH, panelIntervals);
-        this.panelIntervals = new Lazy<>(() -> readIntervals(file, PANEL_INTERVALS_PATH));
     }
 
-    private void setPanelIntervalFractionalMedians(final double[] panelIntervalFractionalMedians) {
+    private void writePanelIntervalFractionalMedians(final double[] panelIntervalFractionalMedians) {
         file.makeDoubleArray(PANEL_INTERVAL_FRACTIONAL_MEDIANS_PATH, panelIntervalFractionalMedians);
     }
 
-    private void setSingularValues(final double[] singularValues) {
+    private void writeSingularValues(final double[] singularValues) {
         file.makeDoubleArray(PANEL_SINGULAR_VALUES_PATH, singularValues);
     }
 
-    private void setRightSingular(final double[][] rightSingular) {
-        file.makeDoubleMatrix(PANEL_RIGHT_SINGULAR_PATH, rightSingular);
+    private void writeLeftSingular(final double[][] leftSingular) {
+        file.makeDoubleMatrix(PANEL_LEFT_SINGULAR_PATH, leftSingular);
     }
 
-    private void setPanelRightSingularPseudoinverse(final double[][] rightSingularPseudoinverse) {
-        file.makeDoubleMatrix(PANEL_RIGHT_SINGULAR_PSEUDOINVERSE_PATH, rightSingularPseudoinverse);
+    private void writePanelLeftSingularPseudoinverse(final double[][] leftSingularPseudoinverse) {
+        file.makeDoubleMatrix(PANEL_LEFT_SINGULAR_PSEUDOINVERSE_PATH, leftSingularPseudoinverse);
     }
 
     //HDF5 array/matrix read/write methods
 
     private static List<SimpleInterval> readIntervals(final HDF5File file, final String path) {
-        final String[][] values = readStringMatrix(file, path);
+        final String[][] values = file.readStringMatrix(path, NUM_INTERVAL_COLUMNS_PATH);
         final List<SimpleInterval> result = new ArrayList<>(values.length);
         for (final String[] row : values) {
             result.add(new SimpleInterval(
@@ -388,14 +410,6 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             values[i][IntervalColumn.START.index] = String.valueOf(interval.getStart());
             values[i][IntervalColumn.END.index] = String.valueOf(interval.getEnd());
         }
-        writeStringMatrix(file, path, values);
-    }
-
-    private static String[][] readStringMatrix(final HDF5File file, final String path) {
-        return file.readStringMatrix(path, path + NUM_COLUMNS_PATH);
-    }
-
-    private static void writeStringMatrix(final HDF5File file, final String path, final String[][] values) {
-        file.makeStringMatrix(path, values, path + NUM_COLUMNS_PATH);
+        file.makeStringMatrix(path, values, NUM_INTERVAL_COLUMNS_PATH);
     }
 }

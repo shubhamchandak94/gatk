@@ -52,8 +52,8 @@ import java.io.IOException;
 public final class DenoiseReadCounts extends SparkCommandLineProgram {
     private static final long serialVersionUID = 1L;
 
-    private static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
-    private static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
+    static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
+    static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
 
     @Argument(
             doc = "Input read-count file containing integer read counts in genomic intervals for a single case sample.",
@@ -116,7 +116,13 @@ public final class DenoiseReadCounts extends SparkCommandLineProgram {
                     this.numEigensamples == null ?
                             panelOfNormals.getNumEigensamples() :
                             Math.min(panelOfNormals.getNumEigensamples(), this.numEigensamples);
+            if (this.numEigensamples != null && numEigensamples < this.numEigensamples) {
+                logger.warn(String.format("%d eigensamples were requested but only %d are available in the panel of normals...",
+                        this.numEigensamples, numEigensamples));
+            }
             final DenoisedCopyRatioResult denoisedCopyRatioResult = panelOfNormals.denoise(readCounts, numEigensamples, ctx);
+
+            logger.info("Writing standardized and denoised copy-ratio profiles...");
             denoisedCopyRatioResult.write(standardizedProfileFile, denoisedProfileFile);
 
             logger.info("Read counts successfully denoised.");
