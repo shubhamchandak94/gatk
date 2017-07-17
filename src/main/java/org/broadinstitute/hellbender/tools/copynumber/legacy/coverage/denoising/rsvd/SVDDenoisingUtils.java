@@ -12,10 +12,11 @@ import org.apache.spark.mllib.linalg.DenseMatrix;
 import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.mllib.linalg.distributed.RowMatrix;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.DenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.Target;
+import org.broadinstitute.hellbender.tools.exome.gcbias.GCCorrector;
 import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
+import org.broadinstitute.hellbender.utils.MatrixSummaryUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
@@ -62,10 +63,10 @@ public final class SVDDenoisingUtils {
      * Only the eigensamples (which are sorted by singular value in decreasing order) specified by
      * {@code numEigensamples} are used to denoise.
      */
-    static DenoisedCopyRatioResult denoise(final SVDReadCountPanelOfNormals panelOfNormals,
-                                           final ReadCountCollection readCounts,
-                                           final int numEigensamples,
-                                           final JavaSparkContext ctx) {
+    static SVDDenoisedCopyRatioResult denoise(final SVDReadCountPanelOfNormals panelOfNormals,
+                                              final ReadCountCollection readCounts,
+                                              final int numEigensamples,
+                                              final JavaSparkContext ctx) {
         Utils.nonNull(panelOfNormals);
         validateReadCounts(readCounts);
         Utils.nonNull(ctx);
@@ -91,7 +92,7 @@ public final class SVDDenoisingUtils {
         final ReadCountCollection standardizedProfile = new ReadCountCollection(readCounts.targets(), readCounts.columnNames(), standardizedCounts);
         final ReadCountCollection denoisedProfile = new ReadCountCollection(readCounts.targets(), readCounts.columnNames(), denoisedCounts);
 
-        return new DenoisedCopyRatioResult(standardizedProfile, denoisedProfile);
+        return new SVDDenoisedCopyRatioResult(standardizedProfile, denoisedProfile);
     }
 
     /**
@@ -103,46 +104,49 @@ public final class SVDDenoisingUtils {
         RealMatrix result = readCounts.copy();
 
         logger.info("Transforming read counts to fractional coverage...");
-        final double[] sampleSums = GATKProtectedMathUtils.rowSums(readCounts);
+        final double[] sampleSums = GATKProtectedMathUtils.columnSums(readCounts);
         result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+            public double visit(int intervalIndex, int sampleIndex, double value) {
                 return value / sampleSums[sampleIndex];
             }
         });
+
+        if (panelOfNormals.getOriginalIntervalGCContent() != null) {
+            logger.info("GC-content annotations found in the panel of normals; performing explicit GC-bias correction...");
+            GCCorrector.correctCoverage(result, panelOfNormals.getOriginalIntervalGCContent());
+        }
 
         logger.info("Subsetting sample intervals to post-filter panel intervals...");
         final Set<SimpleInterval> panelIntervals = new HashSet<>(panelOfNormals.getPanelIntervals());
         final int[] subsetIntervalIndices = IntStream.range(0, panelOfNormals.getOriginalIntervals().size())
                 .filter(i -> panelIntervals.contains(panelOfNormals.getOriginalIntervals().get(i)))
                 .toArray();
-        result = readCounts.getSubMatrix(subsetIntervalIndices, new int[]{0});
+        result = result.getSubMatrix(subsetIntervalIndices, new int[]{0});
 
-        //use interval fractional medians from panel of normals if provided, else calculate from provided read counts
         logger.info("Dividing by interval medians from the panel of normals...");
         final double[] intervalMedians = panelOfNormals.getPanelIntervalFractionalMedians();
         result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+            public double visit(int intervalIndex, int sampleIndex, double value) {
                 return value / intervalMedians[intervalIndex];
             }
         });
 
         logger.info("Dividing by sample mean and transforming to log2 space...");
-        final double[] sampleMeans = GATKProtectedMathUtils.columnMeans(readCounts);
+        final double[] sampleMeans = MatrixSummaryUtils.getColumnMedians(readCounts);
         result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+            public double visit(int intervalIndex, int sampleIndex, double value) {
                 return safeLog2(value / sampleMeans[sampleIndex]);
             }
         });
 
         logger.info("Subtracting sample median...");
-        final double[] sampleMedians = IntStream.range(0, readCounts.getColumnDimension())
-                .mapToDouble(sampleIndex -> new Median().evaluate(readCounts.getColumn(sampleIndex))).toArray();
+        final double[] sampleMedians = MatrixSummaryUtils.getColumnMedians(readCounts);
         result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+            public double visit(int intervalIndex, int sampleIndex, double value) {
                 return value - sampleMedians[sampleIndex];
             }
         });

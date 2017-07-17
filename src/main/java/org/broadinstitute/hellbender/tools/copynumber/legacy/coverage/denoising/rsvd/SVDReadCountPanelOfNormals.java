@@ -2,7 +2,6 @@ package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising
 
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.DenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 
@@ -81,9 +80,9 @@ public interface SVDReadCountPanelOfNormals {
      */
     double[][] getLeftSingularPseudoinverse();
 
-    default DenoisedCopyRatioResult denoise(final ReadCountCollection readCounts,
-                                            final int numEigensamples,
-                                            final JavaSparkContext ctx) {
+    default SVDDenoisedCopyRatioResult denoise(final ReadCountCollection readCounts,
+                                               final int numEigensamples,
+                                               final JavaSparkContext ctx) {
         return SVDDenoisingUtils.denoise(this, readCounts, numEigensamples, ctx);
     }
 }

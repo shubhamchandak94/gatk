@@ -1,22 +1,30 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
+import com.google.common.primitives.Doubles;
 import htsjdk.samtools.util.Lazy;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.DefaultRealMatrixChangingVisitor;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.stat.descriptive.rank.Median;
+import org.apache.commons.math3.stat.descriptive.rank.Percentile;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.hdf5.HDF5File;
+import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.exome.gcbias.GCCorrector;
 import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
+import org.broadinstitute.hellbender.utils.MatrixSummaryUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.svd.SVD;
 import org.broadinstitute.hellbender.utils.svd.SVDFactory;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -56,7 +64,6 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
      * The minor version should be only a single digit.
      */
     private static final double CURRENT_PON_VERSION = 7.0;
-
 
     private static final String VERSION_PATH = "/version/value";    //note that full path names must include a top-level group name ("version" here)
     private static final String COMMAND_LINE_PATH = "/command_line/value";
@@ -279,7 +286,9 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
      * Preprocess (i.e., filter, impute, and truncate) and standardize read counts from a panel of normals.
      * All inputs are assumed to be valid.
      * The dimensions of {@code readCounts} should be intervals x samples.
-     * To reduce memory footprint, {@code readCounts} is modified in place.
+     * To reduce memory footprint, {@code readCounts} is modified in place when possible.
+     * Filtering is performed by using boolean arrays to keep track of intervals and samples
+     * that have been filtered at any step and masking {@code readCounts} with them appropriately.
      * If {@code intervalGCContent} is null, GC-bias correction will not be performed.
      */
     private static PreprocessedStandardizedResult preprocessAndStandardize(final RealMatrix readCounts,
@@ -289,52 +298,117 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
                                                                            final double maximumZerosInIntervalPercentage,
                                                                            final double extremeSampleMedianPercentile,
                                                                            final double extremeOutlierTruncationPercentile) {
-        final boolean[] filterIntervals = new boolean[readCounts.getRowDimension()];
-        final boolean[] filterSamples = new boolean[readCounts.getColumnDimension()];
+        final int numOriginalIntervals = readCounts.getRowDimension();
+        final int numOriginalSamples = readCounts.getColumnDimension();
+
+        final boolean[] filterIntervals = new boolean[numOriginalIntervals];
+        final boolean[] filterSamples = new boolean[numOriginalSamples];
 
         logger.info("Transforming read counts to fractional coverage...");
         final double[] sampleSums = GATKProtectedMathUtils.columnSums(readCounts);
         readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+            public double visit(int intervalIndex, int sampleIndex, double value) {
                 return value / sampleSums[sampleIndex];
             }
         });
 
-        //use interval fractional medians from panel of normals if provided, else calculate from provided read counts
-        logger.info("Dividing by interval medians...");
-        final double[] intervalMedians = IntStream.range(0, readCounts.getRowDimension())
-                .mapToDouble(intervalIndex -> new Median().evaluate(readCounts.getRow(intervalIndex))).toArray();
-        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
-                return value / intervalMedians[intervalIndex];
-            }
-        });
+        if (intervalGCContent != null) {
+            logger.info("Performing explicit GC-bias correction...");
+            GCCorrector.correctCoverage(readCounts, intervalGCContent);
+        }
 
-        logger.info("Dividing by sample means and transforming to log2 space...");
-        final double[] sampleMeans = GATKProtectedMathUtils.columnMeans(readCounts);
+        final double[] originalIntervalMedians = MatrixSummaryUtils.getRowMedians(readCounts);
+        final double minimumIntervalMedianThreshold = minimumIntervalMedianPercentile == 0. //Percentile requires arguments > 0
+                ? Doubles.min(originalIntervalMedians)
+                : new Percentile(minimumIntervalMedianPercentile).evaluate(originalIntervalMedians);
+        IntStream.range(0, numOriginalIntervals)
+                .filter(i -> originalIntervalMedians[i] < minimumIntervalMedianThreshold)
+                .forEach(i -> filterIntervals[i] = true);
+        logger.info(String.format("After filtering intervals with median (across samples) below %.2f percentile, %d out of %d intervals remain.",
+                minimumIntervalMedianPercentile, countNumberPassingFilter(filterIntervals), numOriginalIntervals));
+
+        logger.info("Dividing by interval medians...");
+        for (int intervalIndex = 0; intervalIndex < numOriginalIntervals; intervalIndex++) {
+            if (!filterIntervals[intervalIndex]) {
+                for (int sampleIndex = 0; sampleIndex < numOriginalSamples; sampleIndex++) {
+                    if (!filterSamples[sampleIndex]) {
+                        final double value = readCounts.getEntry(intervalIndex, sampleIndex);
+                        readCounts.setEntry(intervalIndex, sampleIndex, value / originalIntervalMedians[intervalIndex]);
+                    }
+                }
+            }
+        }
+//        readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+//            @Override
+//            public double visit(int intervalIndex, int sampleIndex, double value) {
+//                return value / originalIntervalMedians[intervalIndex];
+//            }
+//        });
+
+        //remove samples with zeros
+        for (int sampleIndex = 0; sampleIndex < numOriginalSamples; sampleIndex++) {
+            int numZerosInSample = 0;
+            for (int intervalIndex = 0; intervalIndex < numOriginalIntervals; intervalIndex++) {
+                if (!filterIntervals[intervalIndex] && readCounts.getEntry(intervalIndex, sampleIndex) == 0.) {
+                    numZerosInSample++;
+                }
+            }
+            if (numZerosInSample > calculateMaximumZerosCount(numZerosInSample, maximumZerosInSamplePercentage)) {
+                filterSamples[sampleIndex] = true;
+            }
+        }
+        logger.info(String.format("After filtering samples with an amount of zero-coverage intervals above %.2f percent, %d out of %d samples remain.",
+                maximumZerosInSamplePercentage, countNumberPassingFilter(filterSamples), numOriginalSamples));
+
+        //remove intervals with zeros
+
+        //remove extreme samples
+
+        //impute zeros as interval median
+
+        //truncate extreme counts
+
+        logger.info("Dividing by sample medians and transforming to log2 space...");
+        final double[] sampleMeans = MatrixSummaryUtils.getColumnMedians(readCounts);
         readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
+            public double visit(int intervalIndex, int sampleIndex, double value) {
                 return SVDDenoisingUtils.safeLog2(value / sampleMeans[sampleIndex]);
             }
         });
 
-        logger.info("Subtracting sample medians...");
-        final double[] sampleMedians = IntStream.range(0, readCounts.getColumnDimension())
-                .mapToDouble(sampleIndex -> new Median().evaluate(readCounts.getColumn(sampleIndex))).toArray();
+        logger.info("Subtracting median of sample medians...");
+        final double[] sampleMedians = MatrixSummaryUtils.getColumnMedians(readCounts);
+        final double medianOfSampleMedians = new Median().evaluate(sampleMedians);
         readCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
-            public double visit(final int intervalIndex, final int sampleIndex, final double value) {
-                return value - sampleMedians[sampleIndex];
+            public double visit(int intervalIndex, int sampleIndex, double value) {
+                return value - medianOfSampleMedians;
             }
         });
 
         logger.info("Panel read counts standardized.");
 
-//        readCounts.getSubMatrix()
-        return new PreprocessedStandardizedResult(readCounts, intervalMedians, filterIntervals, filterSamples);
+        //construct the final filtered results
+        final int[] panelIntervalIndices = IntStream.range(0, numOriginalIntervals).filter(i -> !filterIntervals[i]).toArray();
+        final int[] panelSamplesIndices = IntStream.range(0, numOriginalSamples).filter(i -> !filterSamples[i]).toArray();
+        final RealMatrix preprocessedStandardizedReadCounts = readCounts.getSubMatrix(panelIntervalIndices, panelSamplesIndices);
+        final double[] panelIntervalFractionalMedians = IntStream.range(0, numOriginalIntervals)
+                .filter(i -> !filterIntervals[i]).mapToDouble(i -> originalIntervalMedians[i]).toArray();
+        return new PreprocessedStandardizedResult(preprocessedStandardizedReadCounts, panelIntervalFractionalMedians, filterIntervals, filterSamples);
+    }
+
+    private static int countNumberPassingFilter(final boolean[] filter) {
+        final int numPassingFilter = (int) IntStream.range(0, filter.length).filter(i -> !filter[i]).count();
+        if (numPassingFilter == 0) {
+            throw new UserException.BadInput("Filtering removed all samples or intervals.  Select less strict filtering criteria.");
+        }
+        return numPassingFilter;
+    }
+
+    private static int calculateMaximumZerosCount(final int numZeroCounts, final double percentage) {
+        return (int) Math.ceil(numZeroCounts * percentage / 100.0);
     }
 
     //PRIVATE WRITERS (write values to HDF5 file)
@@ -387,8 +461,6 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     private void writePanelLeftSingularPseudoinverse(final double[][] leftSingularPseudoinverse) {
         file.makeDoubleMatrix(PANEL_LEFT_SINGULAR_PSEUDOINVERSE_PATH, leftSingularPseudoinverse);
     }
-
-    //HDF5 array/matrix read/write methods
 
     private static List<SimpleInterval> readIntervals(final HDF5File file, final String path) {
         final String[][] values = file.readStringMatrix(path, NUM_INTERVAL_COLUMNS_PATH);

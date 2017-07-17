@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
@@ -9,16 +9,16 @@ import java.io.File;
 import java.io.IOException;
 
 /**
- * Represents a copy-ratio profile that has been denoised by a {@link ReadCountPanelOfNormals}.
+ * Represents a copy-ratio profile that has been standardized and denoised by an {@link SVDReadCountPanelOfNormals}.
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
-public final class DenoisedCopyRatioResult {
+public final class SVDDenoisedCopyRatioResult {
     private final ReadCountCollection standardizedProfile;
     private final ReadCountCollection denoisedProfile;
 
-    public DenoisedCopyRatioResult(final ReadCountCollection standardizedProfile,
-                                   final ReadCountCollection denoisedProfile) {
+    public SVDDenoisedCopyRatioResult(final ReadCountCollection standardizedProfile,
+                                      final ReadCountCollection denoisedProfile) {
         this.standardizedProfile = standardizedProfile;
         this.denoisedProfile = denoisedProfile;
     }

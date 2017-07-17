@@ -2,7 +2,9 @@ package org.broadinstitute.hellbender.tools.copynumber.legacy;
 
 import htsjdk.samtools.util.Log;
 import org.broadinstitute.hellbender.CommandLineProgramTest;
+import org.broadinstitute.hellbender.cmdline.ExomeStandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
+import org.broadinstitute.hellbender.tools.exome.TargetArgumentCollection;
 import org.broadinstitute.hellbender.utils.LoggingUtils;
 import org.testng.annotations.Test;
 
@@ -20,13 +22,35 @@ public final class CreateReadCountPanelOfNormalsIntegrationTest extends CommandL
     @Test
     public void testWES() {
 //        final File outputPanelOfNormalsFile = createTempFile("create-read-count-panel-of-normals", ".pon");
-        final File outputPanelOfNormalsFile = new File("/home/slee/working/ipython/wes.pon");
+        final File outputPanelOfNormalsFile = new File("/home/slee/working/ipython/wes.no-gc.pon");
         final String[] arguments = {
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_0.tsv",
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_1.tsv",
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_2.tsv",
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_3.tsv",
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_4.tsv",
+//                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_5.tsv",
+//                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_6.tsv",
+//                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_7.tsv",
+//                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_8.tsv",
+//                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_9.tsv",
+                "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputPanelOfNormalsFile.getAbsolutePath(),
+                "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
+        };
+        runCommandLine(arguments);
+    }
+
+    @Test
+    public void testWESWithGC() {
+//        final File outputPanelOfNormalsFile = createTempFile("create-read-count-panel-of-normals", ".pon");
+        final File outputPanelOfNormalsFile = new File("/home/slee/working/ipython/wes.gc.pon");
+        final String[] arguments = {
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_0.tsv",
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_1.tsv",
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_2.tsv",
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_3.tsv",
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_4.tsv",
+                "-" + TargetArgumentCollection.TARGET_FILE_SHORT_NAME, "/home/slee/working/ipython/wes.intervals.annot.tsv",
 //                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_5.tsv",
 //                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_6.tsv",
 //                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_7.tsv",

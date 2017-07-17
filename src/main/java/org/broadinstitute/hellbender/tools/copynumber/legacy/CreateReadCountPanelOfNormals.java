@@ -114,7 +114,8 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private File outputPanelOfNormalsFile;
 
     @Argument(
-            doc = "Genomic intervals with a median (across samples) of fractional coverage below this percentile are filtered out.  " +
+            doc = "Genomic intervals with a median (across samples) of fractional coverage (optionally corrected for GC bias) " +
+                    "below this percentile are filtered out.  " +
                     "(This is the first filter applied.)",
             fullName  = MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME,
             shortName = MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME,
@@ -244,7 +245,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             return null;
         }
         logger.info("Validating and reading GC-content annotations for intervals...");
-        Utils.validateArg(annotatedIntervals.targets().stream().map(Target::getInterval).equals(intervals),
+        Utils.validateArg(annotatedIntervals.targets().stream().map(Target::getInterval).collect(Collectors.toList()).equals(intervals),
                 "Annotated intervals do not match intervals from first read-count file.");
         if (!annotatedIntervals.targets().stream().allMatch(t -> t.getAnnotations().hasAnnotation(TargetAnnotation.GC_CONTENT))) {
             throw new UserException.BadInput("At least one interval is missing a GC-content annotation.");
@@ -281,18 +282,15 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             final int sampleIndex = inputReadCountFilesIterator.nextIndex();
             final File inputReadCountFile = inputReadCountFilesIterator.next();
             logger.info(String.format("Aggregating read-count file %s (%d / %d)", inputReadCountFile, sampleIndex + 1, numSamples));
-            logger.info("Reading...");
             final ReadCountCollection readCounts;
             try {
                 readCounts = ReadCountCollectionUtils.parse(inputReadCountFile);
             } catch (final IOException e) {
                 throw new UserException.CouldNotReadInputFile(inputReadCountFile);
             }
-            logger.info("Validating...");
             SVDDenoisingUtils.validateReadCounts(readCounts);
             Utils.validateArg(readCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList()).equals(intervals),
                     String.format("Intervals for read-count file %s do not match those in other read-count files.", inputReadCountFile));
-            logger.info("Adding to RealMatrix...");
             readCountMatrix.setColumn(sampleIndex, readCounts.getColumn(0));
         }
         return readCountMatrix;
