@@ -130,7 +130,7 @@ public final class SVDDenoisingUtils {
         });
 
         logger.info("Dividing by sample median and transforming to log2 space...");
-        final double[] sampleMedians = MatrixSummaryUtils.getColumnMedians(readCounts);
+        final double[] sampleMedians = MatrixSummaryUtils.getColumnMedians(result);
         result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(int intervalIndex, int sampleIndex, double value) {
@@ -139,7 +139,7 @@ public final class SVDDenoisingUtils {
         });
 
         logger.info("Subtracting sample median...");
-        final double[] sampleLog2Medians = MatrixSummaryUtils.getColumnMedians(readCounts);
+        final double[] sampleLog2Medians = MatrixSummaryUtils.getColumnMedians(result);
         result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(int intervalIndex, int sampleIndex, double value) {
