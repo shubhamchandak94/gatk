@@ -114,6 +114,11 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     
     @Override
     public double getVersion() {
+        if (!file.isPresent(VERSION_PATH)) {
+            throw new UserException.BadInput(String.format("The panel of normals is out of date and incompatible.  " +
+                    "Please use a panel of normals that was created by CreateReadCountPanelOfNormals and is version " +
+                    PON_VERSION_STRING_FORMAT + ".", CURRENT_PON_VERSION));
+        }
         return file.readDouble(VERSION_PATH);
     }
 
@@ -134,11 +139,10 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
     @Override
     public double[] getOriginalIntervalGCContent() {
-        try {
-            return file.readDoubleArray(ORIGINAL_INTERVAL_GC_CONTENT_PATH);
-        } catch (final HDF5LibException e) {    //will be thrown if HDF5 path to GC-content information is not present
+        if (!file.isPresent(ORIGINAL_INTERVAL_GC_CONTENT_PATH)) {
             return null;
         }
+        return file.readDoubleArray(ORIGINAL_INTERVAL_GC_CONTENT_PATH);
     }
 
     @Override
@@ -172,15 +176,9 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
      */
     public static HDF5RandomizedSVDReadCountPanelOfNormals read(final HDF5File file) {
         final HDF5RandomizedSVDReadCountPanelOfNormals pon = new HDF5RandomizedSVDReadCountPanelOfNormals(file);
-        try {
-            if (pon.getVersion() < CURRENT_PON_VERSION) {
-                logger.warn(String.format("The version of the specified panel of normals (%f) is older than the latest version (%f).",
-                        pon.getVersion(), CURRENT_PON_VERSION));
-            }
-        } catch (final HDF5LibException e) { //will be thrown if HDF5 path to version information is not present
-            throw new UserException.BadInput(String.format("The panel of normals is out of date and incompatible.  " +
-                    "Please use a panel of normals that was created by CreateReadCountPanelOfNormals and is version " +
-                            PON_VERSION_STRING_FORMAT + ".", CURRENT_PON_VERSION));
+        if (pon.getVersion() < CURRENT_PON_VERSION) {
+            logger.warn(String.format("The version of the specified panel of normals (%f) is older than the latest version (%f).",
+                    pon.getVersion(), CURRENT_PON_VERSION));
         }
         return pon;
     }
