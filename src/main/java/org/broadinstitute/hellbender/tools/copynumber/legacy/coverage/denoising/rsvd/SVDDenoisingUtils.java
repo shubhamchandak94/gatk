@@ -1,16 +1,11 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
-import com.google.common.primitives.Doubles;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.DefaultRealMatrixChangingVisitor;
 import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.commons.math3.stat.descriptive.rank.Median;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.mllib.linalg.DenseMatrix;
-import org.apache.spark.mllib.linalg.Matrix;
-import org.apache.spark.mllib.linalg.distributed.RowMatrix;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.Target;
@@ -20,9 +15,9 @@ import org.broadinstitute.hellbender.utils.MatrixSummaryUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
-import org.broadinstitute.hellbender.utils.spark.SparkConverter;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -65,11 +60,9 @@ public final class SVDDenoisingUtils {
      */
     static SVDDenoisedCopyRatioResult denoise(final SVDReadCountPanelOfNormals panelOfNormals,
                                               final ReadCountCollection readCounts,
-                                              final int numEigensamples,
-                                              final JavaSparkContext ctx) {
+                                              final int numEigensamples) {
         Utils.nonNull(panelOfNormals);
         validateReadCounts(readCounts);
-        Utils.nonNull(ctx);
         ParamUtils.isPositive(numEigensamples, "Number of eigensamples to use for denoising must be positive.");
         Utils.validateArg(numEigensamples <= panelOfNormals.getNumEigensamples(),
                 "Number of eigensamples to use for denoising is greater than the number available in the panel of normals.");
@@ -84,13 +77,16 @@ public final class SVDDenoisingUtils {
         logger.info(String.format("Using %d out of %d eigensamples to denoise...", numEigensamples, panelOfNormals.getNumEigensamples()));
         logger.info("Subtracting projection onto space spanned by eigensamples...");
         final RealMatrix denoisedCounts = subtractProjection(standardizedCounts,
-                panelOfNormals.getLeftSingular(), panelOfNormals.getLeftSingularPseudoinverse(), numEigensamples, ctx);
+                panelOfNormals.getLeftSingular(), panelOfNormals.getLeftSingularPseudoinverse(), numEigensamples);
 
         logger.info("Sample denoised.");
 
         //construct the result
-        final ReadCountCollection standardizedProfile = new ReadCountCollection(readCounts.targets(), readCounts.columnNames(), standardizedCounts);
-        final ReadCountCollection denoisedProfile = new ReadCountCollection(readCounts.targets(), readCounts.columnNames(), denoisedCounts);
+        //TODO clean this up once Targets are removed
+        final Set<SimpleInterval> panelIntervals = new HashSet<>(panelOfNormals.getPanelIntervals());
+        final List<Target> targets = readCounts.targets().stream().filter(t -> panelIntervals.contains(t.getInterval())).collect(Collectors.toList());
+        final ReadCountCollection standardizedProfile = new ReadCountCollection(targets, readCounts.columnNames(), standardizedCounts);
+        final ReadCountCollection denoisedProfile = new ReadCountCollection(targets, readCounts.columnNames(), denoisedCounts);
 
         return new SVDDenoisedCopyRatioResult(standardizedProfile, denoisedProfile);
     }
@@ -164,37 +160,26 @@ public final class SVDDenoisingUtils {
     private static RealMatrix subtractProjection(final RealMatrix standardizedProfile,
                                                  final double[][] leftSingular,
                                                  final double[][] leftSingularPseudoinverse,
-                                                 final int numEigensamples,
-                                                 final JavaSparkContext ctx) {
+                                                 final int numEigensamples) {
         final int numIntervals = leftSingular.length;
 
         logger.info("Distributing the standardized read counts...");
-        final RowMatrix standardizedProfileDistributedMatrix = SparkConverter.convertRealMatrixToSparkRowMatrix(
-                ctx, standardizedProfile.transpose(), NUM_SLICES_SPARK);
 
         logger.info("Composing left-singular matrix and pseudoinverse for the requested number of eigensamples and transposing them...");
-        final RealMatrix leftSingularTruncatedMatrix = new Array2DRowRealMatrix(leftSingular)
-                .getSubMatrix(0, numIntervals - 1, 0, numEigensamples - 1);
-        final Matrix leftSingularTruncatedTransposedLocalMatrix = new DenseMatrix(numIntervals, numEigensamples,
-                Doubles.concat(leftSingularTruncatedMatrix.getData()))
+        final RealMatrix leftSingularTruncatedTransposedMatrix = new Array2DRowRealMatrix(leftSingular)
+                .getSubMatrix(0, numIntervals - 1, 0, numEigensamples - 1)
                 .transpose();
-        final RealMatrix leftSingularPseudoinverseTruncatedMatrix = new Array2DRowRealMatrix(leftSingularPseudoinverse)
-                .getSubMatrix(0, numEigensamples - 1, 0, numIntervals - 1);
-        final Matrix leftSingularPseudoinverseTransposeLocalMatrix = new DenseMatrix(numEigensamples, numIntervals,
-                Doubles.concat(leftSingularPseudoinverseTruncatedMatrix.getData()), true)
+        final RealMatrix leftSingularPseudoinverseTruncatedTransposedMatrix = new Array2DRowRealMatrix(leftSingularPseudoinverse)
+                .getSubMatrix(0, numEigensamples - 1, 0, numIntervals - 1)
                 .transpose();
 
         logger.info("Computing projection of transpose...");
-        final RowMatrix projectionTransposeDistributedMatrix = standardizedProfileDistributedMatrix
-                .multiply(leftSingularPseudoinverseTransposeLocalMatrix)
-                .multiply(leftSingularTruncatedTransposedLocalMatrix);
-
-        logger.info("Converting and transposing result...");
-        final RealMatrix projection = SparkConverter.convertSparkRowMatrixToRealMatrix(projectionTransposeDistributedMatrix, 1)
-                .transpose();
+        final RealMatrix projectionTranspose = standardizedProfile.transpose()
+                .multiply(leftSingularPseudoinverseTruncatedTransposedMatrix)
+                .multiply(leftSingularTruncatedTransposedMatrix);
 
         logger.info("Subtracting projection...");
-        return standardizedProfile.subtract(projection);
+        return standardizedProfile.subtract(projectionTranspose.transpose());
     }
 
     static double safeLog2(final double x) {

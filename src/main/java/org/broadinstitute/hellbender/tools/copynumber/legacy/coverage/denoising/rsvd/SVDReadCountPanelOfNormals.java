@@ -81,8 +81,7 @@ public interface SVDReadCountPanelOfNormals {
     double[][] getLeftSingularPseudoinverse();
 
     default SVDDenoisedCopyRatioResult denoise(final ReadCountCollection readCounts,
-                                               final int numEigensamples,
-                                               final JavaSparkContext ctx) {
-        return SVDDenoisingUtils.denoise(this, readCounts, numEigensamples, ctx);
+                                               final int numEigensamples) {
+        return SVDDenoisingUtils.denoise(this, readCounts, numEigensamples);
     }
 }

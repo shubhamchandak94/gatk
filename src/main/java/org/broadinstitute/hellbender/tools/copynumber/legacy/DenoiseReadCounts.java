@@ -1,18 +1,17 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy;
 
-import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hdf5.HDF5Library;
+import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
 import org.broadinstitute.hellbender.cmdline.ExomeStandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
-import org.broadinstitute.hellbender.engine.spark.SparkCommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDDenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.HDF5RandomizedSVDReadCountPanelOfNormals;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDDenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDDenoisingUtils;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
@@ -49,9 +48,7 @@ import java.io.IOException;
         programGroup = CopyNumberProgramGroup.class
 )
 @DocumentedFeature
-public final class DenoiseReadCounts extends SparkCommandLineProgram {
-    private static final long serialVersionUID = 1L;
-
+public final class DenoiseReadCounts extends CommandLineProgram {
     static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
     static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
 
@@ -60,28 +57,28 @@ public final class DenoiseReadCounts extends SparkCommandLineProgram {
             fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME
     )
-    protected File inputReadCountsFile;
+    private File inputReadCountsFile;
 
     @Argument(
             doc = "Input HDF5 file containing the panel of normals (output of CreateReadCountPanelOfNormals).",
             fullName = ExomeStandardArgumentDefinitions.PON_FILE_LONG_NAME,
             shortName = ExomeStandardArgumentDefinitions.PON_FILE_SHORT_NAME
     )
-    protected File inputPanelOfNormalsFile;
+    private File inputPanelOfNormalsFile;
 
     @Argument(
             doc = "Output file for standardized (pre-tangent-normalized) copy-ratio profile.",
             fullName = ExomeStandardArgumentDefinitions.PRE_TANGENT_NORMALIZED_COUNTS_FILE_LONG_NAME,
             shortName = ExomeStandardArgumentDefinitions.PRE_TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME
     )
-    protected File standardizedProfileFile;
+    private File standardizedProfileFile;
 
     @Argument(
             doc = "Output file for denoised (tangent-normalized) copy-ratio profile.",
             fullName = ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_LONG_NAME,
             shortName = ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME
     )
-    protected File denoisedProfileFile;
+    private File denoisedProfileFile;
 
     @Argument(
             doc = "Number of eigensamples to use for denoising.  " +
@@ -92,10 +89,10 @@ public final class DenoiseReadCounts extends SparkCommandLineProgram {
             minValue = 1,
             optional = true
     )
-    protected Integer numEigensamples = null;
+    private Integer numEigensamples = null;
 
     @Override
-    protected void runPipeline(final JavaSparkContext ctx) {
+    protected Object doWork() {
         if (!new HDF5Library().load(null)) { //Note: passing null means using the default temp dir.
             throw new UserException.HardwareFeatureException("Cannot load the required HDF5 library. " +
                     "HDF5 is currently supported on x86-64 architecture and Linux or OSX systems.");
@@ -120,12 +117,14 @@ public final class DenoiseReadCounts extends SparkCommandLineProgram {
                 logger.warn(String.format("%d eigensamples were requested but only %d are available in the panel of normals...",
                         this.numEigensamples, numEigensamples));
             }
-            final SVDDenoisedCopyRatioResult denoisedCopyRatioResult = panelOfNormals.denoise(readCounts, numEigensamples, ctx);
+            final SVDDenoisedCopyRatioResult denoisedCopyRatioResult = panelOfNormals.denoise(readCounts, numEigensamples);
 
             logger.info("Writing standardized and denoised copy-ratio profiles...");
             denoisedCopyRatioResult.write(standardizedProfileFile, denoisedProfileFile);
 
             logger.info("Read counts successfully denoised.");
+
+            return "SUCCESS";
         } catch (final IOException e) {
             throw new UserException.CouldNotReadInputFile(inputReadCountsFile);
         }

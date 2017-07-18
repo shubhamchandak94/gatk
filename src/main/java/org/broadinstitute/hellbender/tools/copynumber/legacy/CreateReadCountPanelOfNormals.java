@@ -66,19 +66,19 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
 
     //parameter names (some are public so they can be used in logging messages)
     public static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME = "minimumIntervalMedianPercentile";
-    private static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME = "minIntervalMedPct";
+    static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME = "minIntervalMedPct";
     public static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME = "maximumZerosInSamplePercentage";
-    private static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME = "maxZerosInSamplePct";
+    static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME = "maxZerosInSamplePct";
     public static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_LONG_NAME = "maximumZerosInIntervalPercentage";
-    private static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME = "maxZerosInIntervalPct";
+    static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME = "maxZerosInIntervalPct";
     public static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_LONG_NAME = "extremeSampleMedianPercentile";
-    private static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_SHORT_NAME = "extSampleMedPct";
+    static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_SHORT_NAME = "extSampleMedPct";
     public static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME = "extremeOutlierTruncationPercentile";
-    private static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_SHORT_NAME = "extOutTruncPct";
-    private static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
-    private static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
-    private static final String INTERVAL_WEIGHTS_LONG_NAME = "intervalWeights";
-    private static final String INTERVAL_WEIGHTS_SHORT_NAME = "weights";
+    static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_SHORT_NAME = "extOutTruncPct";
+    static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
+    static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
+    static final String INTERVAL_WEIGHTS_LONG_NAME = "intervalWeights";
+    static final String INTERVAL_WEIGHTS_SHORT_NAME = "weights";
 
     //default values for filtering (taken from ReCapSeg)
     private static final double DEFAULT_MINIMUM_INTERVAL_MEDIAN_PERCENTILE = 25.0;

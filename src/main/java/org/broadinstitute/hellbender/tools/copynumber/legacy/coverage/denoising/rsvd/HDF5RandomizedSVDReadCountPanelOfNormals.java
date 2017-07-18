@@ -2,7 +2,6 @@ package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising
 
 import com.google.common.primitives.Doubles;
 import htsjdk.samtools.util.Lazy;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.DefaultRealMatrixChangingVisitor;
 import org.apache.commons.math3.linear.RealMatrix;
@@ -12,6 +11,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.hdf5.HDF5File;
+import org.broadinstitute.hdf5.HDF5LibException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.CreateReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.exome.gcbias.GCCorrector;
@@ -19,7 +19,6 @@ import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
 import org.broadinstitute.hellbender.utils.MatrixSummaryUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.svd.SVD;
 import org.broadinstitute.hellbender.utils.svd.SVDFactory;
 
@@ -65,6 +64,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
      * The minor version should be only a single digit.
      */
     private static final double CURRENT_PON_VERSION = 7.0;
+    private static final String PON_VERSION_STRING_FORMAT = "%.1f";
 
     private static final String VERSION_PATH = "/version/value";    //note that full path names must include a top-level group name ("version" here)
     private static final String COMMAND_LINE_PATH = "/command_line/value";
@@ -136,7 +136,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     public double[] getOriginalIntervalGCContent() {
         try {
             return file.readDoubleArray(ORIGINAL_INTERVAL_GC_CONTENT_PATH);
-        } catch (final IllegalArgumentException e) {
+        } catch (final HDF5LibException e) {    //will be thrown if HDF5 path to GC-content information is not present
             return null;
         }
     }
@@ -172,9 +172,15 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
      */
     public static HDF5RandomizedSVDReadCountPanelOfNormals read(final HDF5File file) {
         final HDF5RandomizedSVDReadCountPanelOfNormals pon = new HDF5RandomizedSVDReadCountPanelOfNormals(file);
-        if (pon.getVersion() < CURRENT_PON_VERSION) {
-            logger.warn(String.format("The version of the specified panel of normals (%f) is older than the latest version (%f).",
-                    pon.getVersion(), CURRENT_PON_VERSION));
+        try {
+            if (pon.getVersion() < CURRENT_PON_VERSION) {
+                logger.warn(String.format("The version of the specified panel of normals (%f) is older than the latest version (%f).",
+                        pon.getVersion(), CURRENT_PON_VERSION));
+            }
+        } catch (final HDF5LibException e) { //will be thrown if HDF5 path to version information is not present
+            throw new UserException.BadInput(String.format("The panel of normals is out of date and incompatible.  " +
+                    "Please use a panel of normals that was created by CreateReadCountPanelOfNormals and is version " +
+                            PON_VERSION_STRING_FORMAT + ".", CURRENT_PON_VERSION));
         }
         return pon;
     }
@@ -201,7 +207,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             logger.info("Creating " + outFile.getAbsolutePath() + "...");
             final HDF5RandomizedSVDReadCountPanelOfNormals pon = new HDF5RandomizedSVDReadCountPanelOfNormals(file);
 
-            logger.info(String.format("Writing version number (%.1f)...", CURRENT_PON_VERSION));
+            logger.info(String.format("Writing version number (" + PON_VERSION_STRING_FORMAT + ")...", CURRENT_PON_VERSION));
             pon.writeVersion(CURRENT_PON_VERSION);
 
             logger.info("Writing command line...");
@@ -434,27 +440,31 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
                 numImputed[0]));
 
         //truncate extreme values to the corresponding percentile
-        final double[] values = Doubles.concat(preprocessedStandardizedReadCounts.getData());
-        final double minimumOutlierTruncationThreshold = new Percentile(extremeOutlierTruncationPercentile).evaluate(values);
-        final double maximumOutlierTruncationThreshold = new Percentile(100. - extremeSampleMedianPercentile).evaluate(values);
-        final int[] numTruncated = {0};  //needs to be effectively final to be used inside visitor
-        preprocessedStandardizedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(int intervalIndex, int sampleIndex, double value) {
-                if (value < minimumOutlierTruncationThreshold) {
-                    numTruncated[0]++;
-                    return minimumOutlierTruncationThreshold;
+        if (extremeOutlierTruncationPercentile == 0.) {
+            logger.info(String.format("A value of 0 was provided for argument %s, so the corresponding truncation step will be skipped...",
+                    CreateReadCountPanelOfNormals.EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME));
+        } else {
+            final double[] values = Doubles.concat(preprocessedStandardizedReadCounts.getData());
+            final double minimumOutlierTruncationThreshold = new Percentile(extremeOutlierTruncationPercentile).evaluate(values);
+            final double maximumOutlierTruncationThreshold = new Percentile(100. - extremeSampleMedianPercentile).evaluate(values);
+            final int[] numTruncated = {0};  //needs to be effectively final to be used inside visitor
+            preprocessedStandardizedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+                @Override
+                public double visit(int intervalIndex, int sampleIndex, double value) {
+                    if (value < minimumOutlierTruncationThreshold) {
+                        numTruncated[0]++;
+                        return minimumOutlierTruncationThreshold;
+                    }
+                    if (value > maximumOutlierTruncationThreshold) {
+                        numTruncated[0]++;
+                        return maximumOutlierTruncationThreshold;
+                    }
+                    return value;
                 }
-                if (value > maximumOutlierTruncationThreshold) {
-                    numTruncated[0]++;
-                    return maximumOutlierTruncationThreshold;
-                }
-                return value;
-            }
-        });
-        logger.info(String.format("%d values below the %.2f percentile or above the %.2f percentile were truncated to the corresponding value...",
-                numTruncated[0], extremeOutlierTruncationPercentile, 100. - extremeOutlierTruncationPercentile));
-
+            });
+            logger.info(String.format("%d values below the %.2f percentile or above the %.2f percentile were truncated to the corresponding value...",
+                    numTruncated[0], extremeOutlierTruncationPercentile, 100. - extremeOutlierTruncationPercentile));
+        }
 
         logger.info("Dividing by sample medians and transforming to log2 space...");
         final double[] sampleMedians = MatrixSummaryUtils.getColumnMedians(preprocessedStandardizedReadCounts);
