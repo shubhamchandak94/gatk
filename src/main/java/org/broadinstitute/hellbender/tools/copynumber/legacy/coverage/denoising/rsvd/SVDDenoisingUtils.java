@@ -133,21 +133,21 @@ public final class SVDDenoisingUtils {
             }
         });
 
-        logger.info("Dividing by sample mean and transforming to log2 space...");
-        final double[] sampleMeans = MatrixSummaryUtils.getColumnMedians(readCounts);
-        result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(int intervalIndex, int sampleIndex, double value) {
-                return safeLog2(value / sampleMeans[sampleIndex]);
-            }
-        });
-
-        logger.info("Subtracting sample median...");
+        logger.info("Dividing by sample median and transforming to log2 space...");
         final double[] sampleMedians = MatrixSummaryUtils.getColumnMedians(readCounts);
         result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(int intervalIndex, int sampleIndex, double value) {
-                return value - sampleMedians[sampleIndex];
+                return safeLog2(value / sampleMedians[sampleIndex]);
+            }
+        });
+
+        logger.info("Subtracting sample median...");
+        final double[] sampleLog2Medians = MatrixSummaryUtils.getColumnMedians(readCounts);
+        result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(int intervalIndex, int sampleIndex, double value) {
+                return value - sampleLog2Medians[sampleIndex];
             }
         });
 

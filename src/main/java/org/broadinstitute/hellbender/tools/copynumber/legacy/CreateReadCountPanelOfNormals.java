@@ -64,21 +64,21 @@ import java.util.stream.Collectors;
 public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private static final long serialVersionUID = 1L;
 
-    //parameter names
-    static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME = "minimumIntervalMedianPercentile";
-    static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME = "minIntervalMedPct";
-    static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME = "maximumZerosInSamplePercentage";
-    static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME = "maxZerosInSamplePct";
-    static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_LONG_NAME = "maximumZerosInIntervalPercentage";
-    static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME = "maxZerosInIntervalPct";
-    static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_LONG_NAME = "extremeSampleMedianPercentile";
-    static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_SHORT_NAME = "extSampleMedPct";
-    static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME = "extremeOutlierTruncationPercentile";
-    static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_SHORT_NAME = "extOutTruncPct";
-    static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
-    static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
-    static final String INTERVAL_WEIGHTS_LONG_NAME = "intervalWeights";
-    static final String INTERVAL_WEIGHTS_SHORT_NAME = "weights";
+    //parameter names (some are public so they can be used in logging messages)
+    public static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME = "minimumIntervalMedianPercentile";
+    private static final String MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME = "minIntervalMedPct";
+    public static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME = "maximumZerosInSamplePercentage";
+    private static final String MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME = "maxZerosInSamplePct";
+    public static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_LONG_NAME = "maximumZerosInIntervalPercentage";
+    private static final String MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME = "maxZerosInIntervalPct";
+    public static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_LONG_NAME = "extremeSampleMedianPercentile";
+    private static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_SHORT_NAME = "extSampleMedPct";
+    public static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME = "extremeOutlierTruncationPercentile";
+    private static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_SHORT_NAME = "extOutTruncPct";
+    private static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
+    private static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
+    private static final String INTERVAL_WEIGHTS_LONG_NAME = "intervalWeights";
+    private static final String INTERVAL_WEIGHTS_SHORT_NAME = "weights";
 
     //default values for filtering (taken from ReCapSeg)
     private static final double DEFAULT_MINIMUM_INTERVAL_MEDIAN_PERCENTILE = 25.0;
@@ -125,7 +125,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private double minimumIntervalMedianPercentile = DEFAULT_MINIMUM_INTERVAL_MEDIAN_PERCENTILE;
 
     @Argument(
-            doc = "Samples with an amount of zero-coverage genomic intervals above this percentage are filtered out.  " +
+            doc = "Samples with a fraction of zero-coverage genomic intervals above this percentage are filtered out.  " +
                     "(This is the second filter applied.)",
             fullName = MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME,
             shortName = MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME,
@@ -135,7 +135,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private double maximumZerosInSamplePercentage = DEFAULT_MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE;
 
     @Argument(
-            doc = "Genomic intervals with an amount of zero-coverage samples above this percentage are filtered out.  " +
+            doc = "Genomic intervals with a fraction of zero-coverage samples above this percentage are filtered out.  " +
                     "(This is the third filter applied.)",
             fullName = MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_LONG_NAME,
             shortName = MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME,
@@ -145,13 +145,13 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private double maximumZerosInIntervalPercentage = DEFAULT_MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE;
 
     @Argument(
-            doc = "Samples with a median (across intervals) of fractional coverage normalized by genomic-interval medians  " +
+            doc = "Samples with a median (across genomic intervals) of fractional coverage normalized by genomic-interval medians  " +
                     "below this percentile or above the complementary percentile are filtered out.  " +
                     "(This is the fourth filter applied.)",
             fullName = EXTREME_SAMPLE_MEDIAN_PERCENTILE_LONG_NAME,
             shortName = EXTREME_SAMPLE_MEDIAN_PERCENTILE_SHORT_NAME,
             minValue = 0.,
-            maxValue = 100.
+            maxValue = 50.
     )
     private double extremeSampleMedianPercentile = DEFAULT_EXTREME_SAMPLE_MEDIAN_PERCENTILE;
 
@@ -162,7 +162,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             fullName = EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME,
             shortName = EXTREME_OUTLIER_TRUNCATION_PERCENTILE_SHORT_NAME,
             minValue = 0.,
-            maxValue = 100.
+            maxValue = 50.
     )
     private double extremeOutlierTruncationPercentile = DEFAULT_EXTREME_OUTLIER_TRUNCATION_PERCENTILE;
 
