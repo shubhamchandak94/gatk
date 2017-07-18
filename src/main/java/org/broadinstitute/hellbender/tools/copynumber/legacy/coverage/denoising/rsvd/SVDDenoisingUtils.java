@@ -5,7 +5,6 @@ import org.apache.commons.math3.linear.DefaultRealMatrixChangingVisitor;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.Target;
@@ -30,11 +29,9 @@ import java.util.stream.IntStream;
 public final class SVDDenoisingUtils {
     private static final Logger logger = LogManager.getLogger(SVDDenoisingUtils.class);
 
-    public static final double EPSILON = 1E-30;
+    public static final double EPSILON = 1E-9;
     private static final double INV_LN2 = GATKProtectedMathUtils.INV_LOG_2;
     private static final double LN2_EPSILON = Math.log(EPSILON) * INV_LN2;
-
-    private static final int NUM_SLICES_SPARK = 50;
 
     private SVDDenoisingUtils() {}
 

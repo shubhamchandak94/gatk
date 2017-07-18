@@ -444,7 +444,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
         } else {
             final double[] values = Doubles.concat(preprocessedStandardizedReadCounts.getData());
             final double minimumOutlierTruncationThreshold = new Percentile(extremeOutlierTruncationPercentile).evaluate(values);
-            final double maximumOutlierTruncationThreshold = new Percentile(100. - extremeSampleMedianPercentile).evaluate(values);
+            final double maximumOutlierTruncationThreshold = new Percentile(100. - extremeOutlierTruncationPercentile).evaluate(values);
+            System.out.println(minimumOutlierTruncationThreshold + " " + maximumOutlierTruncationThreshold);
             final int[] numTruncated = {0};  //needs to be effectively final to be used inside visitor
             preprocessedStandardizedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
                 @Override
