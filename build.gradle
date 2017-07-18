@@ -111,6 +111,10 @@ dependencies {
     compileOnly(javadocJDKFiles)
     testCompile(javadocJDKFiles)
 
+    // Library for configuration:
+    compile 'org.aeonbits.owner:owner:1.0.9'
+//    compile 'org.aeonbits.owner:owner:1.0.10-SNAPSHOT'
+
     compile 'org.broadinstitute:barclay:1.1.0'
     compile ('com.intel:genomicsdb:' + genomicsdbVersion)  {
         exclude module: 'spark-core_2.10'
@@ -216,7 +220,8 @@ processResources {
 processTestResources {
     //Don't waste time packaging our test data into the test jar
     exclude "**/large/**"
-    exclude "**/org/broadinstitute/hellbender/**"
+    //TODO: DON"T MERGE THIS!!!!!!!!11!!!11!!!
+//    exclude "**/org/broadinstitute/hellbender/**"
 }
 
 sourceCompatibility = 1.8

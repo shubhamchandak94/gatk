@@ -11,9 +11,9 @@ import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.ClassUtils;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.config.ConfigUtils;
 
-import java.io.PrintStream;
-import java.io.Serializable;
+import java.io.*;
 import java.util.*;
 
 /**
@@ -40,6 +40,9 @@ public class Main {
          * to think about number formatting issues.
          */
         Utils.forceJVMLocaleToUSEnglish();
+
+        // Set config factory to know about the configuration options that we have.
+        ConfigUtils.setConfigFactoryVariableDefaults();
     }
 
     /**
@@ -68,6 +71,11 @@ public class Main {
      */
     private static final int ANY_OTHER_EXCEPTION_EXIT_VALUE = 3;
     private static final String STACK_TRACE_ON_USER_EXCEPTION_PROPERTY = "GATK_STACKTRACE_ON_USER_EXCEPTION";
+
+    /**
+     * The option specifying a main configuration file.
+     */
+    private static final String gatkConfigFileOption = "--gatkConfigFile";
 
     /**
      * Prints the given message (may be null) to the provided stream, adding adornments and formatting.
@@ -147,9 +155,16 @@ public class Main {
      * Note: this is the only method that is allowed to call System.exit (because gatk tools may be run from test harness etc)
      */
     protected final void mainEntry(final String[] args) {
-        final CommandLineProgram program = extractCommandLineProgram(args, getPackageList(), getClassList(), getCommandLineName());
+
+        // First we package our args together a little better:
+        ArrayList<String> argArrayList = new ArrayList<>( Arrays.asList(args) );
+
+        // Now we setup our configurations:
+        ConfigUtils.initializeConfigurationsFromCommandLineArgs(argArrayList, gatkConfigFileOption);
+
+        final CommandLineProgram program = extractCommandLineProgram(argArrayList.toArray(new String[] {}), getPackageList(), getClassList(), getCommandLineName());
         try {
-            final Object result = runCommandLineProgram(program, args);
+            final Object result = runCommandLineProgram(program, argArrayList.toArray(new String[] {}));
             handleResult(result);
             //no explicit System.exit(0) since that causes issues when running in Yarn containers
         } catch (final CommandLineException e){
@@ -167,7 +182,6 @@ public class Main {
             System.exit(ANY_OTHER_EXCEPTION_EXIT_VALUE);
         }
     }
-
 
 
     /**
