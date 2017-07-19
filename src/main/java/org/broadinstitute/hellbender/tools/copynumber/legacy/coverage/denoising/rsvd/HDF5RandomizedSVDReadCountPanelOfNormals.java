@@ -10,6 +10,9 @@ import org.apache.commons.math3.stat.descriptive.rank.Percentile;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.mllib.linalg.Matrix;
+import org.apache.spark.mllib.linalg.SingularValueDecomposition;
+import org.apache.spark.mllib.linalg.distributed.RowMatrix;
 import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.CreateReadCountPanelOfNormals;
@@ -18,8 +21,7 @@ import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
 import org.broadinstitute.hellbender.utils.MatrixSummaryUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.svd.SVD;
-import org.broadinstitute.hellbender.utils.svd.SVDFactory;
+import org.broadinstitute.hellbender.utils.spark.SparkConverter;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -55,6 +57,9 @@ import java.util.stream.IntStream;
 public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCountPanelOfNormals {
     private static final Logger logger = LogManager.getLogger(HDF5RandomizedSVDReadCountPanelOfNormals.class);
 
+    private static final int NUM_SLICES_FOR_SPARK_MATRIX_CONVERSION = 100;
+    private static final double EPSILON = 1E-9;
+
     private final HDF5File file;
 
     /**
@@ -79,7 +84,6 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     private static final String PANEL_INTERVAL_FRACTIONAL_MEDIANS_PATH = PANEL_GROUP_NAME + "/interval_fractional_medians";
     private static final String PANEL_SINGULAR_VALUES_PATH = PANEL_GROUP_NAME + "/singular_values";
     private static final String PANEL_LEFT_SINGULAR_PATH = PANEL_GROUP_NAME + "/left_singular";
-    private static final String PANEL_LEFT_SINGULAR_PSEUDOINVERSE_PATH = PANEL_GROUP_NAME + "/left_singular_pseudoinverse";
 
     private static final String NUM_INTERVAL_COLUMNS_PATH = "/num_interval_columns/value";
 
@@ -162,11 +166,6 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     @Override
     public double[][] getLeftSingular() {
         return file.readDoubleMatrix(PANEL_LEFT_SINGULAR_PATH);
-    }
-
-    @Override
-    public double[][] getLeftSingularPseudoinverse() {
-        return file.readDoubleMatrix(PANEL_LEFT_SINGULAR_PSEUDOINVERSE_PATH);
     }
 
     /**
@@ -252,23 +251,21 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             logger.info(String.format("Writing panel interval fractional medians (%d)...", panelIntervalFractionalMedians.length));
             pon.writePanelIntervalFractionalMedians(panelIntervalFractionalMedians);
 
-            //TODO truncate at numEigensamples
-            logger.info("Performing SVD of standardized counts...");
-            final SVD svd = SVDFactory.createSVD(preprocessedStandardizedResult.preprocessedStandardizedReadCounts, ctx);
-            final double[] singularValues = svd.getSingularValues();    //should be in decreasing order (with corresponding matrices below)
-            final double[][] leftSingular = svd.getU().getData();
+            final int numPanelIntervals = preprocessedStandardizedResult.preprocessedStandardizedReadCounts.getRowDimension();
+            final int numPanelSamples = preprocessedStandardizedResult.preprocessedStandardizedReadCounts.getColumnDimension();
+            logger.info(String.format("Performing SVD (truncated at %d eigensamples) of standardized counts (%d x %d)...",
+                    numEigensamples, numPanelIntervals, numPanelSamples));
+            final SingularValueDecomposition<RowMatrix, Matrix> svd = SparkConverter.convertRealMatrixToSparkRowMatrix(
+                    ctx, preprocessedStandardizedResult.preprocessedStandardizedReadCounts, NUM_SLICES_FOR_SPARK_MATRIX_CONVERSION)
+                    .computeSVD(numEigensamples, true, EPSILON);
+            final double[] singularValues = svd.s().toArray();    //should be in decreasing order (with corresponding matrices below)
+            final double[][] leftSingular = SparkConverter.convertSparkRowMatrixToRealMatrix(svd.U(), numPanelIntervals).getData();
 
             logger.info(String.format("Writing singular values (%d)...", singularValues.length));
             pon.writeSingularValues(singularValues);
 
             logger.info(String.format("Writing left-singular matrix (%d x %d)...", leftSingular.length, leftSingular[0].length));
             pon.writeLeftSingular(leftSingular);
-
-            logger.info("Performing SVD of left-singular matrix to calculate pseudoinverse...");
-            final double[][] leftSingularPseudoinverse = SVDFactory.createSVD(svd.getU(), ctx).getPinv().getData();
-
-            logger.info(String.format("Writing left-singular pseudoinverse (%d x %d)...", leftSingularPseudoinverse.length, leftSingularPseudoinverse[0].length));
-            pon.writePanelLeftSingularPseudoinverse(leftSingularPseudoinverse);
         }
         logger.info(String.format("Read-count panel of normals written to %s.", outFile));
     }
@@ -549,10 +546,6 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
     private void writeLeftSingular(final double[][] leftSingular) {
         file.makeDoubleMatrix(PANEL_LEFT_SINGULAR_PATH, leftSingular);
-    }
-
-    private void writePanelLeftSingularPseudoinverse(final double[][] leftSingularPseudoinverse) {
-        file.makeDoubleMatrix(PANEL_LEFT_SINGULAR_PSEUDOINVERSE_PATH, leftSingularPseudoinverse);
     }
 
     private static List<SimpleInterval> readIntervals(final HDF5File file, final String path) {

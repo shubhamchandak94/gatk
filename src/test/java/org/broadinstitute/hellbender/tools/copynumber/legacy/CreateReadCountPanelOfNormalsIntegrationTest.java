@@ -44,6 +44,7 @@ public final class CreateReadCountPanelOfNormalsIntegrationTest extends CommandL
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_17.tsv",
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_18.tsv",
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_19.tsv",
+                "-" + CreateReadCountPanelOfNormals.NUMBER_OF_EIGENSAMPLES_SHORT_NAME, "20",
                 "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputPanelOfNormalsFile.getAbsolutePath(),
                 "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
         };

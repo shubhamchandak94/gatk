@@ -70,15 +70,6 @@ public interface SVDReadCountPanelOfNormals {
      */
     double[][] getLeftSingular();
 
-    /**
-     * Returns a modifiable copy of an array contatining the pseudoinverse of the matrix of left-singular vectors
-     * returned by {@link #getLeftSingular()}.
-     * This matrix has dimensions {@code K x M},
-     * where {@code K} is the number of eigensamples
-     * and {@code M} is the number of panel intervals (after filtering).
-     */
-    double[][] getLeftSingularPseudoinverse();
-
     default SVDDenoisedCopyRatioResult denoise(final ReadCountCollection readCounts,
                                                final int numEigensamples) {
         return SVDDenoisingUtils.denoise(this, readCounts, numEigensamples);
