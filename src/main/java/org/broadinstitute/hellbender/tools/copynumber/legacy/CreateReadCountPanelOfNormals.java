@@ -173,7 +173,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             shortName = NUMBER_OF_EIGENSAMPLES_SHORT_NAME,
             minValue = 1
     )
-    private int numberOfEigensamples = DEFAULT_NUMBER_OF_EIGENSAMPLES;
+    private int numEigensamples = DEFAULT_NUMBER_OF_EIGENSAMPLES;
 
     @Argument(
             doc = "Output file for the genomic-interval weights (given by the inverse variance of the denoised copy ratio)." +
@@ -217,7 +217,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         HDF5RandomizedSVDReadCountPanelOfNormals.create(outputPanelOfNormalsFile, getCommandLine(),
                 readCountMatrix, sampleFilenames, intervals, intervalGCContent,
                 minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
-                extremeSampleMedianPercentile, extremeOutlierTruncationPercentile, ctx);
+                extremeSampleMedianPercentile, extremeOutlierTruncationPercentile, numEigensamples, ctx);
 //
 //        //output a copy of the interval weights to file
 //        logger.info("Writing interval-weights file to " + outputIntervalWeightsFile + "...");
@@ -230,10 +230,10 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         Utils.validateArg(inputReadCountFiles.size() == new HashSet<>(inputReadCountFiles).size(),
                 "List of input read-count files cannot contain duplicates.");
         inputReadCountFiles.forEach(IOUtils::canReadFile);
-        if (numberOfEigensamples > inputReadCountFiles.size()) {
+        if (numEigensamples > inputReadCountFiles.size()) {
             logger.warn(String.format("Number of eigensamples (%d) is greater than the number of input samples (%d); " +
                             "the number of samples retained after filtering will be used instead.",
-                    numberOfEigensamples, inputReadCountFiles.size()));
+                    numEigensamples, inputReadCountFiles.size()));
         }
     }
 

@@ -11,7 +11,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.hdf5.HDF5File;
-import org.broadinstitute.hdf5.HDF5LibException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.CreateReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.exome.gcbias.GCCorrector;
@@ -200,6 +199,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
                               final double maximumZerosInIntervalPercentage,
                               final double extremeSampleMedianPercentile,
                               final double extremeOutlierTruncationPercentile,
+                              final int numEigensamples,
                               final JavaSparkContext ctx) {
         try (final HDF5File file = new HDF5File(outFile, HDF5File.OpenMode.CREATE)) {
             logger.info("Creating " + outFile.getAbsolutePath() + "...");
@@ -252,17 +252,20 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             logger.info(String.format("Writing panel interval fractional medians (%d)...", panelIntervalFractionalMedians.length));
             pon.writePanelIntervalFractionalMedians(panelIntervalFractionalMedians);
 
-            logger.info("Performing SVD...");
+            //TODO truncate at numEigensamples
+            logger.info("Performing SVD of standardized counts...");
             final SVD svd = SVDFactory.createSVD(preprocessedStandardizedResult.preprocessedStandardizedReadCounts, ctx);
             final double[] singularValues = svd.getSingularValues();    //should be in decreasing order (with corresponding matrices below)
             final double[][] leftSingular = svd.getU().getData();
-            final double[][] leftSingularPseudoinverse = svd.getPinv().getData();
 
             logger.info(String.format("Writing singular values (%d)...", singularValues.length));
             pon.writeSingularValues(singularValues);
 
             logger.info(String.format("Writing left-singular matrix (%d x %d)...", leftSingular.length, leftSingular[0].length));
             pon.writeLeftSingular(leftSingular);
+
+            logger.info("Performing SVD of left-singular matrix to calculate pseudoinverse...");
+            final double[][] leftSingularPseudoinverse = SVDFactory.createSVD(svd.getU(), ctx).getPinv().getData();
 
             logger.info(String.format("Writing left-singular pseudoinverse (%d x %d)...", leftSingularPseudoinverse.length, leftSingularPseudoinverse[0].length));
             pon.writePanelLeftSingularPseudoinverse(leftSingularPseudoinverse);

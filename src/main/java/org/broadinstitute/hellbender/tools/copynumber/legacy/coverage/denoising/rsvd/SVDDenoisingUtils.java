@@ -14,6 +14,7 @@ import org.broadinstitute.hellbender.utils.MatrixSummaryUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
+import org.broadinstitute.hellbender.utils.svd.SVDFactory;
 
 import java.util.HashSet;
 import java.util.List;
@@ -72,6 +73,7 @@ public final class SVDDenoisingUtils {
         final RealMatrix standardizedCounts = preprocessAndStandardizeSample(panelOfNormals, readCounts.counts());
 
         logger.info(String.format("Using %d out of %d eigensamples to denoise...", numEigensamples, panelOfNormals.getNumEigensamples()));
+
         logger.info("Subtracting projection onto space spanned by eigensamples...");
         final RealMatrix denoisedCounts = subtractProjection(standardizedCounts,
                 panelOfNormals.getLeftSingular(), panelOfNormals.getLeftSingularPseudoinverse(), numEigensamples);
@@ -152,28 +154,33 @@ public final class SVDDenoisingUtils {
     /**
      * Given standardized read counts specified by a column vector S (dimensions {@code M x 1}),
      * left-singular vectors U (dimensions {@code M x K}), and the pseudoinverse U<sup>+</sup> (dimensions {@code K x M}),
-     * returns s - U U<sup>+</sup> s.
+     * returns s - U<sub>k</sub> U<sub>k</sub><sup>+</sup> s, where U<sub>k</sub> contains the first {@code numEigensamples}.
      */
     private static RealMatrix subtractProjection(final RealMatrix standardizedProfile,
                                                  final double[][] leftSingular,
                                                  final double[][] leftSingularPseudoinverse,
                                                  final int numEigensamples) {
         final int numIntervals = leftSingular.length;
+        final int numAllEigensamples = leftSingular[0].length;
 
         logger.info("Distributing the standardized read counts...");
 
         logger.info("Composing left-singular matrix and pseudoinverse for the requested number of eigensamples and transposing them...");
-        final RealMatrix leftSingularTruncatedTransposedMatrix = new Array2DRowRealMatrix(leftSingular)
-                .getSubMatrix(0, numIntervals - 1, 0, numEigensamples - 1)
-                .transpose();
-        final RealMatrix leftSingularPseudoinverseTruncatedTransposedMatrix = new Array2DRowRealMatrix(leftSingularPseudoinverse)
-                .getSubMatrix(0, numEigensamples - 1, 0, numIntervals - 1)
-                .transpose();
+        if (numEigensamples != numAllEigensamples) {
+            logger.info("Requested number of eigensamples is less than the number available in the panel of normals, " +
+                    "so the pseudoinverse of the left-singular truncated matrix must be calculated...");
+        }
+        final RealMatrix leftSingularTruncatedMatrix = numEigensamples == numAllEigensamples
+                ? new Array2DRowRealMatrix(leftSingular)
+                : new Array2DRowRealMatrix(leftSingular).getSubMatrix(0, numIntervals - 1, 0, numEigensamples - 1);
+        final RealMatrix leftSingularTruncatedPseudoinverse = numEigensamples == numAllEigensamples
+                ? new Array2DRowRealMatrix(leftSingularPseudoinverse)
+                : SVDFactory.createSVD(leftSingularTruncatedMatrix).getPinv();
 
         logger.info("Computing projection of transpose...");
         final RealMatrix projectionTranspose = standardizedProfile.transpose()
-                .multiply(leftSingularPseudoinverseTruncatedTransposedMatrix)
-                .multiply(leftSingularTruncatedTransposedMatrix);
+                .multiply(leftSingularTruncatedMatrix)
+                .multiply(leftSingularTruncatedPseudoinverse);
 
         logger.info("Subtracting projection...");
         return standardizedProfile.subtract(projectionTranspose.transpose());
