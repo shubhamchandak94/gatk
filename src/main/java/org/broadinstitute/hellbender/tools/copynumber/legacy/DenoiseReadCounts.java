@@ -89,7 +89,7 @@ public final class DenoiseReadCounts extends CommandLineProgram {
             minValue = 1,
             optional = true
     )
-    private Integer numEigensamples = null;
+    private Integer numEigensamplesRequested = null;
 
     @Override
     protected Object doWork() {
@@ -110,12 +110,12 @@ public final class DenoiseReadCounts extends CommandLineProgram {
 
             //perform denoising and write result
             final int numEigensamples =
-                    this.numEigensamples == null ?
+                    numEigensamplesRequested == null ?
                             panelOfNormals.getNumEigensamples() :
-                            Math.min(panelOfNormals.getNumEigensamples(), this.numEigensamples);
-            if (this.numEigensamples != null && numEigensamples < this.numEigensamples) {
+                            Math.min(panelOfNormals.getNumEigensamples(), this.numEigensamplesRequested);
+            if (numEigensamplesRequested != null && numEigensamples < numEigensamplesRequested) {
                 logger.warn(String.format("%d eigensamples were requested but only %d are available in the panel of normals...",
-                        this.numEigensamples, numEigensamples));
+                        numEigensamplesRequested, numEigensamples));
             }
             final SVDDenoisedCopyRatioResult denoisedCopyRatioResult = panelOfNormals.denoise(readCounts, numEigensamples);
 

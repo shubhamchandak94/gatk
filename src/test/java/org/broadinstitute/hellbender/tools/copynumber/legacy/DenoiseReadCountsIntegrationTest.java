@@ -30,4 +30,17 @@ public class DenoiseReadCountsIntegrationTest extends CommandLineProgramTest {
         };
         runCommandLine(arguments);
     }
+
+    @Test
+    public void testWGS() {
+        final String[] arguments = {
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test/wgs_4.tsv",
+                "-" + ExomeStandardArgumentDefinitions.PON_FILE_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test/wgs.no-gc.pon",
+                "-" + ExomeStandardArgumentDefinitions.PRE_TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test/wgs_4.no-gc.ptn.tsv",
+                "-" + ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test/wgs_4.no-gc.tn.tsv",
+//                "-" + DenoiseReadCounts.NUMBER_OF_EIGENSAMPLES_SHORT_NAME, "10",
+                "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
+        };
+        runCommandLine(arguments);
+    }
 }

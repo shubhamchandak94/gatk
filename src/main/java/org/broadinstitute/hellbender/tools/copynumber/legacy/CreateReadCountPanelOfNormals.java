@@ -14,14 +14,16 @@ import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGrou
 import org.broadinstitute.hellbender.engine.spark.SparkCommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.HDF5RandomizedSVDReadCountPanelOfNormals;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SVDDenoisingUtils;
-import org.broadinstitute.hellbender.tools.exome.*;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.SimpleReadCountCollection;
+import org.broadinstitute.hellbender.tools.exome.Target;
+import org.broadinstitute.hellbender.tools.exome.TargetAnnotation;
+import org.broadinstitute.hellbender.tools.exome.TargetArgumentCollection;
+import org.broadinstitute.hellbender.tools.exome.TargetCollection;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -173,7 +175,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             shortName = NUMBER_OF_EIGENSAMPLES_SHORT_NAME,
             minValue = 1
     )
-    private int numEigensamples = DEFAULT_NUMBER_OF_EIGENSAMPLES;
+    private int numEigensamplesRequested = DEFAULT_NUMBER_OF_EIGENSAMPLES;
 
     @Argument(
             doc = "Output file for the genomic-interval weights (given by the inverse variance of the denoised copy ratio)." +
@@ -202,6 +204,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         final List<String> sampleFilenames = inputReadCountFiles.stream().map(File::getAbsolutePath).collect(Collectors.toList());
 
         //get intervals from the first read-count file to use as the canonical list of intervals
+        //(this file is read again below, which is slightly inefficient but also slightly simplifies the code)
         final List<SimpleInterval> intervals = getIntervalsFromFirstReadCountFile(logger, inputReadCountFiles);
 
         //get GC content (null if not provided)
@@ -217,7 +220,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         HDF5RandomizedSVDReadCountPanelOfNormals.create(outputPanelOfNormalsFile, getCommandLine(),
                 readCountMatrix, sampleFilenames, intervals, intervalGCContent,
                 minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
-                extremeSampleMedianPercentile, extremeOutlierTruncationPercentile, numEigensamples, ctx);
+                extremeSampleMedianPercentile, extremeOutlierTruncationPercentile, numEigensamplesRequested, ctx);
 //
 //        //output a copy of the interval weights to file
 //        logger.info("Writing interval-weights file to " + outputIntervalWeightsFile + "...");
@@ -230,10 +233,10 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         Utils.validateArg(inputReadCountFiles.size() == new HashSet<>(inputReadCountFiles).size(),
                 "List of input read-count files cannot contain duplicates.");
         inputReadCountFiles.forEach(IOUtils::canReadFile);
-        if (numEigensamples > inputReadCountFiles.size()) {
+        if (numEigensamplesRequested > inputReadCountFiles.size()) {
             logger.warn(String.format("Number of eigensamples (%d) is greater than the number of input samples (%d); " +
                             "the number of samples retained after filtering will be used instead.",
-                    numEigensamples, inputReadCountFiles.size()));
+                    numEigensamplesRequested, inputReadCountFiles.size()));
         }
     }
 
@@ -257,16 +260,8 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
                                                                            final List<File> inputReadCountFiles) {
         final File firstReadCountFile = inputReadCountFiles.get(0);
         logger.info(String.format("Retrieving intervals from first read-count file (%s)...", firstReadCountFile));
-        final ReadCountCollection firstSampleReadCounts;
-        try {
-            firstSampleReadCounts = ReadCountCollectionUtils.parse(firstReadCountFile);
-        } catch (final IOException e) {
-            throw new UserException.CouldNotReadInputFile(firstReadCountFile);
-        }
-        if (firstSampleReadCounts.targets().isEmpty()) {
-            throw new UserException.BadInput("First read-count file contains no intervals.");
-        }
-        return firstSampleReadCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList());
+        final SimpleReadCountCollection readCounts = SimpleReadCountCollection.read(firstReadCountFile);
+        return readCounts.getIntervals();
     }
 
     private RealMatrix constructReadCountMatrix(final Logger logger,
@@ -282,16 +277,10 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             final int sampleIndex = inputReadCountFilesIterator.nextIndex();
             final File inputReadCountFile = inputReadCountFilesIterator.next();
             logger.info(String.format("Aggregating read-count file %s (%d / %d)", inputReadCountFile, sampleIndex + 1, numSamples));
-            final ReadCountCollection readCounts;
-            try {
-                readCounts = ReadCountCollectionUtils.parse(inputReadCountFile);
-            } catch (final IOException e) {
-                throw new UserException.CouldNotReadInputFile(inputReadCountFile);
-            }
-            SVDDenoisingUtils.validateReadCounts(readCounts);
-            Utils.validateArg(readCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList()).equals(intervals),
+            final SimpleReadCountCollection readCounts = SimpleReadCountCollection.read(inputReadCountFile);
+            Utils.validateArg(readCounts.getIntervals().equals(intervals),
                     String.format("Intervals for read-count file %s do not match those in other read-count files.", inputReadCountFile));
-            readCountMatrix.setColumn(sampleIndex, readCounts.getColumn(0));
+            readCountMatrix.setColumn(sampleIndex, readCounts.getReadCounts().getColumn(0));
         }
         return readCountMatrix;
     }

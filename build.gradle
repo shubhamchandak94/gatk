@@ -118,6 +118,7 @@ dependencies {
         exclude module: 'protobuf-java'
     }
     compile 'com.opencsv:opencsv:3.4'
+    compile 'net.sf.supercsv:super-csv:2.4.0'
     compile 'com.google.guava:guava:18.0'
     compile 'com.github.samtools:htsjdk:'+ htsjdkVersion
     // Using the shaded version to avoid conflicts between its protobuf dependency
