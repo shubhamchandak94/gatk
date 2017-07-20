@@ -74,6 +74,24 @@ public final class CreateReadCountPanelOfNormalsIntegrationTest extends CommandL
     }
 
     @Test
+    public void testWGS5M() {
+//        final File outputPanelOfNormalsFile = createTempFile("create-read-count-panel-of-normals", ".pon");
+        final File outputPanelOfNormalsFile = new File("/home/slee/working/ipython/wgs-pon-test-5M/wgs-5M.no-gc.pon");
+        final String[] arguments = {
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test-5M/wgs_0.tsv",
+//                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test-5M/wgs_1.tsv",
+//                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test-5M/wgs_2.tsv",
+//                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test-5M/wgs_3.tsv",
+//                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test-5M/wgs_4.tsv",
+                "-" + CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME, "100",
+                "-" + CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME, "100",
+                "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputPanelOfNormalsFile.getAbsolutePath(),
+                "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
+        };
+        runCommandLine(arguments);
+    }
+
+    @Test
     public void testWGS() {
 //        final File outputPanelOfNormalsFile = createTempFile("create-read-count-panel-of-normals", ".pon");
         final File outputPanelOfNormalsFile = new File("/home/slee/working/ipython/wgs-pon-test/wgs.no-gc.pon");
@@ -86,7 +104,7 @@ public final class CreateReadCountPanelOfNormalsIntegrationTest extends CommandL
                 "-" + CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME, "100",
                 "-" + CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME, "100",
                 "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputPanelOfNormalsFile.getAbsolutePath(),
-                "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "DEBUG"
+                "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
         };
         runCommandLine(arguments);
     }

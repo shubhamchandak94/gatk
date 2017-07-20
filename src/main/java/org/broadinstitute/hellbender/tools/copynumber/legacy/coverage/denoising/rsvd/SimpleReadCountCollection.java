@@ -65,7 +65,7 @@ public final class SimpleReadCountCollection {
     public static SimpleReadCountCollection read(final File file) {
         IOUtils.canReadFile(file);
         final int numRows = countRows(file);
-        logger.debug(String.format("Number of rows: %d", numRows));
+        logger.info(String.format("Number of rows: %d", numRows));
         final List<Locatable> intervals = new ArrayList<>(numRows);
         final List<Integer> readCounts = new ArrayList<>(numRows);
         try (final FileReader fileReader = new FileReader(file);
@@ -96,7 +96,7 @@ public final class SimpleReadCountCollection {
 //    public static SimpleReadCountCollection read(final File file) {
 //        IOUtils.canReadFile(file);
 //        final int numRows = countRows(file);
-//        logger.debug(String.format("Number of rows: %d", numRows))
+//        logger.info(String.format("Number of rows: %d", numRows))
 //        final List<Locatable> intervals = new ArrayList<>(numLines);
 //        final List<Integer> readCounts = new ArrayList<>(numLines);
 //        try (final FileReader reader = new FileReader(file)) {
@@ -122,7 +122,7 @@ public final class SimpleReadCountCollection {
 //    }
 
     private static int countRows(final File file) {
-        logger.debug("Counting lines...");
+        logger.info("Counting lines...");
         try {
             return (int) Files.lines(file.toPath()).filter(l -> !l.startsWith(COMMENT_STRING)).count() - 1;
         } catch (final IOException e) {

@@ -77,8 +77,6 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     private static final String PANEL_SINGULAR_VALUES_PATH = PANEL_GROUP_NAME + "/singular_values";
     private static final String PANEL_LEFT_SINGULAR_PATH = PANEL_GROUP_NAME + "/left_singular";
 
-    private static final String NUM_INTERVAL_COLUMNS_PATH = "/num_interval_columns/value";
-
     private final Lazy<List<Locatable>> originalIntervals;
     private final Lazy<List<Locatable>> panelIntervals;
 
@@ -90,8 +88,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     private HDF5RandomizedSVDReadCountPanelOfNormals(final HDF5File file) {
         Utils.nonNull(file);
         this.file = file;
-        originalIntervals = new Lazy<>(() -> readIntervals(file, ORIGINAL_INTERVALS_PATH));
-        panelIntervals = new Lazy<>(() -> readIntervals(file, PANEL_INTERVALS_PATH));
+        originalIntervals = new Lazy<>(() -> IntervalHelper.readIntervals(file, ORIGINAL_INTERVALS_PATH));
+        panelIntervals = new Lazy<>(() -> IntervalHelper.readIntervals(file, PANEL_INTERVALS_PATH));
     }
     
     @Override
@@ -282,7 +280,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     }
 
     private void writeOriginalIntervals(final List<Locatable> originalIntervals) {
-        writeIntervals(file, ORIGINAL_INTERVALS_PATH, originalIntervals);
+        IntervalHelper.writeIntervals(file, ORIGINAL_INTERVALS_PATH, originalIntervals);
     }
 
     private void writeOriginalIntervalGCContent(final double[] originalIntervalGCContent) {
@@ -294,7 +292,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     }
 
     private void writePanelIntervals(final List<Locatable> panelIntervals) {
-        writeIntervals(file, PANEL_INTERVALS_PATH, panelIntervals);
+        IntervalHelper.writeIntervals(file, PANEL_INTERVALS_PATH, panelIntervals);
     }
 
     private void writePanelIntervalFractionalMedians(final double[] panelIntervalFractionalMedians) {
@@ -309,42 +307,54 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
         file.makeDoubleMatrix(PANEL_LEFT_SINGULAR_PATH, leftSingular);
     }
 
-    private enum IntervalColumn {
-        CONTIG (0),
-        START (1),
-        END (2);
+    private static final class IntervalHelper {
+        //writing intervals as a string matrix is expensive,
+        //so we instead store a map from integer indices to contig strings and
+        //store (index, start, end) in a double matrix
 
-        private final int index;
+        private static final String INTERVAL_CONTIG_NAMES_PATH_SUFFIX = "/contig_names";
+        private static final String INTERVAL_MATRIX_PATH_SUFFIX = "/contig-index_start_end";
 
-        IntervalColumn(final int index) {
-            this.index = index;
+        private enum IntervalField {
+            CONTIG_INDEX(0),
+            START (1),
+            END (2);
+
+            private final int index;
+
+            IntervalField(final int index) {
+                this.index = index;
+            }
         }
-    }
-    private static final int NUM_INTERVAL_COLUMNS = IntervalColumn.values().length;
+        private static final int NUM_INTERVAL_FIELDS = IntervalField.values().length;
 
-    private static List<Locatable> readIntervals(final HDF5File file,
-                                                 final String path) {
-        final String[][] values = file.readStringMatrix(path, NUM_INTERVAL_COLUMNS_PATH);
-        final List<Locatable> result = new ArrayList<>(values.length);
-        for (final String[] row : values) {
-            result.add(new SimpleInterval(
-                    row[IntervalColumn.CONTIG.index],
-                    Integer.parseInt(row[IntervalColumn.START.index]),
-                    Integer.parseInt(row[IntervalColumn.END.index])));
+        private static List<Locatable> readIntervals(final HDF5File file,
+        final String path) {
+            final String[] contigNames = file.readStringArray(path + INTERVAL_CONTIG_NAMES_PATH_SUFFIX);
+            final double[][] matrix = file.readDoubleMatrix(path + INTERVAL_MATRIX_PATH_SUFFIX);
+            final List<Locatable> result = new ArrayList<>(matrix.length);
+            for (final double[] row : matrix) {
+                result.add(new SimpleInterval(
+                        contigNames[(int) row[IntervalField.CONTIG_INDEX.index]],
+                        (int) row[IntervalField.START.index],
+                        (int) row[IntervalField.END.index]));
+            }
+            return result;
         }
-        return result;
-    }
 
-    private static void writeIntervals(final HDF5File file,
-                                       final String path,
-                                       final List<Locatable> intervals) {
-        final String[][] values = new String[NUM_INTERVAL_COLUMNS][intervals.size()];
-        for (int i = 0; i < intervals.size(); i++) {
-            final Locatable interval = intervals.get(i);
-            values[IntervalColumn.CONTIG.index][i] = interval.getContig();
-            values[IntervalColumn.START.index][i] = String.valueOf(interval.getStart());
-            values[IntervalColumn.END.index][i] = String.valueOf(interval.getEnd());
+        private static void writeIntervals(final HDF5File file,
+                                           final String path,
+                                           final List<Locatable> intervals) {
+            final String[] contigNames = intervals.stream().map(Locatable::getContig).distinct().toArray(String[]::new);
+            final Map<>
+            final double[][] matrix = new double[intervals.size()][NUM_INTERVAL_FIELDS];
+            for (int i = 0; i < intervals.size(); i++) {
+                final Locatable interval = intervals.get(i);
+                matrix[i][IntervalField.CONTIG_INDEX.index] = interval.getContig();
+                matrix[i][IntervalField.START.index] = interval.getStart();
+                matrix[i][IntervalField.END.index] = interval.getEnd();
+            }
+            file.makeStringMatrix(path, matrix, NUM_INTERVAL_COLUMNS_PATH);
         }
-        file.makeStringMatrix(path, values, NUM_INTERVAL_COLUMNS_PATH);
     }
 }
