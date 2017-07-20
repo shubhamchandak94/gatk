@@ -88,12 +88,6 @@ public final class SVDDenoisingUtils {
                                                                    final double maximumZerosInIntervalPercentage,
                                                                    final double extremeSampleMedianPercentile,
                                                                    final double extremeOutlierTruncationPercentile) {
-        final int numOriginalIntervals = readCounts.getRowDimension();
-        final int numOriginalSamples = readCounts.getColumnDimension();
-
-        final boolean[] filterIntervals = new boolean[numOriginalIntervals];
-        final boolean[] filterSamples = new boolean[numOriginalSamples];
-
         logger.info("Transforming read counts to fractional coverage...");
         transformToFractionalCoverage(readCounts);
 
@@ -102,157 +96,18 @@ public final class SVDDenoisingUtils {
             GCCorrector.correctCoverage(readCounts, intervalGCContent);
         }
 
-        final double[] originalIntervalMedians = MatrixSummaryUtils.getRowMedians(readCounts);
-
-        //filter intervals by fractional median
-        if (minimumIntervalMedianPercentile == 0.) {
-            logger.info(String.format("A value of 0 was provided for argument %s, so the corresponding filtering step will be skipped...",
-                    CreateReadCountPanelOfNormals.MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME));
-        } else {
-            logger.info(String.format("Filtering intervals with median (across samples) below the %.2f percentile...", minimumIntervalMedianPercentile));
-            //calculate percentile
-            final double minimumIntervalMedianThreshold = new Percentile(minimumIntervalMedianPercentile).evaluate(originalIntervalMedians);
-            //filter intervals
-            IntStream.range(0, numOriginalIntervals)
-                    .filter(intervalIndex -> originalIntervalMedians[intervalIndex] < minimumIntervalMedianThreshold)
-                    .forEach(intervalIndex -> filterIntervals[intervalIndex] = true);
-            logger.info(String.format("%d out of %d intervals remain...", countNumberPassingFilter(filterIntervals), numOriginalIntervals));
-        }
-
-        logger.info("Dividing by interval medians...");
-        IntStream.range(0, numOriginalIntervals)
-                .filter(intervalIndex -> !filterIntervals[intervalIndex])
-                .forEach(intervalIndex -> IntStream.range(0, numOriginalSamples).filter(sampleIndex -> !filterSamples[sampleIndex]).forEach(sampleIndex -> {
-                    final double value = readCounts.getEntry(intervalIndex, sampleIndex);
-                    readCounts.setEntry(intervalIndex, sampleIndex, value / originalIntervalMedians[intervalIndex]);
-                }));
-
-        //filter samples by percentage of zero-coverage intervals not already filtered
-        if (maximumZerosInSamplePercentage == 100.) {
-            logger.info(String.format("A value of 100 was provided for argument %s, so the corresponding filtering step will be skipped...",
-                    CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME));
-        } else {
-            logger.info(String.format("Filtering samples with a fraction of zero-coverage intervals above %.2f percent...", maximumZerosInSamplePercentage));
-            IntStream.range(0, numOriginalSamples)
-                    .filter(sampleIndex -> !filterSamples[sampleIndex])
-                    .forEach(sampleIndex -> {
-                        final int numZerosInSample = (int) IntStream.range(0, numOriginalIntervals)
-                                .filter(intervalIndex -> !filterIntervals[intervalIndex] && readCounts.getEntry(intervalIndex, sampleIndex) == 0.)
-                                .count();
-                        if (numZerosInSample > calculateMaximumZerosCount(numZerosInSample, maximumZerosInSamplePercentage)) {
-                            filterSamples[sampleIndex] = true;
-                        }
-                    });
-            logger.info(String.format("%d out of %d samples remain...", countNumberPassingFilter(filterSamples), numOriginalSamples));
-        }
-
-        //filter intervals by percentage of zero-coverage samples not already filtered
-        if (maximumZerosInIntervalPercentage == 100.) {
-            logger.info(String.format("A value of 100 was provided for argument %s, so the corresponding filtering step will be skipped...",
-                    CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_LONG_NAME));
-        } else {
-            logger.info(String.format("Filtering intervals with a fraction of zero-coverage samples above %.2f percent...", maximumZerosInIntervalPercentage));
-            IntStream.range(0, numOriginalIntervals)
-                    .filter(intervalIndex -> !filterIntervals[intervalIndex])
-                    .forEach(intervalIndex -> {
-                        final int numZerosInInterval = (int) IntStream.range(0, numOriginalSamples)
-                                .filter(sampleIndex -> !filterSamples[sampleIndex] && readCounts.getEntry(sampleIndex, sampleIndex) == 0.)
-                                .count();
-                        if (numZerosInInterval > calculateMaximumZerosCount(numZerosInInterval, maximumZerosInIntervalPercentage)) {
-                            filterIntervals[intervalIndex] = true;
-                        }
-                    });
-            logger.info(String.format("%d out of %d intervals remain...", countNumberPassingFilter(filterIntervals), numOriginalIntervals));
-        }
-
-        //filter samples with extreme medians
-        if (extremeSampleMedianPercentile == 0.) {
-            logger.info(String.format("A value of 0 was provided for argument %s, so the corresponding filtering step will be skipped...",
-                    CreateReadCountPanelOfNormals.EXTREME_SAMPLE_MEDIAN_PERCENTILE_LONG_NAME));
-        } else {
-            logger.info(String.format("Filtering samples with a median (across intervals) below the %.2f percentile or above the %.2f percentile...",
-                    extremeSampleMedianPercentile, 100. - extremeSampleMedianPercentile));
-            //calculate the medians for all samples (which, although unnecessary, makes bookkeeping easier) across intervals not already filtered
-            final double[] sampleMedians = IntStream.range(0, numOriginalSamples)
-                    .mapToDouble(sampleIndex -> new Median().evaluate(IntStream.range(0, numOriginalIntervals)
-                            .filter(intervalIndex -> !filterIntervals[intervalIndex])
-                            .mapToDouble(intervalIndex -> readCounts.getEntry(intervalIndex, sampleIndex))
-                            .toArray()))
-                    .toArray();
-            //calculate percentiles
-            final double minimumSampleMedianThreshold = new Percentile(extremeSampleMedianPercentile).evaluate(sampleMedians);
-            final double maximumSampleMedianThreshold = new Percentile(100. - extremeSampleMedianPercentile).evaluate(sampleMedians);
-            //filter samples
-            IntStream.range(0, numOriginalSamples)
-                    .filter(sampleIndex -> sampleMedians[sampleIndex] < minimumSampleMedianThreshold || sampleMedians[sampleIndex] > maximumSampleMedianThreshold)
-                    .forEach(sampleIndex -> filterSamples[sampleIndex] = true);
-            logger.info(String.format("%d out of %d samples remain...", countNumberPassingFilter(filterSamples), numOriginalSamples));
-        }
-
-        //construct the filtered results as a new matrix, which will be modified in place from this point on
-        final int[] panelIntervalIndices = IntStream.range(0, numOriginalIntervals).filter(intervalIndex -> !filterIntervals[intervalIndex]).toArray();
-        final int[] panelSampleIndices = IntStream.range(0, numOriginalSamples).filter(sampleIndex -> !filterSamples[sampleIndex]).toArray();
-        final RealMatrix preprocessedStandardizedReadCounts = readCounts.getSubMatrix(panelIntervalIndices, panelSampleIndices);
-        final double[] panelIntervalFractionalMedians = IntStream.range(0, numOriginalIntervals)
-                .filter(intervalIndex -> !filterIntervals[intervalIndex])
-                .mapToDouble(intervalIndex -> originalIntervalMedians[intervalIndex]).toArray();
-
-        //impute zeros as median of non-zero values in interval
-        //TODO make this optional
-        final int numPanelIntervals = panelIntervalIndices.length;
-        final double[] intervalNonZeroMedians = IntStream.range(0, numPanelIntervals)
-                .mapToObj(intervalIndex -> Arrays.stream(preprocessedStandardizedReadCounts.getRow(intervalIndex)).filter(value -> value > 0.).toArray())
-                .mapToDouble(nonZeroValues -> new Median().evaluate(nonZeroValues))
-                .toArray();
-        final int[] numImputed = {0};  //needs to be effectively final to be used inside visitor
-        preprocessedStandardizedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(int intervalIndex, int sampleIndex, double value) {
-                if (value == 0.) {
-                    numImputed[0]++;
-                    return intervalNonZeroMedians[intervalIndex];
-                }
-                return value;
-            }
-        });
-        logger.info(String.format("%d zero-coverage values were imputed to the median of the non-zero values in the corresponding interval...",
-                numImputed[0]));
-
-        //truncate extreme values to the corresponding percentile
-        if (extremeOutlierTruncationPercentile == 0.) {
-            logger.info(String.format("A value of 0 was provided for argument %s, so the corresponding truncation step will be skipped...",
-                    CreateReadCountPanelOfNormals.EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME));
-        } else {
-            final double[] values = Doubles.concat(preprocessedStandardizedReadCounts.getData());
-            final double minimumOutlierTruncationThreshold = new Percentile(extremeOutlierTruncationPercentile).evaluate(values);
-            final double maximumOutlierTruncationThreshold = new Percentile(100. - extremeOutlierTruncationPercentile).evaluate(values);
-            System.out.println(minimumOutlierTruncationThreshold + " " + maximumOutlierTruncationThreshold);
-            final int[] numTruncated = {0};  //needs to be effectively final to be used inside visitor
-            preprocessedStandardizedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-                @Override
-                public double visit(int intervalIndex, int sampleIndex, double value) {
-                    if (value < minimumOutlierTruncationThreshold) {
-                        numTruncated[0]++;
-                        return minimumOutlierTruncationThreshold;
-                    }
-                    if (value > maximumOutlierTruncationThreshold) {
-                        numTruncated[0]++;
-                        return maximumOutlierTruncationThreshold;
-                    }
-                    return value;
-                }
-            });
-            logger.info(String.format("%d values below the %.2f percentile or above the %.2f percentile were truncated to the corresponding value...",
-                    numTruncated[0], extremeOutlierTruncationPercentile, 100. - extremeOutlierTruncationPercentile));
-        }
+        final PreprocessedStandardizedResult preprocessedStandardizedResult = preprocessPanel(readCounts,
+                minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
+                extremeSampleMedianPercentile, extremeOutlierTruncationPercentile);
 
         logger.info("Dividing by sample medians and transforming to log2 space...");
-        divideBySampleMedianAndTransformToLog2(preprocessedStandardizedReadCounts);
+        divideBySampleMedianAndTransformToLog2(preprocessedStandardizedResult.preprocessedStandardizedReadCounts);
 
         logger.info("Subtracting median of sample medians...");
-        final double[] sampleLog2Medians = MatrixSummaryUtils.getColumnMedians(preprocessedStandardizedReadCounts);
+        final double[] sampleLog2Medians = MatrixSummaryUtils.getColumnMedians(preprocessedStandardizedResult.preprocessedStandardizedReadCounts);
         final double medianOfSampleMedians = new Median().evaluate(sampleLog2Medians);
-        preprocessedStandardizedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+        preprocessedStandardizedResult.preprocessedStandardizedReadCounts
+                .walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(int intervalIndex, int sampleIndex, double value) {
                 return value - medianOfSampleMedians;
@@ -261,7 +116,7 @@ public final class SVDDenoisingUtils {
 
         logger.info("Panel read counts standardized.");
 
-        return new PreprocessedStandardizedResult(preprocessedStandardizedReadCounts, panelIntervalFractionalMedians, filterIntervals, filterSamples);
+        return preprocessedStandardizedResult;
     }
 
     /**
@@ -300,6 +155,167 @@ public final class SVDDenoisingUtils {
         final ReadCountCollection denoisedProfile = new ReadCountCollection(targets, readCounts.columnNames(), denoisedCounts);
 
         return new SVDDenoisedCopyRatioResult(standardizedProfile, denoisedProfile);
+    }
+
+    /**
+     * TODO
+     */
+    private static PreprocessedStandardizedResult preprocessPanel(final RealMatrix transformedReadCounts,
+                                                                  final double minimumIntervalMedianPercentile,
+                                                                  final double maximumZerosInSamplePercentage,
+                                                                  final double maximumZerosInIntervalPercentage,
+                                                                  final double extremeSampleMedianPercentile,
+                                                                  final double extremeOutlierTruncationPercentile) {
+        final int numOriginalIntervals = transformedReadCounts.getRowDimension();
+        final int numOriginalSamples = transformedReadCounts.getColumnDimension();
+
+        final boolean[] filterIntervals = new boolean[numOriginalIntervals];
+        final boolean[] filterSamples = new boolean[numOriginalSamples];
+
+        final double[] originalIntervalMedians = MatrixSummaryUtils.getRowMedians(transformedReadCounts);
+
+        //filter intervals by fractional median
+        if (minimumIntervalMedianPercentile == 0.) {
+            logger.info(String.format("A value of 0 was provided for argument %s, so the corresponding filtering step will be skipped...",
+                    CreateReadCountPanelOfNormals.MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME));
+        } else {
+            logger.info(String.format("Filtering intervals with median (across samples) below the %.2f percentile...", minimumIntervalMedianPercentile));
+            //calculate percentile
+            final double minimumIntervalMedianThreshold = new Percentile(minimumIntervalMedianPercentile).evaluate(originalIntervalMedians);
+            //filter intervals
+            IntStream.range(0, numOriginalIntervals)
+                    .filter(intervalIndex -> originalIntervalMedians[intervalIndex] < minimumIntervalMedianThreshold)
+                    .forEach(intervalIndex -> filterIntervals[intervalIndex] = true);
+            logger.info(String.format("After filtering, %d out of %d intervals remain...", countNumberPassingFilter(filterIntervals), numOriginalIntervals));
+        }
+
+        logger.info("Dividing by interval medians...");
+        IntStream.range(0, numOriginalIntervals)
+                .filter(intervalIndex -> !filterIntervals[intervalIndex])
+                .forEach(intervalIndex -> IntStream.range(0, numOriginalSamples).filter(sampleIndex -> !filterSamples[sampleIndex]).forEach(sampleIndex -> {
+                    final double value = transformedReadCounts.getEntry(intervalIndex, sampleIndex);
+                    transformedReadCounts.setEntry(intervalIndex, sampleIndex, value / originalIntervalMedians[intervalIndex]);
+                }));
+
+        //filter samples by percentage of zero-coverage intervals not already filtered
+        if (maximumZerosInSamplePercentage == 100.) {
+            logger.info(String.format("A value of 100 was provided for argument %s, so the corresponding filtering step will be skipped...",
+                    CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME));
+        } else {
+            logger.info(String.format("Filtering samples with a fraction of zero-coverage intervals above %.2f percent...", maximumZerosInSamplePercentage));
+            IntStream.range(0, numOriginalSamples)
+                    .filter(sampleIndex -> !filterSamples[sampleIndex])
+                    .forEach(sampleIndex -> {
+                        final int numZerosInSample = (int) IntStream.range(0, numOriginalIntervals)
+                                .filter(intervalIndex -> !filterIntervals[intervalIndex] && transformedReadCounts.getEntry(intervalIndex, sampleIndex) == 0.)
+                                .count();
+                        if (numZerosInSample > calculateMaximumZerosCount(numZerosInSample, maximumZerosInSamplePercentage)) {
+                            filterSamples[sampleIndex] = true;
+                        }
+                    });
+            logger.info(String.format("After filtering, %d out of %d samples remain...", countNumberPassingFilter(filterSamples), numOriginalSamples));
+        }
+
+        //filter intervals by percentage of zero-coverage samples not already filtered
+        if (maximumZerosInIntervalPercentage == 100.) {
+            logger.info(String.format("A value of 100 was provided for argument %s, so the corresponding filtering step will be skipped...",
+                    CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_LONG_NAME));
+        } else {
+            logger.info(String.format("Filtering intervals with a fraction of zero-coverage samples above %.2f percent...", maximumZerosInIntervalPercentage));
+            IntStream.range(0, numOriginalIntervals)
+                    .filter(intervalIndex -> !filterIntervals[intervalIndex])
+                    .forEach(intervalIndex -> {
+                        final int numZerosInInterval = (int) IntStream.range(0, numOriginalSamples)
+                                .filter(sampleIndex -> !filterSamples[sampleIndex] && transformedReadCounts.getEntry(sampleIndex, sampleIndex) == 0.)
+                                .count();
+                        if (numZerosInInterval > calculateMaximumZerosCount(numZerosInInterval, maximumZerosInIntervalPercentage)) {
+                            filterIntervals[intervalIndex] = true;
+                        }
+                    });
+            logger.info(String.format("After filtering, %d out of %d intervals remain...", countNumberPassingFilter(filterIntervals), numOriginalIntervals));
+        }
+
+        //filter samples with extreme medians
+        if (extremeSampleMedianPercentile == 0.) {
+            logger.info(String.format("A value of 0 was provided for argument %s, so the corresponding filtering step will be skipped...",
+                    CreateReadCountPanelOfNormals.EXTREME_SAMPLE_MEDIAN_PERCENTILE_LONG_NAME));
+        } else {
+            logger.info(String.format("Filtering samples with a median (across intervals) below the %.2f percentile or above the %.2f percentile...",
+                    extremeSampleMedianPercentile, 100. - extremeSampleMedianPercentile));
+            //calculate the medians for all samples (which, although unnecessary, makes bookkeeping easier) across intervals not already filtered
+            final double[] sampleMedians = IntStream.range(0, numOriginalSamples)
+                    .mapToDouble(sampleIndex -> new Median().evaluate(IntStream.range(0, numOriginalIntervals)
+                            .filter(intervalIndex -> !filterIntervals[intervalIndex])
+                            .mapToDouble(intervalIndex -> transformedReadCounts.getEntry(intervalIndex, sampleIndex))
+                            .toArray()))
+                    .toArray();
+            //calculate percentiles
+            final double minimumSampleMedianThreshold = new Percentile(extremeSampleMedianPercentile).evaluate(sampleMedians);
+            final double maximumSampleMedianThreshold = new Percentile(100. - extremeSampleMedianPercentile).evaluate(sampleMedians);
+            //filter samples
+            IntStream.range(0, numOriginalSamples)
+                    .filter(sampleIndex -> sampleMedians[sampleIndex] < minimumSampleMedianThreshold || sampleMedians[sampleIndex] > maximumSampleMedianThreshold)
+                    .forEach(sampleIndex -> filterSamples[sampleIndex] = true);
+            logger.info(String.format("After filtering, %d out of %d samples remain...", countNumberPassingFilter(filterSamples), numOriginalSamples));
+        }
+
+        //construct the filtered results as a new matrix, which will be modified in place from this point on
+        final int[] panelIntervalIndices = IntStream.range(0, numOriginalIntervals).filter(intervalIndex -> !filterIntervals[intervalIndex]).toArray();
+        final int[] panelSampleIndices = IntStream.range(0, numOriginalSamples).filter(sampleIndex -> !filterSamples[sampleIndex]).toArray();
+        final RealMatrix preprocessedStandardizedReadCounts = transformedReadCounts.getSubMatrix(panelIntervalIndices, panelSampleIndices);
+        final double[] panelIntervalFractionalMedians = IntStream.range(0, numOriginalIntervals)
+                .filter(intervalIndex -> !filterIntervals[intervalIndex])
+                .mapToDouble(intervalIndex -> originalIntervalMedians[intervalIndex]).toArray();
+
+        //impute zeros as median of non-zero values in interval
+        //TODO make this optional
+        final int numPanelIntervals = panelIntervalIndices.length;
+        final double[] intervalNonZeroMedians = IntStream.range(0, numPanelIntervals)
+                .mapToObj(intervalIndex -> Arrays.stream(preprocessedStandardizedReadCounts.getRow(intervalIndex)).filter(value -> value > 0.).toArray())
+                .mapToDouble(nonZeroValues -> new Median().evaluate(nonZeroValues))
+                .toArray();
+        final int[] numImputed = {0};  //needs to be effectively final to be used inside visitor
+        preprocessedStandardizedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(int intervalIndex, int sampleIndex, double value) {
+                if (value == 0.) {
+                    numImputed[0]++;
+                    return intervalNonZeroMedians[intervalIndex];
+                }
+                return value;
+            }
+        });
+        logger.info(String.format("%d zero-coverage values were imputed to the median of the non-zero values in the corresponding interval...",
+                numImputed[0]));
+
+        //truncate extreme values to the corresponding percentile
+        if (extremeOutlierTruncationPercentile == 0.) {
+            logger.info(String.format("A value of 0 was provided for argument %s, so the corresponding truncation step will be skipped...",
+                    CreateReadCountPanelOfNormals.EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME));
+        } else {
+            final double[] values = Doubles.concat(preprocessedStandardizedReadCounts.getData());
+            final double minimumOutlierTruncationThreshold = new Percentile(extremeOutlierTruncationPercentile).evaluate(values);
+            final double maximumOutlierTruncationThreshold = new Percentile(100. - extremeOutlierTruncationPercentile).evaluate(values);
+            final int[] numTruncated = {0};  //needs to be effectively final to be used inside visitor
+            preprocessedStandardizedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+                @Override
+                public double visit(int intervalIndex, int sampleIndex, double value) {
+                    if (value < minimumOutlierTruncationThreshold) {
+                        numTruncated[0]++;
+                        return minimumOutlierTruncationThreshold;
+                    }
+                    if (value > maximumOutlierTruncationThreshold) {
+                        numTruncated[0]++;
+                        return maximumOutlierTruncationThreshold;
+                    }
+                    return value;
+                }
+            });
+            logger.info(String.format("%d values below the %.2f percentile or above the %.2f percentile were truncated to the corresponding value...",
+                    numTruncated[0], extremeOutlierTruncationPercentile, 100. - extremeOutlierTruncationPercentile));
+        }
+        return new PreprocessedStandardizedResult(transformedReadCounts, panelIntervalFractionalMedians,
+                filterIntervals, filterSamples);
     }
 
     /**
