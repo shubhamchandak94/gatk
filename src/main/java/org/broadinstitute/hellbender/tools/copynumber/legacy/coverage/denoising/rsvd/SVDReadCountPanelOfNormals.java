@@ -1,8 +1,8 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
+import htsjdk.samtools.util.Locatable;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
-import org.broadinstitute.hellbender.utils.SimpleInterval;
 
 import java.util.List;
 
@@ -23,18 +23,18 @@ public interface SVDReadCountPanelOfNormals {
     int getNumEigensamples();
 
     /**
-     * Returns a modifiable copy of the original matrix of integer read-counts used to build the PoN
+     * Returns a modifiable copy of the original matrix of integer read-counts (represented as doubles) used to build the PoN
      * (no filtering will have been applied).  This matrix has has dimensions {@code M_original x N_original},
      * where {@code M_original} is the number of original intervals and {@code N_original} is the number of
      * original samples.
      */
-    RealMatrix getOriginalReadCounts();
+    double[][] getOriginalReadCounts();
 
     /**
      * Returns a modifiable copy of the list of the original intervals that were used to build this PoN
      * (no filtering will have been applied).  This list has length {@code M_original}.
      */
-    List<SimpleInterval> getOriginalIntervals();
+    List<Locatable> getOriginalIntervals();
 
     /**
      * Returns a modifiable copy of an array containing the GC content of the original intervals
@@ -46,7 +46,7 @@ public interface SVDReadCountPanelOfNormals {
      * Returns a modifiable copy of the list of the intervals contained in this PoN after all filtering has been applied.
      * This list has length {@code M}.
      */
-    List<SimpleInterval> getPanelIntervals();
+    List<Locatable> getPanelIntervals();
 
     /**
      * Returns a modifiable copy of an array containing the median (across all samples, before filtering)

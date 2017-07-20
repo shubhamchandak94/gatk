@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
+import htsjdk.samtools.util.Locatable;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.logging.log4j.LogManager;
@@ -27,7 +28,7 @@ import java.util.List;
 /**
  * //TODO replace this class with updated ReadCountCollection
  *
- * Simple class to enable input and output of a TSV containing a list of {@link SimpleInterval} and integer read counts.
+ * Simple class to enable input and output of a TSV containing a list of {@link Locatable} and integer read counts.
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
@@ -37,14 +38,13 @@ public final class SimpleReadCountCollection {
     private static final CsvPreference TAB_SKIP_COMMENTS_PREFERENCE = new CsvPreference.Builder(CsvPreference.TAB_PREFERENCE)
             .skipComments(new CommentStartsWith("#")).build();
 
-    private final List<SimpleInterval> intervals;
+    private final List<Locatable> intervals;
     private final RealMatrix readCounts;
 
-    private SimpleReadCountCollection(final List<SimpleInterval> intervals,
+    private SimpleReadCountCollection(final List<Locatable> intervals,
                                       final RealMatrix readCounts) {
-        Utils.nonNull(intervals);
+        Utils.nonEmpty(intervals);
         Utils.nonNull(readCounts);
-        Utils.validateArg(!intervals.isEmpty(), "List of intervals cannot be empty.");
         Utils.validateArg(readCounts.getColumnDimension() == 1, "Read-count matrix must contain only a single column.");
         Utils.validateArg(intervals.size() == readCounts.getRowDimension(), "Number of intervals and read counts must match.");
         Utils.validateArg(Arrays.stream(readCounts.getColumn(0)).noneMatch(c -> c < 0), "Read counts must all be non-negative integers.");
@@ -54,7 +54,7 @@ public final class SimpleReadCountCollection {
         this.readCounts = readCounts;
     }
 
-    public List<SimpleInterval> getIntervals() {
+    public List<Locatable> getIntervals() {
         return intervals;
     }
 
@@ -65,7 +65,7 @@ public final class SimpleReadCountCollection {
     public static SimpleReadCountCollection read(final File file) {
         IOUtils.canReadFile(file);
         final int numLines = countLines(file);  //this includes comment lines and column headers
-        final List<SimpleInterval> intervals = new ArrayList<>(numLines);
+        final List<Locatable> intervals = new ArrayList<>(numLines);
         final List<Integer> readCounts = new ArrayList<>(numLines);
         try (final FileReader fileReader = new FileReader(file);
              final ICsvListReader listReader = new CsvListReader(fileReader, TAB_SKIP_COMMENTS_PREFERENCE)) {
@@ -80,7 +80,7 @@ public final class SimpleReadCountCollection {
 
             List<Object> row;
             while ((row = listReader.read(processors)) != null) {
-                final SimpleInterval interval = new SimpleInterval(row.get(0).toString(), (int) row.get(1), (int) row.get(2));
+                final Locatable interval = new SimpleInterval(row.get(0).toString(), (int) row.get(1), (int) row.get(2));
                 intervals.add(interval);
                 readCounts.add((int) row.get(4));
             }

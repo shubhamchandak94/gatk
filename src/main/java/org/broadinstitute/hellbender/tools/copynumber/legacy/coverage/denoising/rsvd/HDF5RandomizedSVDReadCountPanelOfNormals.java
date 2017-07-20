@@ -1,7 +1,7 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
 import htsjdk.samtools.util.Lazy;
-import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import htsjdk.samtools.util.Locatable;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -79,21 +79,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
     private static final String NUM_INTERVAL_COLUMNS_PATH = "/num_interval_columns/value";
 
-    private enum IntervalColumn {
-        CONTIG (0),
-        START (1),
-        END (2);
-
-        private final int index;
-
-        IntervalColumn(final int index) {
-            this.index = index;
-        }
-    }
-    private static final int NUM_INTERVAL_COLUMNS = IntervalColumn.values().length;
-
-    private final Lazy<List<SimpleInterval>> originalIntervals;
-    private final Lazy<List<SimpleInterval>> panelIntervals;
+    private final Lazy<List<Locatable>> originalIntervals;
+    private final Lazy<List<Locatable>> panelIntervals;
 
     /**
      * <p>DEV NOTE:  If you are adding attributes that are neither RealMatrix nor a primitive,
@@ -123,12 +110,12 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     }
 
     @Override
-    public RealMatrix getOriginalReadCounts() {
-        return new Array2DRowRealMatrix(file.readDoubleMatrix(ORIGINAL_READ_COUNTS_PATH));
+    public double[][] getOriginalReadCounts() {
+        return file.readDoubleMatrix(ORIGINAL_READ_COUNTS_PATH);
     }
 
     @Override
-    public List<SimpleInterval> getOriginalIntervals() {
+    public List<Locatable> getOriginalIntervals() {
         return originalIntervals.get();
     }
 
@@ -141,7 +128,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     }
 
     @Override
-    public List<SimpleInterval> getPanelIntervals() {
+    public List<Locatable> getPanelIntervals() {
         return panelIntervals.get();
     }
 
@@ -183,7 +170,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
                               final String commandLine,
                               final RealMatrix originalReadCounts,
                               final List<String> originalSampleFilenames,
-                              final List<SimpleInterval> originalIntervals,
+                              final List<Locatable> originalIntervals,
                               final double[] intervalGCContent,
                               final double minimumIntervalMedianPercentile,
                               final double maximumZerosInSamplePercentage,
@@ -228,7 +215,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             final List<String> panelSampleFilenames = IntStream.range(0, originalSampleFilenames.size())
                     .filter(sampleIndex -> !preprocessedStandardizedResult.filterSamples[sampleIndex])
                     .mapToObj(originalSampleFilenames::get).collect(Collectors.toList());
-            final List<SimpleInterval> panelIntervals = IntStream.range(0, originalIntervals.size())
+            final List<Locatable> panelIntervals = IntStream.range(0, originalIntervals.size())
                     .filter(intervalIndex -> !preprocessedStandardizedResult.filterIntervals[intervalIndex])
                     .mapToObj(originalIntervals::get).collect(Collectors.toList());
 
@@ -244,8 +231,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             logger.info(String.format("Writing panel interval fractional medians (%d)...", panelIntervalFractionalMedians.length));
             pon.writePanelIntervalFractionalMedians(panelIntervalFractionalMedians);
 
-            final int numPanelIntervals = preprocessedStandardizedResult.preprocessedStandardizedReadCounts.getRowDimension();
-            final int numPanelSamples = preprocessedStandardizedResult.preprocessedStandardizedReadCounts.getColumnDimension();
+            final int numPanelIntervals = preprocessedStandardizedResult.preprocessedStandardizedProfile.getRowDimension();
+            final int numPanelSamples = preprocessedStandardizedResult.preprocessedStandardizedProfile.getColumnDimension();
             final int numEigensamples = Math.min(numEigensamplesRequested, numPanelSamples);
             if (numEigensamples < numEigensamplesRequested) {
                 logger.warn(String.format("%d eigensamples were requested but only %d are available in the panel of normals...",
@@ -254,7 +241,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             logger.info(String.format("Performing SVD (truncated at %d eigensamples) of standardized counts (%d x %d)...",
                     Math.min(numEigensamples, numPanelSamples), numPanelIntervals, numPanelSamples));
             final SingularValueDecomposition<RowMatrix, Matrix> svd = SparkConverter.convertRealMatrixToSparkRowMatrix(
-                    ctx, preprocessedStandardizedResult.preprocessedStandardizedReadCounts, NUM_SLICES_FOR_SPARK_MATRIX_CONVERSION)
+                    ctx, preprocessedStandardizedResult.preprocessedStandardizedProfile, NUM_SLICES_FOR_SPARK_MATRIX_CONVERSION)
                     .computeSVD(numEigensamples, true, EPSILON);
             final double[] singularValues = svd.s().toArray();    //should be in decreasing order (with corresponding matrices below)
             final double[][] leftSingular = SparkConverter.convertSparkRowMatrixToRealMatrix(svd.U(), numPanelIntervals).getData();
@@ -294,7 +281,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
         file.makeStringArray(ORIGINAL_SAMPLE_FILENAMES_PATH, originalSampleFilenames.toArray(new String[originalSampleFilenames.size()]));
     }
 
-    private void writeOriginalIntervals(final List<SimpleInterval> originalIntervals) {
+    private void writeOriginalIntervals(final List<Locatable> originalIntervals) {
         writeIntervals(file, ORIGINAL_INTERVALS_PATH, originalIntervals);
     }
 
@@ -306,7 +293,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
         file.makeStringArray(PANEL_SAMPLE_FILENAMES_PATH, panelSampleFilenames.toArray(new String[panelSampleFilenames.size()]));
     }
 
-    private void writePanelIntervals(final List<SimpleInterval> panelIntervals) {
+    private void writePanelIntervals(final List<Locatable> panelIntervals) {
         writeIntervals(file, PANEL_INTERVALS_PATH, panelIntervals);
     }
 
@@ -322,9 +309,23 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
         file.makeDoubleMatrix(PANEL_LEFT_SINGULAR_PATH, leftSingular);
     }
 
-    private static List<SimpleInterval> readIntervals(final HDF5File file, final String path) {
+    private enum IntervalColumn {
+        CONTIG (0),
+        START (1),
+        END (2);
+
+        private final int index;
+
+        IntervalColumn(final int index) {
+            this.index = index;
+        }
+    }
+    private static final int NUM_INTERVAL_COLUMNS = IntervalColumn.values().length;
+
+    private static List<Locatable> readIntervals(final HDF5File file,
+                                                 final String path) {
         final String[][] values = file.readStringMatrix(path, NUM_INTERVAL_COLUMNS_PATH);
-        final List<SimpleInterval> result = new ArrayList<>(values.length);
+        final List<Locatable> result = new ArrayList<>(values.length);
         for (final String[] row : values) {
             result.add(new SimpleInterval(
                     row[IntervalColumn.CONTIG.index],
@@ -334,10 +335,12 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
         return result;
     }
 
-    private static void writeIntervals(final HDF5File file, final String path, final List<SimpleInterval> intervals) {
+    private static void writeIntervals(final HDF5File file,
+                                       final String path,
+                                       final List<Locatable> intervals) {
         final String[][] values = new String[intervals.size()][NUM_INTERVAL_COLUMNS];
         for (int i = 0; i < intervals.size(); i++) {
-            final SimpleInterval interval = intervals.get(i);
+            final Locatable interval = intervals.get(i);
             values[i][IntervalColumn.CONTIG.index] = interval.getContig();
             values[i][IntervalColumn.START.index] = String.valueOf(interval.getStart());
             values[i][IntervalColumn.END.index] = String.valueOf(interval.getEnd());

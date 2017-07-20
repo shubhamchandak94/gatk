@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy;
 
+import htsjdk.samtools.util.Locatable;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.logging.log4j.Logger;
@@ -19,7 +20,6 @@ import org.broadinstitute.hellbender.tools.exome.Target;
 import org.broadinstitute.hellbender.tools.exome.TargetAnnotation;
 import org.broadinstitute.hellbender.tools.exome.TargetArgumentCollection;
 import org.broadinstitute.hellbender.tools.exome.TargetCollection;
-import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 
@@ -204,8 +204,8 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         final List<String> sampleFilenames = inputReadCountFiles.stream().map(File::getAbsolutePath).collect(Collectors.toList());
 
         //get intervals from the first read-count file to use as the canonical list of intervals
-        //(this file is read again below, which is slightly inefficient but also slightly simplifies the code)
-        final List<SimpleInterval> intervals = getIntervalsFromFirstReadCountFile(logger, inputReadCountFiles);
+        //(this file is read again below, which is slightly inefficient but is probably not worth the extra code)
+        final List<Locatable> intervals = getIntervalsFromFirstReadCountFile(logger, inputReadCountFiles);
 
         //get GC content (null if not provided)
         final double[] intervalGCContent = getIntervalGCContent(logger, intervals,
@@ -241,7 +241,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     }
 
     private static double[] getIntervalGCContent(final Logger logger,
-                                                 final List<SimpleInterval> intervals,
+                                                 final List<Locatable> intervals,
                                                  final TargetCollection<Target> annotatedIntervals) {
         if (annotatedIntervals == null) {
             logger.info("No GC-content annotations for intervals found; explicit GC-bias correction will not be performed...");
@@ -256,8 +256,8 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         return annotatedIntervals.targets().stream().mapToDouble(t -> t.getAnnotations().getDouble(TargetAnnotation.GC_CONTENT)).toArray();
     }
 
-    private static List<SimpleInterval> getIntervalsFromFirstReadCountFile(final Logger logger,
-                                                                           final List<File> inputReadCountFiles) {
+    private static List<Locatable> getIntervalsFromFirstReadCountFile(final Logger logger,
+                                                                      final List<File> inputReadCountFiles) {
         final File firstReadCountFile = inputReadCountFiles.get(0);
         logger.info(String.format("Retrieving intervals from first read-count file (%s)...", firstReadCountFile));
         final SimpleReadCountCollection readCounts = SimpleReadCountCollection.read(firstReadCountFile);
@@ -266,7 +266,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
 
     private RealMatrix constructReadCountMatrix(final Logger logger,
                                                 final List<File> inputReadCountFiles,
-                                                final List<SimpleInterval> intervals) {
+                                                final List<Locatable> intervals) {
         //TODO CombineReadCounts does this with parallel Buffers, which may be faster
         logger.info("Validating and aggregating input read-count files...");
         final int numSamples = inputReadCountFiles.size();
