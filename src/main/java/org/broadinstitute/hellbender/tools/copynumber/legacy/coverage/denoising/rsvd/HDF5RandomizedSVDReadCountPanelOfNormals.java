@@ -17,9 +17,9 @@ import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.spark.SparkConverter;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 
 /**
@@ -346,15 +346,17 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
                                            final String path,
                                            final List<Locatable> intervals) {
             final String[] contigNames = intervals.stream().map(Locatable::getContig).distinct().toArray(String[]::new);
-            final Map<>
+            file.makeStringArray(path + INTERVAL_CONTIG_NAMES_PATH_SUFFIX, contigNames);
+            final Map<String, Double> contigNamesToIndexMap = IntStream.range(0, contigNames.length).boxed()
+                    .collect(Collectors.toMap(i -> contigNames[i], i -> (double) i));
             final double[][] matrix = new double[intervals.size()][NUM_INTERVAL_FIELDS];
             for (int i = 0; i < intervals.size(); i++) {
                 final Locatable interval = intervals.get(i);
-                matrix[i][IntervalField.CONTIG_INDEX.index] = interval.getContig();
+                matrix[i][IntervalField.CONTIG_INDEX.index] = contigNamesToIndexMap.get(interval.getContig());
                 matrix[i][IntervalField.START.index] = interval.getStart();
                 matrix[i][IntervalField.END.index] = interval.getEnd();
             }
-            file.makeStringMatrix(path, matrix, NUM_INTERVAL_COLUMNS_PATH);
+            file.makeDoubleMatrix(path + INTERVAL_MATRIX_PATH_SUFFIX, matrix);
         }
     }
 }
