@@ -62,57 +62,30 @@ public final class SimpleReadCountCollection {
         return readCounts;
     }
 
-//    public static SimpleReadCountCollection read(final File file) {
-//        IOUtils.canReadFile(file);
-//        final int numLines = countLines(file);  //this includes comment lines and column headers
-//        final List<Locatable> intervals = new ArrayList<>(numLines);
-//        final List<Integer> readCounts = new ArrayList<>(numLines);
-//        try (final FileReader fileReader = new FileReader(file);
-//             final ICsvListReader listReader = new CsvListReader(fileReader, TAB_SKIP_COMMENTS_PREFERENCE)) {
-//            listReader.getHeader(true);
-//            final CellProcessor[] processors = new CellProcessor[]{
-//                    new NotNull(),  //contig
-//                    new ParseInt(), //start
-//                    new ParseInt(), //stop
-//                    null,           //ignore name
-//                    new ParseInt()  //count
-//            };
-//
-//            List<Object> row;
-//            while ((row = listReader.read(processors)) != null) {
-//                final Locatable interval = new SimpleInterval(row.get(0).toString(), (int) row.get(1), (int) row.get(2));
-//                intervals.add(interval);
-//                readCounts.add((int) row.get(4));
-//            }
-//            final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(readCounts.size(), 1);
-//            readCountsMatrix.setColumn(0, readCounts.stream().mapToDouble(Integer::doubleValue).toArray());
-//            return new SimpleReadCountCollection(intervals, readCountsMatrix);
-//        } catch (final IOException e) {
-//            throw new UserException.CouldNotReadInputFile(file);
-//        }
-//    }
-
     public static SimpleReadCountCollection read(final File file) {
         IOUtils.canReadFile(file);
-        final int numLines = countLines(file);  //this includes comment lines and column headers
-        System.out.println(numLines);
-        final List<Locatable> intervals = new ArrayList<>(numLines);
-        final List<Integer> readCounts = new ArrayList<>(numLines);
-        try (final FileReader reader = new FileReader(file)) {
-            //comment lines
-            //header
-            List<String> row;
-            CSVHelper.parseLine(reader);
-            CSVHelper.parseLine(reader);
-            CSVHelper.parseLine(reader);
-            CSVHelper.parseLine(reader);
-            while ((row = CSVHelper.parseLine(reader)) != null) {
-                final Locatable interval = new SimpleInterval(row.get(0), Integer.parseInt(row.get(1)), Integer.parseInt(row.get(2)));
-                final int readCount = Integer.parseInt(row.get(4));
+        final int numRows = countRows(file);
+        logger.debug(String.format("Number of rows: %d", numRows));
+        final List<Locatable> intervals = new ArrayList<>(numRows);
+        final List<Integer> readCounts = new ArrayList<>(numRows);
+        try (final FileReader fileReader = new FileReader(file);
+             final ICsvListReader listReader = new CsvListReader(fileReader, TAB_SKIP_COMMENTS_PREFERENCE)) {
+            listReader.getHeader(true);
+            final CellProcessor[] processors = new CellProcessor[]{
+                    new NotNull(),  //contig
+                    new ParseInt(), //start
+                    new ParseInt(), //stop
+                    null,           //ignore name
+                    new ParseInt()  //count
+            };
+
+            List<Object> row;
+            while ((row = listReader.read(processors)) != null) {
+                final Locatable interval = new SimpleInterval(row.get(0).toString(), (int) row.get(1), (int) row.get(2));
                 intervals.add(interval);
-                readCounts.add(readCount);
+                readCounts.add((int) row.get(4));
             }
-            final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(intervals.size(), 1);
+            final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(readCounts.size(), 1);
             readCountsMatrix.setColumn(0, readCounts.stream().mapToDouble(Integer::doubleValue).toArray());
             return new SimpleReadCountCollection(intervals, readCountsMatrix);
         } catch (final IOException e) {
@@ -120,8 +93,36 @@ public final class SimpleReadCountCollection {
         }
     }
 
-    private static int countLines(final File file) {
-        System.out.println("Counting lines.");
+//    public static SimpleReadCountCollection read(final File file) {
+//        IOUtils.canReadFile(file);
+//        final int numRows = countRows(file);
+//        logger.debug(String.format("Number of rows: %d", numRows))
+//        final List<Locatable> intervals = new ArrayList<>(numLines);
+//        final List<Integer> readCounts = new ArrayList<>(numLines);
+//        try (final FileReader reader = new FileReader(file)) {
+//            //comment lines
+//            //header
+//            List<String> row;
+//            CSVHelper.parseLine(reader);
+//            CSVHelper.parseLine(reader);
+//            CSVHelper.parseLine(reader);
+//            CSVHelper.parseLine(reader);
+//            while ((row = CSVHelper.parseLine(reader)) != null) {
+//                final Locatable interval = new SimpleInterval(row.get(0), Integer.parseInt(row.get(1)), Integer.parseInt(row.get(2)));
+//                final int readCount = Integer.parseInt(row.get(4));
+//                intervals.add(interval);
+//                readCounts.add(readCount);
+//            }
+//            final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(intervals.size(), 1);
+//            readCountsMatrix.setColumn(0, readCounts.stream().mapToDouble(Integer::doubleValue).toArray());
+//            return new SimpleReadCountCollection(intervals, readCountsMatrix);
+//        } catch (final IOException e) {
+//            throw new UserException.CouldNotReadInputFile(file);
+//        }
+//    }
+
+    private static int countRows(final File file) {
+        logger.debug("Counting lines...");
         try {
             return (int) Files.lines(file.toPath()).filter(l -> !l.startsWith(COMMENT_STRING)).count() - 1;
         } catch (final IOException e) {

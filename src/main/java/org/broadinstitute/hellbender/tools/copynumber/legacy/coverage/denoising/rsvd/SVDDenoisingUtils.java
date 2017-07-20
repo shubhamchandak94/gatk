@@ -86,17 +86,15 @@ public final class SVDDenoisingUtils {
                                                                    final double maximumZerosInIntervalPercentage,
                                                                    final double extremeSampleMedianPercentile,
                                                                    final double extremeOutlierTruncationPercentile) {
-        logger.info("Transforming read counts to fractional coverage...");
-        transformToFractionalCoverage(readCounts);
+        //preprocess (transform, correct GC bias, filter, impute, truncate) and return copy of submatrix
+        logger.info("Preprocessing read counts...");
 
-        if (intervalGCContent != null) {
-            logger.info("Performing explicit GC-bias correction...");
-            GCCorrector.correctCoverage(readCounts, intervalGCContent);
-        }
-
-        final PreprocessedStandardizedResult preprocessedStandardizedResult = preprocessPanel(readCounts,
+        final PreprocessedStandardizedResult preprocessedStandardizedResult = preprocessPanel(readCounts, intervalGCContent,
                 minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
                 extremeSampleMedianPercentile, extremeOutlierTruncationPercentile);
+
+        //standardize in place
+        logger.info("Standardizing read counts...");
 
         logger.info("Dividing by sample medians and transforming to log2 space...");
         divideBySampleMedianAndTransformToLog2(preprocessedStandardizedResult.preprocessedStandardizedProfile);
@@ -135,7 +133,7 @@ public final class SVDDenoisingUtils {
         Utils.validateArg(panelOfNormals.getOriginalIntervals().equals(readCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList())),
                 "Sample intervals must be identical to the original intervals used to build the panel of normals.");
 
-        logger.info("Standardizing sample read counts...");
+        logger.info("Preprocessing and standardizing sample read counts...");
         final RealMatrix standardizedProfile = preprocessAndStandardize(panelOfNormals, readCounts.counts());
 
         logger.info(String.format("Using %d out of %d eigensamples to denoise...", numEigensamples, panelOfNormals.getNumEigensamples()));
@@ -153,22 +151,28 @@ public final class SVDDenoisingUtils {
         return new SVDDenoisedCopyRatioResult(intervals, readCounts.columnNames(), standardizedProfile, denoisedProfile);
     }
 
-    /**
-     * TODO
-     */
-    private static PreprocessedStandardizedResult preprocessPanel(final RealMatrix transformedReadCounts,
+    private static PreprocessedStandardizedResult preprocessPanel(final RealMatrix readCounts,
+                                                                  final double[] intervalGCContent,
                                                                   final double minimumIntervalMedianPercentile,
                                                                   final double maximumZerosInSamplePercentage,
                                                                   final double maximumZerosInIntervalPercentage,
                                                                   final double extremeSampleMedianPercentile,
                                                                   final double extremeOutlierTruncationPercentile) {
-        final int numOriginalIntervals = transformedReadCounts.getRowDimension();
-        final int numOriginalSamples = transformedReadCounts.getColumnDimension();
+        final int numOriginalIntervals = readCounts.getRowDimension();
+        final int numOriginalSamples = readCounts.getColumnDimension();
 
         final boolean[] filterIntervals = new boolean[numOriginalIntervals];
         final boolean[] filterSamples = new boolean[numOriginalSamples];
 
-        final double[] originalIntervalMedians = MatrixSummaryUtils.getRowMedians(transformedReadCounts);
+        logger.info("Transforming read counts to fractional coverage...");
+        transformToFractionalCoverage(readCounts);
+
+        if (intervalGCContent != null) {
+            logger.info("Performing explicit GC-bias correction...");
+            GCCorrector.correctCoverage(readCounts, intervalGCContent);
+        }
+
+        final double[] originalIntervalMedians = MatrixSummaryUtils.getRowMedians(readCounts);
 
         //filter intervals by fractional median
         if (minimumIntervalMedianPercentile == 0.) {
@@ -189,8 +193,8 @@ public final class SVDDenoisingUtils {
         IntStream.range(0, numOriginalIntervals)
                 .filter(intervalIndex -> !filterIntervals[intervalIndex])
                 .forEach(intervalIndex -> IntStream.range(0, numOriginalSamples).filter(sampleIndex -> !filterSamples[sampleIndex]).forEach(sampleIndex -> {
-                    final double value = transformedReadCounts.getEntry(intervalIndex, sampleIndex);
-                    transformedReadCounts.setEntry(intervalIndex, sampleIndex, value / originalIntervalMedians[intervalIndex]);
+                    final double value = readCounts.getEntry(intervalIndex, sampleIndex);
+                    readCounts.setEntry(intervalIndex, sampleIndex, value / originalIntervalMedians[intervalIndex]);
                 }));
 
         //filter samples by percentage of zero-coverage intervals not already filtered
@@ -203,7 +207,7 @@ public final class SVDDenoisingUtils {
                     .filter(sampleIndex -> !filterSamples[sampleIndex])
                     .forEach(sampleIndex -> {
                         final int numZerosInSample = (int) IntStream.range(0, numOriginalIntervals)
-                                .filter(intervalIndex -> !filterIntervals[intervalIndex] && transformedReadCounts.getEntry(intervalIndex, sampleIndex) == 0.)
+                                .filter(intervalIndex -> !filterIntervals[intervalIndex] && readCounts.getEntry(intervalIndex, sampleIndex) == 0.)
                                 .count();
                         if (numZerosInSample > calculateMaximumZerosCount(numZerosInSample, maximumZerosInSamplePercentage)) {
                             filterSamples[sampleIndex] = true;
@@ -222,7 +226,7 @@ public final class SVDDenoisingUtils {
                     .filter(intervalIndex -> !filterIntervals[intervalIndex])
                     .forEach(intervalIndex -> {
                         final int numZerosInInterval = (int) IntStream.range(0, numOriginalSamples)
-                                .filter(sampleIndex -> !filterSamples[sampleIndex] && transformedReadCounts.getEntry(sampleIndex, sampleIndex) == 0.)
+                                .filter(sampleIndex -> !filterSamples[sampleIndex] && readCounts.getEntry(sampleIndex, sampleIndex) == 0.)
                                 .count();
                         if (numZerosInInterval > calculateMaximumZerosCount(numZerosInInterval, maximumZerosInIntervalPercentage)) {
                             filterIntervals[intervalIndex] = true;
@@ -242,7 +246,7 @@ public final class SVDDenoisingUtils {
             final double[] sampleMedians = IntStream.range(0, numOriginalSamples)
                     .mapToDouble(sampleIndex -> new Median().evaluate(IntStream.range(0, numOriginalIntervals)
                             .filter(intervalIndex -> !filterIntervals[intervalIndex])
-                            .mapToDouble(intervalIndex -> transformedReadCounts.getEntry(intervalIndex, sampleIndex))
+                            .mapToDouble(intervalIndex -> readCounts.getEntry(intervalIndex, sampleIndex))
                             .toArray()))
                     .toArray();
             //calculate percentiles
@@ -258,7 +262,7 @@ public final class SVDDenoisingUtils {
         //construct the filtered results as a new matrix, which will be modified in place from this point on
         final int[] panelIntervalIndices = IntStream.range(0, numOriginalIntervals).filter(intervalIndex -> !filterIntervals[intervalIndex]).toArray();
         final int[] panelSampleIndices = IntStream.range(0, numOriginalSamples).filter(sampleIndex -> !filterSamples[sampleIndex]).toArray();
-        final RealMatrix preprocessedStandardizedReadCounts = transformedReadCounts.getSubMatrix(panelIntervalIndices, panelSampleIndices);
+        final RealMatrix preprocessedStandardizedReadCounts = readCounts.getSubMatrix(panelIntervalIndices, panelSampleIndices);
         final double[] panelIntervalFractionalMedians = IntStream.range(0, numOriginalIntervals)
                 .filter(intervalIndex -> !filterIntervals[intervalIndex])
                 .mapToDouble(intervalIndex -> originalIntervalMedians[intervalIndex]).toArray();
@@ -310,7 +314,7 @@ public final class SVDDenoisingUtils {
             logger.info(String.format("%d values below the %.2f percentile or above the %.2f percentile were truncated to the corresponding value...",
                     numTruncated[0], extremeOutlierTruncationPercentile, 100. - extremeOutlierTruncationPercentile));
         }
-        return new PreprocessedStandardizedResult(transformedReadCounts, panelIntervalFractionalMedians,
+        return new PreprocessedStandardizedResult(readCounts, panelIntervalFractionalMedians,
                 filterIntervals, filterSamples);
     }
 
@@ -321,6 +325,9 @@ public final class SVDDenoisingUtils {
     private static RealMatrix preprocessAndStandardize(final SVDReadCountPanelOfNormals panelOfNormals,
                                                        final RealMatrix readCounts) {
         RealMatrix result = readCounts.copy();
+
+        //preprocess (transform, correct GC bias, subset, divide by fractional medians) copy in place
+        logger.info("Preprocessing read counts...");
 
         logger.info("Transforming read counts to fractional coverage...");
         transformToFractionalCoverage(result);
@@ -346,6 +353,9 @@ public final class SVDDenoisingUtils {
                 return value / intervalMedians[intervalIndex];
             }
         });
+
+        //standardize copy in place
+        logger.info("Standardizing read counts...");
 
         logger.info("Dividing by sample median and transforming to log2 space...");
         divideBySampleMedianAndTransformToLog2(result);

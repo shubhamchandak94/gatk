@@ -338,12 +338,12 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     private static void writeIntervals(final HDF5File file,
                                        final String path,
                                        final List<Locatable> intervals) {
-        final String[][] values = new String[intervals.size()][NUM_INTERVAL_COLUMNS];
+        final String[][] values = new String[NUM_INTERVAL_COLUMNS][intervals.size()];
         for (int i = 0; i < intervals.size(); i++) {
             final Locatable interval = intervals.get(i);
-            values[i][IntervalColumn.CONTIG.index] = interval.getContig();
-            values[i][IntervalColumn.START.index] = String.valueOf(interval.getStart());
-            values[i][IntervalColumn.END.index] = String.valueOf(interval.getEnd());
+            values[IntervalColumn.CONTIG.index][i] = interval.getContig();
+            values[IntervalColumn.START.index][i] = String.valueOf(interval.getStart());
+            values[IntervalColumn.END.index][i] = String.valueOf(interval.getEnd());
         }
         file.makeStringMatrix(path, values, NUM_INTERVAL_COLUMNS_PATH);
     }

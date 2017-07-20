@@ -1,7 +1,6 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
 import htsjdk.samtools.util.Locatable;
-import org.apache.commons.math3.linear.RealMatrix;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 
 import java.util.List;
