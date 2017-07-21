@@ -158,7 +158,7 @@ public final class DenoiseReadCounts extends CommandLineProgram {
                 logger.warn("Neither a panel of normals nor GC-content annotations were provided, so only standardization will be performed...");
             }
 
-            final RealMatrix standardizedProfile = SVDDenoisingUtils.preprocessAndStandardizeSample(readCounts.counts(), intervalGCContent);
+            final RealMatrix standardizedProfile = SVDDenoisingUtils.preprocessAndStandardizeSample(readCounts.counts().transpose(), intervalGCContent);
 
             //construct a result with denoised profile identical to standardized profile
             final SVDDenoisedCopyRatioResult standardizedResult = new SVDDenoisedCopyRatioResult(
