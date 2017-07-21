@@ -82,8 +82,8 @@ public final class CreateReadCountPanelOfNormalsIntegrationTest extends CommandL
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test-5M/wgs_1.tsv",
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test-5M/wgs_2.tsv",
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wgs-pon-test-5M/wgs_3.tsv",
-                "-" + CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME, "100",
-                "-" + CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME, "100",
+//                "-" + CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_SHORT_NAME, "100",
+//                "-" + CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_SHORT_NAME, "100",
                 "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputPanelOfNormalsFile.getAbsolutePath(),
                 "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
         };

@@ -26,24 +26,11 @@ import java.util.stream.IntStream;
 /**
  * TODO
  *
- * HDF5 File backed coverage panel of normals data structure.
- *
  * Several attributes are stored transposed (in other words, the rows and columns are interchanged).
  * This dodges a very slow write time in HDF5, since we usually have many more rows (targets) than columns (samples),
  * and HDF5 writes matrices with few rows and many columns much faster than matrices with many rows and few columns.
  *
  * The following are stored as transposes:
- *
- * <ul>
- *  <li>Normalized Counts</li>
- *  <li>Log-Normalized Counts</li>
- *  <li>Reduced Panel Counts</li>
- *</ul>
- *
- * In these cases, the samples are the rows and the targets are the columns.  No transposing is performed for
- * pseudoinverses since they already have dimensions of samples x targets.
- *
- * This is only for storage.  When saving/loading the above attributes, the transposing is handled transparently.
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
@@ -66,7 +53,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     private static final String VERSION_PATH = "/version/value";    //note that full path names must include a top-level group name ("version" here)
     private static final String COMMAND_LINE_PATH = "/command_line/value";
     private static final String ORIGINAL_DATA_GROUP_NAME = "/original_data";
-    private static final String ORIGINAL_READ_COUNTS_PATH = ORIGINAL_DATA_GROUP_NAME + "/transposed_read_counts";
+    private static final String ORIGINAL_READ_COUNTS_PATH = ORIGINAL_DATA_GROUP_NAME + "/read_counts_samples_by_intervals";
     private static final String ORIGINAL_SAMPLE_FILENAMES_PATH = ORIGINAL_DATA_GROUP_NAME + "/sample_filenames";
     private static final String ORIGINAL_INTERVALS_PATH = ORIGINAL_DATA_GROUP_NAME + "/intervals";
     private static final String ORIGINAL_INTERVAL_GC_CONTENT_PATH = ORIGINAL_DATA_GROUP_NAME + "/interval_gc_content";
@@ -76,7 +63,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     private static final String PANEL_INTERVALS_PATH = PANEL_GROUP_NAME + "/intervals";
     private static final String PANEL_INTERVAL_FRACTIONAL_MEDIANS_PATH = PANEL_GROUP_NAME + "/interval_fractional_medians";
     private static final String PANEL_SINGULAR_VALUES_PATH = PANEL_GROUP_NAME + "/singular_values";
-    private static final String PANEL_LEFT_SINGULAR_PATH = PANEL_GROUP_NAME + "/transposed_left_singular";
+    private static final String PANEL_EIGENSAMPLE_VECTORS_PATH = PANEL_GROUP_NAME + "/transposed_eigensamples_samples_by_intervals";
 
     private final Lazy<List<Locatable>> originalIntervals;
     private final Lazy<List<Locatable>> panelIntervals;
@@ -110,7 +97,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
     @Override
     public double[][] getOriginalReadCounts() {
-        return new Array2DRowRealMatrix(file.readDoubleMatrix(ORIGINAL_READ_COUNTS_PATH), false).transpose().getData();
+        return file.readDoubleMatrix(ORIGINAL_READ_COUNTS_PATH);
     }
 
     @Override
@@ -142,8 +129,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     }
 
     @Override
-    public double[][] getLeftSingular() {
-        return new Array2DRowRealMatrix(file.readDoubleMatrix(PANEL_LEFT_SINGULAR_PATH), false).transpose().getData();
+    public double[][] getEigensampleVectors() {
+        return new Array2DRowRealMatrix(file.readDoubleMatrix(PANEL_EIGENSAMPLE_VECTORS_PATH), false).transpose().getData();
     }
 
     /**
@@ -188,7 +175,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             logger.info("Writing command line...");
             pon.writeCommandLine(commandLine);
 
-            logger.info(String.format("Writing original read counts (transposed to %d x %d)...",
+            logger.info(String.format("Writing original read counts (%d x %d)...",
                     originalReadCounts.getColumnDimension(), originalReadCounts.getRowDimension()));
             pon.writeOriginalReadCountsPath(originalReadCounts);
 
@@ -231,26 +218,26 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             logger.info(String.format("Writing panel interval fractional medians (%d)...", panelIntervalFractionalMedians.length));
             pon.writePanelIntervalFractionalMedians(panelIntervalFractionalMedians);
 
-            final int numPanelIntervals = preprocessedStandardizedResult.preprocessedStandardizedProfile.getRowDimension();
-            final int numPanelSamples = preprocessedStandardizedResult.preprocessedStandardizedProfile.getColumnDimension();
+            final int numPanelSamples = preprocessedStandardizedResult.preprocessedStandardizedProfile.getRowDimension();
+            final int numPanelIntervals = preprocessedStandardizedResult.preprocessedStandardizedProfile.getColumnDimension();
             final int numEigensamples = Math.min(numEigensamplesRequested, numPanelSamples);
             if (numEigensamples < numEigensamplesRequested) {
                 logger.warn(String.format("%d eigensamples were requested but only %d are available in the panel of normals...",
                         numEigensamplesRequested, numEigensamples));
             }
-            logger.info(String.format("Performing SVD (truncated at %d eigensamples) of standardized counts (%d x %d)...",
+            logger.info(String.format("Performing SVD (truncated at %d eigensamples) of transposed standardized counts (%d x %d)...",
                     Math.min(numEigensamples, numPanelSamples), numPanelIntervals, numPanelSamples));
             final SingularValueDecomposition<RowMatrix, Matrix> svd = SparkConverter.convertRealMatrixToSparkRowMatrix(
-                    ctx, preprocessedStandardizedResult.preprocessedStandardizedProfile, NUM_SLICES_FOR_SPARK_MATRIX_CONVERSION)
+                    ctx, preprocessedStandardizedResult.preprocessedStandardizedProfile.transpose(), NUM_SLICES_FOR_SPARK_MATRIX_CONVERSION)
                     .computeSVD(numEigensamples, true, EPSILON);
             final double[] singularValues = svd.s().toArray();    //should be in decreasing order (with corresponding matrices below)
-            final double[][] leftSingular = SparkConverter.convertSparkRowMatrixToRealMatrix(svd.U(), numPanelIntervals).getData();
+            final double[][] eigensampleVectors = SparkConverter.convertSparkRowMatrixToRealMatrix(svd.U(), numPanelIntervals).getData();
 
             logger.info(String.format("Writing singular values (%d)...", singularValues.length));
             pon.writeSingularValues(singularValues);
 
-            logger.info(String.format("Writing left-singular matrix (transposed to %d x %d)...", leftSingular[0].length, leftSingular.length));
-            pon.writeLeftSingular(leftSingular);
+            logger.info(String.format("Writing eigensample vectors (transposed to %d x %d)...", eigensampleVectors.length, eigensampleVectors[0].length));
+            pon.writeEigensampleVectors(eigensampleVectors);
         } catch (final RuntimeException e) {
             //if any exceptions encountered, delete partial output and rethrow
             logger.warn(String.format("Exception encountered during creation of panel of normals.  Attempting to delete partial output in %s...",
@@ -274,7 +261,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     }
 
     private void writeOriginalReadCountsPath(final RealMatrix originalReadCounts) {
-        file.makeDoubleMatrix(ORIGINAL_READ_COUNTS_PATH, originalReadCounts.transpose().getData());
+        file.makeDoubleMatrix(ORIGINAL_READ_COUNTS_PATH, originalReadCounts.getData());
     }
 
     private void writeOriginalSampleFilenames(final List<String> originalSampleFilenames) {
@@ -305,8 +292,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
         file.makeDoubleArray(PANEL_SINGULAR_VALUES_PATH, singularValues);
     }
 
-    private void writeLeftSingular(final double[][] leftSingular) {
-        file.makeDoubleMatrix(PANEL_LEFT_SINGULAR_PATH, new Array2DRowRealMatrix(leftSingular, false).transpose().getData());
+    private void writeEigensampleVectors(final double[][] eigensampleVectors) {
+        file.makeDoubleMatrix(PANEL_EIGENSAMPLE_VECTORS_PATH, new Array2DRowRealMatrix(eigensampleVectors, false).transpose().getData());
     }
 
     private static final class IntervalHelper {

@@ -46,8 +46,8 @@ public final class SimpleReadCountCollection {
                                       final RealMatrix readCounts) {
         Utils.nonEmpty(intervals);
         Utils.nonNull(readCounts);
-        Utils.validateArg(readCounts.getColumnDimension() == 1, "Read-count matrix must contain only a single column.");
-        Utils.validateArg(intervals.size() == readCounts.getRowDimension(), "Number of intervals and read counts must match.");
+        Utils.validateArg(readCounts.getRowDimension() == 1, "Read-count matrix must contain only a single row.");
+        Utils.validateArg(intervals.size() == readCounts.getColumnDimension(), "Number of intervals and read counts must match.");
         Utils.validateArg(Arrays.stream(readCounts.getColumn(0)).noneMatch(c -> c < 0), "Read counts must all be non-negative integers.");
         Utils.validateArg(intervals.stream().distinct().count() == intervals.size(), "Intervals must all be unique.");
 
@@ -85,8 +85,8 @@ public final class SimpleReadCountCollection {
                 intervals.add(interval);
                 readCounts.add((int) row.get(4));
             }
-            final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(readCounts.size(), 1);
-            readCountsMatrix.setColumn(0, readCounts.stream().mapToDouble(Integer::doubleValue).toArray());
+            final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(1, readCounts.size());
+            readCountsMatrix.setRow(0, readCounts.stream().mapToDouble(Integer::doubleValue).toArray());
             return new SimpleReadCountCollection(intervals, readCountsMatrix);
         } catch (final IOException e) {
             throw new UserException.CouldNotReadInputFile(file);

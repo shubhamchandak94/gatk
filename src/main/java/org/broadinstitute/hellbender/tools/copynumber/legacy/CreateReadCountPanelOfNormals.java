@@ -271,7 +271,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         logger.info("Validating and aggregating input read-count files...");
         final int numSamples = inputReadCountFiles.size();
         final int numIntervals = intervals.size();
-        final RealMatrix readCountMatrix = new Array2DRowRealMatrix(numIntervals, numSamples);
+        final RealMatrix readCountMatrix = new Array2DRowRealMatrix(numSamples, numIntervals);
         final ListIterator<File> inputReadCountFilesIterator = inputReadCountFiles.listIterator();
         while (inputReadCountFilesIterator.hasNext()) {
             final int sampleIndex = inputReadCountFilesIterator.nextIndex();
@@ -280,7 +280,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             final SimpleReadCountCollection readCounts = SimpleReadCountCollection.read(inputReadCountFile);
             Utils.validateArg(readCounts.getIntervals().equals(intervals),
                     String.format("Intervals for read-count file %s do not match those in other read-count files.", inputReadCountFile));
-            readCountMatrix.setColumn(sampleIndex, readCounts.getReadCounts().getColumn(0));
+            readCountMatrix.setRow(sampleIndex, readCounts.getReadCounts().getRow(0));
         }
         return readCountMatrix;
     }

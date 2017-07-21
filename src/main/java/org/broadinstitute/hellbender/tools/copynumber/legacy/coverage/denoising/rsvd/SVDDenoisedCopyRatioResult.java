@@ -24,23 +24,23 @@ public final class SVDDenoisedCopyRatioResult {
     private final RealMatrix denoisedProfile;
 
     public SVDDenoisedCopyRatioResult(final List<Target> intervals,
-                                      final List<String> columnNames,
+                                      final List<String> sampleNames,
                                       final RealMatrix standardizedProfile,
                                       final RealMatrix denoisedProfile) {
         Utils.nonEmpty(intervals);
-        Utils.nonEmpty(columnNames);
+        Utils.nonEmpty(sampleNames);
         Utils.nonNull(standardizedProfile);
         Utils.nonNull(denoisedProfile);
-        Utils.validateArg(intervals.size() == standardizedProfile.getRowDimension(),
-                "Number of intervals and rows in standardized profile must match.");
-        Utils.validateArg(intervals.size() == denoisedProfile.getRowDimension(),
-                "Number of intervals and rows in denoised profile must match.");
-        Utils.validateArg(columnNames.size() == standardizedProfile.getColumnDimension(),
-                "Number of column names and columns in standardized profile must match.");
-        Utils.validateArg(columnNames.size() == denoisedProfile.getColumnDimension(),
-                "Number of column names and columns in denoised profile must match.");
+        Utils.validateArg(intervals.size() == standardizedProfile.getColumnDimension(),
+                "Number of intervals and columns in standardized profile must match.");
+        Utils.validateArg(intervals.size() == denoisedProfile.getColumnDimension(),
+                "Number of intervals and columns in denoised profile must match.");
+        Utils.validateArg(sampleNames.size() == standardizedProfile.getRowDimension(),
+                "Number of sample names and rows in standardized profile must match.");
+        Utils.validateArg(sampleNames.size() == denoisedProfile.getRowDimension(),
+                "Number of sample names and rows in denoised profile must match.");
         this.intervals = intervals;
-        this.columnNames = columnNames;
+        this.columnNames = sampleNames;
         this.standardizedProfile = standardizedProfile;
         this.denoisedProfile = denoisedProfile;
     }
@@ -55,7 +55,7 @@ public final class SVDDenoisedCopyRatioResult {
 
     private void writeProfile(final File file, final RealMatrix profile, final String title) {
         try {
-            final ReadCountCollection rcc = new ReadCountCollection(intervals, columnNames, profile);
+            final ReadCountCollection rcc = new ReadCountCollection(intervals, columnNames, profile.transpose());
             ReadCountCollectionUtils.write(file, rcc,"title = " + title);
         } catch (final IOException e) {
             throw new UserException.CouldNotCreateOutputFile(file, e.getMessage());

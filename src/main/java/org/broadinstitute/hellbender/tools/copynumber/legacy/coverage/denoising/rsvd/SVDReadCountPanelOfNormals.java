@@ -61,13 +61,13 @@ public interface SVDReadCountPanelOfNormals {
     double[] getSingularValues();
 
     /**
-     * Returns a modifiable copy of an array containing the matrix of left-singular vectors.
+     * Returns a modifiable copy of an array containing the orthnonormal matrix of eigensample vectors.
      * This matrix has has dimensions {@code M x K},
      * where {@code M} is the number of panel intervals (after filtering)
      * and {@code K} is the number of eigensamples.
      * Columns are sorted by singular value in decreasing order.
      */
-    double[][] getLeftSingular();
+    double[][] getEigensampleVectors();
 
     default SVDDenoisedCopyRatioResult denoise(final ReadCountCollection readCounts,
                                                final int numEigensamples) {
