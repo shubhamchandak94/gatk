@@ -3,6 +3,7 @@ package org.broadinstitute.hellbender.tools.copynumber.legacy;
 import org.broadinstitute.hellbender.CommandLineProgramTest;
 import org.broadinstitute.hellbender.cmdline.ExomeStandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
+import org.broadinstitute.hellbender.tools.exome.TargetArgumentCollection;
 import org.testng.annotations.Test;
 
 import java.io.File;
@@ -26,6 +27,29 @@ public class DenoiseReadCountsIntegrationTest extends CommandLineProgramTest {
                 "-" + ExomeStandardArgumentDefinitions.PRE_TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes.no-gc.ptn.tsv",
                 "-" + ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes.no-gc.tn.tsv",
 //                "-" + DenoiseReadCounts.NUMBER_OF_EIGENSAMPLES_SHORT_NAME, "10",
+                "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
+        };
+        runCommandLine(arguments);
+    }
+
+    @Test
+    public void testWESNoPoN() {
+        final String[] arguments = {
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes_case.tsv",
+                "-" + ExomeStandardArgumentDefinitions.PRE_TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes.no-pon.ptn.tsv",
+                "-" + ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes.no-pon.tn.tsv",
+                "-" + TargetArgumentCollection.TARGET_FILE_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes.intervals.annot.tsv",
+                "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
+        };
+        runCommandLine(arguments);
+    }
+
+    @Test
+    public void testWESNoPoNNoGC() {
+        final String[] arguments = {
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes_case.tsv",
+                "-" + ExomeStandardArgumentDefinitions.PRE_TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes.no-pon-no-gc.ptn.tsv",
+                "-" + ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes.no-pon-no-gc.tn.tsv",
                 "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
         };
         runCommandLine(arguments);

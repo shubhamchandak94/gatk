@@ -79,13 +79,13 @@ public final class SVDDenoisingUtils {
      * that have been filtered at any step and masking {@code readCounts} with them appropriately.
      * If {@code intervalGCContent} is null, GC-bias correction will not be performed.
      */
-    static PreprocessedStandardizedResult preprocessAndStandardize(final RealMatrix readCounts,
-                                                                   final double[] intervalGCContent,
-                                                                   final double minimumIntervalMedianPercentile,
-                                                                   final double maximumZerosInSamplePercentage,
-                                                                   final double maximumZerosInIntervalPercentage,
-                                                                   final double extremeSampleMedianPercentile,
-                                                                   final double extremeOutlierTruncationPercentile) {
+    static PreprocessedStandardizedResult preprocessAndStandardizePanel(final RealMatrix readCounts,
+                                                                        final double[] intervalGCContent,
+                                                                        final double minimumIntervalMedianPercentile,
+                                                                        final double maximumZerosInSamplePercentage,
+                                                                        final double maximumZerosInIntervalPercentage,
+                                                                        final double extremeSampleMedianPercentile,
+                                                                        final double extremeOutlierTruncationPercentile) {
         //preprocess (transform, correct GC bias, filter, impute, truncate) and return copy of submatrix
         logger.info("Preprocessing read counts...");
 
@@ -134,7 +134,7 @@ public final class SVDDenoisingUtils {
                 "Sample intervals must be identical to the original intervals used to build the panel of normals.");
 
         logger.info("Preprocessing and standardizing sample read counts...");
-        final RealMatrix standardizedProfile = preprocessAndStandardize(panelOfNormals, readCounts.counts());
+        final RealMatrix standardizedProfile = preprocessAndStandardizeSample(panelOfNormals, readCounts.counts());
 
         logger.info(String.format("Using %d out of %d eigensamples to denoise...", numEigensamples, panelOfNormals.getNumEigensamples()));
 
@@ -149,6 +149,53 @@ public final class SVDDenoisingUtils {
         final List<Target> intervals = readCounts.targets().stream().filter(t -> panelIntervals.contains(t.getInterval())).collect(Collectors.toList());
 
         return new SVDDenoisedCopyRatioResult(intervals, readCounts.columnNames(), standardizedProfile, denoisedProfile);
+    }
+
+    /**
+     * Standardize read counts for samples when no panel of normals is available.
+     * The original {@code readCounts} has dimensions intervals x samples and is not modified.
+     * If {@code intervalGCContent} is null, GC-bias correction will not be performed
+     *
+     * This code will work when the number of samples is greater than one, but is currently only
+     * called by methods that assume a single sample.
+     */
+    public static RealMatrix preprocessAndStandardizeSample(final RealMatrix readCounts,
+                                                            final double[] intervalGCContent) {
+        Utils.nonNull(readCounts);
+        Utils.validateArg(intervalGCContent == null || readCounts.getRowDimension() == intervalGCContent.length,
+                "Number of intervals for read counts must match those for GC-content annotations.");
+
+        RealMatrix result = readCounts.copy();
+
+        //preprocess (transform, correct GC bias, subset, divide by fractional medians) copy in place
+        logger.info("Preprocessing read counts...");
+
+        logger.info("Transforming read counts to fractional coverage...");
+        transformToFractionalCoverage(result);
+
+        if (intervalGCContent != null) {
+            logger.info("Performing GC-bias correction...");
+            GCCorrector.correctCoverage(result, intervalGCContent);
+        }
+
+        //standardize copy in place
+        logger.info("Standardizing read counts...");
+
+        logger.info("Dividing by sample median and transforming to log2 space...");
+        divideBySampleMedianAndTransformToLog2(result);
+
+        logger.info("Subtracting sample median...");
+        final double[] sampleLog2Medians = MatrixSummaryUtils.getColumnMedians(result);
+        result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(int intervalIndex, int sampleIndex, double value) {
+                return value - sampleLog2Medians[sampleIndex];
+            }
+        });
+
+        logger.info("Sample read counts standardized.");
+
+        return result;
     }
 
     private static PreprocessedStandardizedResult preprocessPanel(final RealMatrix readCounts,
@@ -168,7 +215,7 @@ public final class SVDDenoisingUtils {
         transformToFractionalCoverage(readCounts);
 
         if (intervalGCContent != null) {
-            logger.info("Performing explicit GC-bias correction...");
+            logger.info("Performing GC-bias correction...");
             GCCorrector.correctCoverage(readCounts, intervalGCContent);
         }
 
@@ -321,9 +368,12 @@ public final class SVDDenoisingUtils {
     /**
      * Standardize read counts for samples, using interval fractional medians from a panel of normals.
      * The original {@code readCounts} has dimensions intervals x samples and is not modified.
+     *
+     * This code will work when the number of samples is greater than one, but is currently only
+     * called by methods that assume a single sample.
      */
-    private static RealMatrix preprocessAndStandardize(final SVDReadCountPanelOfNormals panelOfNormals,
-                                                       final RealMatrix readCounts) {
+    private static RealMatrix preprocessAndStandardizeSample(final SVDReadCountPanelOfNormals panelOfNormals,
+                                                             final RealMatrix readCounts) {
         RealMatrix result = readCounts.copy();
 
         //preprocess (transform, correct GC bias, subset, divide by fractional medians) copy in place
@@ -333,7 +383,7 @@ public final class SVDDenoisingUtils {
         transformToFractionalCoverage(result);
 
         if (panelOfNormals.getOriginalIntervalGCContent() != null) {
-            logger.info("GC-content annotations found in the panel of normals; performing explicit GC-bias correction...");
+            logger.info("GC-content annotations found in the panel of normals; performing GC-bias correction...");
             GCCorrector.correctCoverage(result, panelOfNormals.getOriginalIntervalGCContent());
         }
 

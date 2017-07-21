@@ -244,7 +244,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
                                                  final List<Locatable> intervals,
                                                  final TargetCollection<Target> annotatedIntervals) {
         if (annotatedIntervals == null) {
-            logger.info("No GC-content annotations for intervals found; explicit GC-bias correction will not be performed...");
+            logger.info("No GC-content annotations for intervals found; GC-bias correction will not be performed...");
             return null;
         }
         logger.info("Validating and reading GC-content annotations for intervals...");

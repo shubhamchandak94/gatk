@@ -23,10 +23,10 @@ public final class SVDDenoisedCopyRatioResult {
     private final RealMatrix standardizedProfile;
     private final RealMatrix denoisedProfile;
 
-    SVDDenoisedCopyRatioResult(final List<Target> intervals,
-                               final List<String> columnNames,
-                               final RealMatrix standardizedProfile,
-                               final RealMatrix denoisedProfile) {
+    public SVDDenoisedCopyRatioResult(final List<Target> intervals,
+                                      final List<String> columnNames,
+                                      final RealMatrix standardizedProfile,
+                                      final RealMatrix denoisedProfile) {
         Utils.nonEmpty(intervals);
         Utils.nonEmpty(columnNames);
         Utils.nonNull(standardizedProfile);

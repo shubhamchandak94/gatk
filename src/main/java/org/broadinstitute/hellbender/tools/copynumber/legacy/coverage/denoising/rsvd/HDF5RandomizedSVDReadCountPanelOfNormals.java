@@ -207,7 +207,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
             //(originalReadCounts is modified in place and a filtered submatrix is returned)
             logger.info("Preprocessing and standardizing read counts...");
             final SVDDenoisingUtils.PreprocessedStandardizedResult preprocessedStandardizedResult =
-                    SVDDenoisingUtils.preprocessAndStandardize(originalReadCounts, intervalGCContent,
+                    SVDDenoisingUtils.preprocessAndStandardizePanel(originalReadCounts, intervalGCContent,
                     minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
                     extremeSampleMedianPercentile, extremeOutlierTruncationPercentile);
 
