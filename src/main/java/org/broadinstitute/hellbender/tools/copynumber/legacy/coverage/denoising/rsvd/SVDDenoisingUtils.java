@@ -234,13 +234,14 @@ public final class SVDDenoisingUtils {
                     CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE_LONG_NAME));
         } else {
             logger.info(String.format("Filtering samples with a fraction of zero-coverage intervals above %.2f percent...", maximumZerosInSamplePercentage));
+            final int maxZerosInSample = calculateMaximumZerosCount(countNumberPassingFilter(filterIntervals), maximumZerosInSamplePercentage);
             IntStream.range(0, numOriginalSamples)
                     .filter(sampleIndex -> !filterSamples[sampleIndex])
                     .forEach(sampleIndex -> {
                         final int numZerosInSample = (int) IntStream.range(0, numOriginalIntervals)
                                 .filter(intervalIndex -> !filterIntervals[intervalIndex] && readCounts.getEntry(sampleIndex, intervalIndex) == 0.)
                                 .count();
-                        if (numZerosInSample > calculateMaximumZerosCount(numZerosInSample, maximumZerosInSamplePercentage)) {
+                        if (numZerosInSample > maxZerosInSample) {
                             filterSamples[sampleIndex] = true;
                         }
                     });
@@ -253,13 +254,14 @@ public final class SVDDenoisingUtils {
                     CreateReadCountPanelOfNormals.MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE_LONG_NAME));
         } else {
             logger.info(String.format("Filtering intervals with a fraction of zero-coverage samples above %.2f percent...", maximumZerosInIntervalPercentage));
+            final int maxZerosInInterval = calculateMaximumZerosCount(countNumberPassingFilter(filterSamples), maximumZerosInIntervalPercentage);
             IntStream.range(0, numOriginalIntervals)
                     .filter(intervalIndex -> !filterIntervals[intervalIndex])
                     .forEach(intervalIndex -> {
                         final int numZerosInInterval = (int) IntStream.range(0, numOriginalSamples)
-                                .filter(sampleIndex -> !filterSamples[sampleIndex] && readCounts.getEntry(sampleIndex, sampleIndex) == 0.)
+                                .filter(sampleIndex -> !filterSamples[sampleIndex] && readCounts.getEntry(sampleIndex, intervalIndex) == 0.)
                                 .count();
-                        if (numZerosInInterval > calculateMaximumZerosCount(numZerosInInterval, maximumZerosInIntervalPercentage)) {
+                        if (numZerosInInterval > maxZerosInInterval) {
                             filterIntervals[intervalIndex] = true;
                         }
                     });
@@ -466,9 +468,9 @@ public final class SVDDenoisingUtils {
         });
     }
 
-    private static int calculateMaximumZerosCount(final int numZeroCounts,
+    private static int calculateMaximumZerosCount(final int numTotalCounts,
                                                   final double percentage) {
-        return (int) Math.ceil(numZeroCounts * percentage / 100.0);
+        return (int) Math.ceil(numTotalCounts * percentage / 100.0);
     }
 
     private static double safeLog2(final double x) {
