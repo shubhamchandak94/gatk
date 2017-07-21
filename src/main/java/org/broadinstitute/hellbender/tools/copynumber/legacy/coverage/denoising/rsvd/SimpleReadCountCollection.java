@@ -17,12 +17,13 @@ import org.supercsv.io.CsvListReader;
 import org.supercsv.io.ICsvListReader;
 import org.supercsv.prefs.CsvPreference;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Vector;
 
 /**
  * //TODO replace this class with updated ReadCountCollection
@@ -65,7 +66,6 @@ public final class SimpleReadCountCollection {
     public static SimpleReadCountCollection read(final File file) {
         IOUtils.canReadFile(file);
         final int numRows = countRows(file);
-        logger.info(String.format("Number of rows: %d", numRows));
         final List<Locatable> intervals = new ArrayList<>(numRows);
         final List<Integer> readCounts = new ArrayList<>(numRows);
         try (final FileReader fileReader = new FileReader(file);
@@ -122,56 +122,10 @@ public final class SimpleReadCountCollection {
 //    }
 
     private static int countRows(final File file) {
-        logger.info("Counting lines...");
         try {
             return (int) Files.lines(file.toPath()).filter(l -> !l.startsWith(COMMENT_STRING)).count() - 1;
         } catch (final IOException e) {
             throw new UserException.BadInput("Could not determine number of lines in TSV file.");
-        }
-    }
-
-    public static final class CSVHelper {
-        public static void writeLine(final Writer w, final List<String> values) throws Exception {
-            boolean firstVal = true;
-            for (String val : values)  {
-                if (!firstVal) {
-                    w.write("\t");
-                }
-                for (int i=0; i<val.length(); i++) {
-                    char ch = val.charAt(i);
-                    w.write(ch);
-                }
-                firstVal = false;
-            }
-            w.write("\n");
-        }
-
-        public static List<String> parseLine(final Reader r) throws IOException {
-            int ch = r.read();
-            while (ch == '\r') {
-                ch = r.read();
-            }
-            if (ch < 0) {
-                return null;
-            }
-            Vector<String> store = new Vector<>();
-            StringBuffer curVal = new StringBuffer();
-            while (ch >= 0) {
-                if (ch == '\t') {
-                    store.add(curVal.toString());
-                    curVal = new StringBuffer();
-                } else if (ch == '\r') {
-                    //ignore LF characters
-                } else if (ch == '\n') {
-                    //end of a line, break out
-                    break;
-                } else {
-                    curVal.append((char) ch);
-                }
-                ch = r.read();
-            }
-            store.add(curVal.toString());
-            return store;
         }
     }
 }

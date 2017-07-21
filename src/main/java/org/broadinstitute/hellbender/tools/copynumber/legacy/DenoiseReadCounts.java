@@ -57,7 +57,7 @@ public final class DenoiseReadCounts extends CommandLineProgram {
             fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME
     )
-    private File inputReadCountsFile;
+    private File inputReadCountFile;
 
     @Argument(
             doc = "Input HDF5 file containing the panel of normals (output of CreateReadCountPanelOfNormals).",
@@ -101,8 +101,8 @@ public final class DenoiseReadCounts extends CommandLineProgram {
         validateInputFiles();
 
         try (final HDF5File hdf5PanelOfNormalsFile = new HDF5File(inputPanelOfNormalsFile)) {  //HDF5File implements AutoCloseable
-            //load input files
-            final ReadCountCollection readCounts = ReadCountCollectionUtils.parse(inputReadCountsFile);
+            logger.info(String.format("Reading read-count file (%s)...", inputReadCountFile));
+            final ReadCountCollection readCounts = ReadCountCollectionUtils.parse(inputReadCountFile);
             final SVDReadCountPanelOfNormals panelOfNormals = HDF5RandomizedSVDReadCountPanelOfNormals.read(hdf5PanelOfNormalsFile);
 
             //check that read-count collection contains single sample and integer counts
@@ -126,12 +126,12 @@ public final class DenoiseReadCounts extends CommandLineProgram {
 
             return "SUCCESS";
         } catch (final IOException e) {
-            throw new UserException.CouldNotReadInputFile(inputReadCountsFile);
+            throw new UserException.CouldNotReadInputFile(inputReadCountFile);
         }
     }
 
     private void validateInputFiles() {
         IOUtils.canReadFile(inputPanelOfNormalsFile);
-        IOUtils.canReadFile(inputReadCountsFile);
+        IOUtils.canReadFile(inputReadCountFile);
     }
 }

@@ -262,7 +262,7 @@ public final class SVDDenoisingUtils {
         //construct the filtered results as a new matrix, which will be modified in place from this point on
         final int[] panelIntervalIndices = IntStream.range(0, numOriginalIntervals).filter(intervalIndex -> !filterIntervals[intervalIndex]).toArray();
         final int[] panelSampleIndices = IntStream.range(0, numOriginalSamples).filter(sampleIndex -> !filterSamples[sampleIndex]).toArray();
-        final RealMatrix preprocessedStandardizedReadCounts = readCounts.getSubMatrix(panelIntervalIndices, panelSampleIndices);
+        final RealMatrix preprocessedReadCounts = readCounts.getSubMatrix(panelIntervalIndices, panelSampleIndices);
         final double[] panelIntervalFractionalMedians = IntStream.range(0, numOriginalIntervals)
                 .filter(intervalIndex -> !filterIntervals[intervalIndex])
                 .mapToDouble(intervalIndex -> originalIntervalMedians[intervalIndex]).toArray();
@@ -271,11 +271,11 @@ public final class SVDDenoisingUtils {
         //TODO make this optional
         final int numPanelIntervals = panelIntervalIndices.length;
         final double[] intervalNonZeroMedians = IntStream.range(0, numPanelIntervals)
-                .mapToObj(intervalIndex -> Arrays.stream(preprocessedStandardizedReadCounts.getRow(intervalIndex)).filter(value -> value > 0.).toArray())
+                .mapToObj(intervalIndex -> Arrays.stream(preprocessedReadCounts.getRow(intervalIndex)).filter(value -> value > 0.).toArray())
                 .mapToDouble(nonZeroValues -> new Median().evaluate(nonZeroValues))
                 .toArray();
         final int[] numImputed = {0};  //needs to be effectively final to be used inside visitor
-        preprocessedStandardizedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+        preprocessedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(int intervalIndex, int sampleIndex, double value) {
                 if (value == 0.) {
@@ -293,11 +293,11 @@ public final class SVDDenoisingUtils {
             logger.info(String.format("A value of 0 was provided for argument %s, so the corresponding truncation step will be skipped...",
                     CreateReadCountPanelOfNormals.EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME));
         } else {
-            final double[] values = Doubles.concat(preprocessedStandardizedReadCounts.getData());
+            final double[] values = Doubles.concat(preprocessedReadCounts.getData());
             final double minimumOutlierTruncationThreshold = new Percentile(extremeOutlierTruncationPercentile).evaluate(values);
             final double maximumOutlierTruncationThreshold = new Percentile(100. - extremeOutlierTruncationPercentile).evaluate(values);
             final int[] numTruncated = {0};  //needs to be effectively final to be used inside visitor
-            preprocessedStandardizedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            preprocessedReadCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
                 @Override
                 public double visit(int intervalIndex, int sampleIndex, double value) {
                     if (value < minimumOutlierTruncationThreshold) {
@@ -314,7 +314,7 @@ public final class SVDDenoisingUtils {
             logger.info(String.format("%d values below the %.2f percentile or above the %.2f percentile were truncated to the corresponding value...",
                     numTruncated[0], extremeOutlierTruncationPercentile, 100. - extremeOutlierTruncationPercentile));
         }
-        return new PreprocessedStandardizedResult(readCounts, panelIntervalFractionalMedians,
+        return new PreprocessedStandardizedResult(preprocessedReadCounts, panelIntervalFractionalMedians,
                 filterIntervals, filterSamples);
     }
 
@@ -390,8 +390,8 @@ public final class SVDDenoisingUtils {
 
         logger.info("Composing left-singular matrix for the requested number of eigensamples and transposing them...");
         final RealMatrix leftSingularTruncatedMatrix = numEigensamples == numAllEigensamples
-                ? new Array2DRowRealMatrix(leftSingular)
-                : new Array2DRowRealMatrix(leftSingular).getSubMatrix(0, numIntervals - 1, 0, numEigensamples - 1);
+                ? new Array2DRowRealMatrix(leftSingular, false)
+                : new Array2DRowRealMatrix(leftSingular, false).getSubMatrix(0, numIntervals - 1, 0, numEigensamples - 1);
 
         logger.info("Computing projection of transpose...");
         final RealMatrix projectionTranspose = standardizedProfile.transpose()

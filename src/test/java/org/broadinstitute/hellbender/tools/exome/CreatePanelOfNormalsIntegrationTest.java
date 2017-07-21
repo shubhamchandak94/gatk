@@ -430,9 +430,9 @@ public class CreatePanelOfNormalsIntegrationTest extends CommandLineProgramTest 
     @Test
     public void testWES() {
 //        final File outputPanelOfNormalsFile = createTempFile("create-read-count-panel-of-normals", ".pon");
-        final File outputPanelOfNormalsFile = new File("/home/slee/working/ipython/wes.no-gc.old.pon");
+        final File outputPanelOfNormalsFile = new File("/home/slee/working/ipython/wes-pon-test/wes.no-gc.old.pon");
         final String[] arguments = {
-                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes_0_19.pcov.unsorted.tsv",
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes_0_19.pcov.unsorted.tsv",
                 "-" + CreatePanelOfNormals.NO_QC_SHORT_NAME, "true",
                 "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputPanelOfNormalsFile.getAbsolutePath(),
                 "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
