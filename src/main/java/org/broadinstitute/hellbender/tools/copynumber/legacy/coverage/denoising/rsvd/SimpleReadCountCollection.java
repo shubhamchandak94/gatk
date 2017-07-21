@@ -93,34 +93,6 @@ public final class SimpleReadCountCollection {
         }
     }
 
-//    public static SimpleReadCountCollection read(final File file) {
-//        IOUtils.canReadFile(file);
-//        final int numRows = countRows(file);
-//        logger.info(String.format("Number of rows: %d", numRows))
-//        final List<Locatable> intervals = new ArrayList<>(numLines);
-//        final List<Integer> readCounts = new ArrayList<>(numLines);
-//        try (final FileReader reader = new FileReader(file)) {
-//            //comment lines
-//            //header
-//            List<String> row;
-//            CSVHelper.parseLine(reader);
-//            CSVHelper.parseLine(reader);
-//            CSVHelper.parseLine(reader);
-//            CSVHelper.parseLine(reader);
-//            while ((row = CSVHelper.parseLine(reader)) != null) {
-//                final Locatable interval = new SimpleInterval(row.get(0), Integer.parseInt(row.get(1)), Integer.parseInt(row.get(2)));
-//                final int readCount = Integer.parseInt(row.get(4));
-//                intervals.add(interval);
-//                readCounts.add(readCount);
-//            }
-//            final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(intervals.size(), 1);
-//            readCountsMatrix.setColumn(0, readCounts.stream().mapToDouble(Integer::doubleValue).toArray());
-//            return new SimpleReadCountCollection(intervals, readCountsMatrix);
-//        } catch (final IOException e) {
-//            throw new UserException.CouldNotReadInputFile(file);
-//        }
-//    }
-
     private static int countRows(final File file) {
         try {
             return (int) Files.lines(file.toPath()).filter(l -> !l.startsWith(COMMENT_STRING)).count() - 1;

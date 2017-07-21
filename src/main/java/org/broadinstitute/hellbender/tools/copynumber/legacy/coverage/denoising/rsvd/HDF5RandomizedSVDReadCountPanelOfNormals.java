@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
 
+import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.util.Lazy;
 import htsjdk.samtools.util.Locatable;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
@@ -37,6 +38,7 @@ import java.util.stream.IntStream;
 public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCountPanelOfNormals {
     private static final Logger logger = LogManager.getLogger(HDF5RandomizedSVDReadCountPanelOfNormals.class);
 
+    private static final int CHUNK_DIVISOR = 16;    //limits number of intervals to 16777215
     private static final int NUM_SLICES_FOR_SPARK_MATRIX_CONVERSION = 100;
     private static final double EPSILON = 1E-9;
 
@@ -75,6 +77,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
      */
     private HDF5RandomizedSVDReadCountPanelOfNormals(final HDF5File file) {
         Utils.nonNull(file);
+        IOUtils.canReadFile(file.getFile());
         this.file = file;
         originalIntervals = new Lazy<>(() -> IntervalHelper.readIntervals(file, ORIGINAL_INTERVALS_PATH));
         panelIntervals = new Lazy<>(() -> IntervalHelper.readIntervals(file, PANEL_INTERVALS_PATH));
@@ -97,7 +100,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
     @Override
     public double[][] getOriginalReadCounts() {
-        return file.readDoubleMatrix(ORIGINAL_READ_COUNTS_PATH);
+        return HDF5ChunkedDoubleMatrixHelper.readMatrix(file, ORIGINAL_READ_COUNTS_PATH);
     }
 
     @Override
@@ -130,7 +133,9 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
     @Override
     public double[][] getEigensampleVectors() {
-        return new Array2DRowRealMatrix(file.readDoubleMatrix(PANEL_EIGENSAMPLE_VECTORS_PATH), false).transpose().getData();
+        return new Array2DRowRealMatrix(
+                HDF5ChunkedDoubleMatrixHelper.readMatrix(file, PANEL_EIGENSAMPLE_VECTORS_PATH), false)
+                .transpose().getData();
     }
 
     /**
@@ -138,6 +143,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
      * version number is not up to date.
      */
     public static HDF5RandomizedSVDReadCountPanelOfNormals read(final HDF5File file) {
+        Utils.nonNull(file);
+        IOUtils.canReadFile(file.getFile());
         final HDF5RandomizedSVDReadCountPanelOfNormals pon = new HDF5RandomizedSVDReadCountPanelOfNormals(file);
         if (pon.getVersion() < CURRENT_PON_VERSION) {
             throw new UserException.BadInput(String.format("The version of the specified panel of normals (%f) is older than the current version (%f).",
@@ -225,7 +232,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
                 logger.warn(String.format("%d eigensamples were requested but only %d are available in the panel of normals...",
                         numEigensamplesRequested, numEigensamples));
             }
-            logger.info(String.format("Performing SVD (truncated at %d eigensamples) of transposed standardized counts (%d x %d)...",
+            logger.info(String.format("Performing SVD (truncated at %d eigensamples) of standardized counts (transposed to %d x %d)...",
                     Math.min(numEigensamples, numPanelSamples), numPanelIntervals, numPanelSamples));
             final SingularValueDecomposition<RowMatrix, Matrix> svd = SparkConverter.convertRealMatrixToSparkRowMatrix(
                     ctx, preprocessedStandardizedResult.preprocessedStandardizedProfile.transpose(), NUM_SLICES_FOR_SPARK_MATRIX_CONVERSION)
@@ -261,7 +268,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     }
 
     private void writeOriginalReadCountsPath(final RealMatrix originalReadCounts) {
-        file.makeDoubleMatrix(ORIGINAL_READ_COUNTS_PATH, originalReadCounts.getData());
+        HDF5ChunkedDoubleMatrixHelper.writeMatrix(file, ORIGINAL_READ_COUNTS_PATH, originalReadCounts.getData(), CHUNK_DIVISOR);
     }
 
     private void writeOriginalSampleFilenames(final List<String> originalSampleFilenames) {
@@ -293,7 +300,9 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
     }
 
     private void writeEigensampleVectors(final double[][] eigensampleVectors) {
-        file.makeDoubleMatrix(PANEL_EIGENSAMPLE_VECTORS_PATH, new Array2DRowRealMatrix(eigensampleVectors, false).transpose().getData());
+        HDF5ChunkedDoubleMatrixHelper.writeMatrix(file, PANEL_EIGENSAMPLE_VECTORS_PATH,
+                new Array2DRowRealMatrix(eigensampleVectors, false).transpose().getData(),
+                CHUNK_DIVISOR);
     }
 
     private static final class IntervalHelper {
@@ -301,8 +310,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
         //so we instead store a map from integer indices to contig strings and
         //store (index, start, end) in a double matrix
 
-        private static final String INTERVAL_CONTIG_NAMES_PATH_SUFFIX = "/contig_names";
-        private static final String INTERVAL_MATRIX_PATH_SUFFIX = "/contig-index_start_end";
+        private static final String INTERVAL_CONTIG_NAMES_SUB_PATH = "/indexed_contig_names";
+        private static final String INTERVAL_MATRIX_SUB_PATH = "/transposed_index_start_end";
 
         private enum IntervalField {
             CONTIG_INDEX(0),
@@ -319,8 +328,8 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
 
         private static List<Locatable> readIntervals(final HDF5File file,
                                                      final String path) {
-            final String[] contigNames = file.readStringArray(path + INTERVAL_CONTIG_NAMES_PATH_SUFFIX);
-            final double[][] matrix = file.readDoubleMatrix(path + INTERVAL_MATRIX_PATH_SUFFIX);
+            final String[] contigNames = file.readStringArray(path + INTERVAL_CONTIG_NAMES_SUB_PATH);
+            final double[][] matrix = file.readDoubleMatrix(path + INTERVAL_MATRIX_SUB_PATH);
             final int numIntervals = matrix[0].length;
             return IntStream.range(0, numIntervals).boxed()
                     .map(i -> (new SimpleInterval(
@@ -334,7 +343,7 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
                                            final String path,
                                            final List<Locatable> intervals) {
             final String[] contigNames = intervals.stream().map(Locatable::getContig).distinct().toArray(String[]::new);
-            file.makeStringArray(path + INTERVAL_CONTIG_NAMES_PATH_SUFFIX, contigNames);
+            file.makeStringArray(path + INTERVAL_CONTIG_NAMES_SUB_PATH, contigNames);
             final Map<String, Double> contigNamesToIndexMap = IntStream.range(0, contigNames.length).boxed()
                     .collect(Collectors.toMap(i -> contigNames[i], i -> (double) i));
             final double[][] matrix = new double[NUM_INTERVAL_FIELDS][intervals.size()];
@@ -344,7 +353,116 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormals implements SVDReadCo
                 matrix[IntervalField.START.index][i] = interval.getStart();
                 matrix[IntervalField.END.index][i] = interval.getEnd();
             }
-            file.makeDoubleMatrix(path + INTERVAL_MATRIX_PATH_SUFFIX, matrix);
+            file.makeDoubleMatrix(path + INTERVAL_MATRIX_SUB_PATH, matrix);
+        }
+    }
+
+    @VisibleForTesting
+    static final class HDF5ChunkedDoubleMatrixHelper {
+
+        private static final String NUMBER_OF_ROWS_SUB_PATH = "/num_rows";
+        private static final String NUMBER_OF_COLUMNS_SUB_PATH = "/num_columns";
+        private static final String NUMBER_OF_CHUNKS_SUB_PATH = "/num_chunks";
+        private static final String CHUNK_INDEX_PATH_SUFFIX = "/chunk_";
+
+        private static final int MAX_NUMBER_OF_VALUES_PER_HDF5_MATRIX = Integer.MAX_VALUE / Byte.SIZE;
+
+        @VisibleForTesting
+        static double[][] readMatrix(final HDF5File file,
+                                     final String path) {
+            Utils.nonNull(file);
+            IOUtils.canReadFile(file.getFile());
+            Utils.nonNull(path);
+
+            final String numRowsPath = path + NUMBER_OF_ROWS_SUB_PATH;
+            final String numColumnsPath = path + NUMBER_OF_COLUMNS_SUB_PATH;
+            final String numChunksPath = path + NUMBER_OF_CHUNKS_SUB_PATH;
+            Utils.validateArg(file.isPresent(numRowsPath) && file.isPresent(numColumnsPath) && file.isPresent(numChunksPath),
+                    String.format("HDF5 file %s does not contain a chunked matrix in path %s.", file.getFile().getAbsolutePath(), path));
+
+            final int numRows = (int) file.readDouble(numRowsPath);
+            final int numColumns = (int) file.readDouble(numColumnsPath);
+            final int numChunks = (int) file.readDouble(numChunksPath);
+
+            final double[][] fullMatrix = new double[numRows][numColumns];
+            int numRowsRead = 0;
+            for (int chunkIndex = 0; chunkIndex < numChunks; chunkIndex++) {
+                final double[][] matrixChunk = file.readDoubleMatrix(path + CHUNK_INDEX_PATH_SUFFIX + chunkIndex);
+                if (numRowsRead + matrixChunk.length > numRows) {
+                    throw new UserException.BadInput("Matrix chunk contains too many rows.");
+                }
+                if (matrixChunk[0].length != numColumns) {
+                    throw new UserException.BadInput("Matrix chunk does not contain expected number of columns.");
+                }
+                System.arraycopy(matrixChunk, 0, fullMatrix, numRowsRead, matrixChunk.length);
+                numRowsRead += matrixChunk.length;
+            }
+            if (numRowsRead != numRows) {
+                throw new UserException.BadInput("Matrix chunks do not contain expected total number of rows.");
+            }
+            return fullMatrix;
+        }
+
+        /**
+         * @param chunkDivisor  The maximum number of values in each chunk
+         *                      is given by {@code MAX_NUM_VALUES_PER_HDF5_MATRIX} / {@code chunkDivisor},
+         *                      so increasing this number will reduce heap usage when writing chunks,
+         *                      which requires subarrays to be copied.  However, since a single row is not allowed
+         *                      to be split across multiple chunks, the number of columns must be less
+         *                      than the maximum number of values in each chunk.  For example,
+         *                      {@code chunkDivisor} = 8 allows for 16777215 columns.
+         */
+        @VisibleForTesting
+        static void writeMatrix(final HDF5File file,
+                                final String path,
+                                final double[][] matrix,
+                                final int chunkDivisor) {
+            Utils.nonNull(file);
+            IOUtils.canReadFile(file.getFile());
+            Utils.nonNull(path);
+            Utils.nonNull(matrix);
+            Utils.validateArg(chunkDivisor > 0, "Chunk divisor must be positive.");
+            final int maxNumValuesPerChunk = MAX_NUMBER_OF_VALUES_PER_HDF5_MATRIX / chunkDivisor;
+            final long numRows = matrix.length;
+            Utils.validateArg(numRows > 0, "Matrix must contain at least one row.");
+            final long numColumns = matrix[0].length;
+            Utils.validateArg(numColumns > 0, "Matrix must contain at least one column.");
+            Utils.validateArg(numColumns <= maxNumValuesPerChunk,
+                    String.format("Number of columns (%d) exceeds the maximum number of values allowed per chunk (%d).",
+                            numColumns, maxNumValuesPerChunk));
+
+            final int numRowsPerFilledChunk = (int) (maxNumValuesPerChunk / numColumns);
+            final int numFilledChunks = numRowsPerFilledChunk == 0 ? 0 : (int) numRows / numRowsPerFilledChunk;
+            final boolean needPartialChunk = numFilledChunks == 0 || numRows % numRowsPerFilledChunk != 0;
+
+            logger.debug("Number of values in matrix / maximum number allowed for HDF5 matrix: " + (double) numRows * numColumns / MAX_NUMBER_OF_VALUES_PER_HDF5_MATRIX);
+            logger.debug("Maximum number of values per chunk: " + maxNumValuesPerChunk);
+            logger.debug("Number of filled chunks: " + numFilledChunks);
+            logger.debug("Number of rows per filled chunk: " + numRowsPerFilledChunk);
+            logger.debug("Partial chunk needed: " + needPartialChunk);
+
+            final String numRowsPath = path + NUMBER_OF_ROWS_SUB_PATH;
+            final String numColumnsPath = path + NUMBER_OF_COLUMNS_SUB_PATH;
+            final String numChunksPath = path + NUMBER_OF_CHUNKS_SUB_PATH;
+            file.makeDouble(numRowsPath, numRows);
+            file.makeDouble(numColumnsPath, numColumns);
+            file.makeDouble(numChunksPath, needPartialChunk ? numFilledChunks + 1 : numFilledChunks);
+
+            //TODO we could add makeDoubleMatrix(path, matrix, startRow, endRow, startCol, endCol) method to avoid copying
+            int numRowsWritten = 0;
+            for (int chunkIndex = 0; chunkIndex < numFilledChunks; chunkIndex++) {
+                final double[][] matrixChunk = new double[numRowsPerFilledChunk][(int) numColumns];
+                System.arraycopy(matrix, numRowsWritten, matrixChunk, 0, numRowsPerFilledChunk);
+                file.makeDoubleMatrix(path + CHUNK_INDEX_PATH_SUFFIX + chunkIndex, matrixChunk);    //write filled chunks
+                numRowsWritten += numRowsPerFilledChunk;
+            }
+            if (needPartialChunk) {
+                final int numRowsPartialChunk = (int) numRows - numRowsWritten;
+                logger.debug("Number of rows in partial chunk: " + numRowsPartialChunk);
+                final double[][] matrixChunk = new double[numRowsPartialChunk][(int) numColumns];
+                System.arraycopy(matrix, numRowsWritten, matrixChunk, 0, numRowsPartialChunk);
+                file.makeDoubleMatrix(path + CHUNK_INDEX_PATH_SUFFIX + numFilledChunks, matrixChunk);    //write final partially filled chunk
+            }
         }
     }
 }

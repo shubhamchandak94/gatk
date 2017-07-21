@@ -434,6 +434,7 @@ public class CreatePanelOfNormalsIntegrationTest extends CommandLineProgramTest 
         final String[] arguments = {
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/ipython/wes-pon-test/wes_0_19.pcov.unsorted.tsv",
                 "-" + CreatePanelOfNormals.NO_QC_SHORT_NAME, "true",
+                "-" + CreatePanelOfNormals.NUMBER_OF_EIGENSAMPLES_SHORT_NAME, "20",
                 "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputPanelOfNormalsFile.getAbsolutePath(),
                 "--" + StandardArgumentDefinitions.VERBOSITY_NAME, "INFO"
         };
