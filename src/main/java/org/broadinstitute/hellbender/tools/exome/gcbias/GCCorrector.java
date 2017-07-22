@@ -75,7 +75,6 @@ public class GCCorrector {
     }
 
     /**
-     *
      * @param inputCounts raw coverage before GC correction
      * @param gcContentByTarget      array of gc contents, one per target of the input
      * @return              GC-corrected coverage
@@ -87,14 +86,13 @@ public class GCCorrector {
     }
 
     //correct in place
-    public static void correctCoverage(final RealMatrix inputCounts, final double[] gcContentByTarget) {
+    private static void correctCoverage(final RealMatrix inputCounts, final double[] gcContentByTarget) {
         // each column (sample) has its own GC bias curve, hence its own GC corrector
         final List<GCCorrector> gcCorrectors = IntStream.range(0, inputCounts.getColumnDimension())
                 .mapToObj(n -> new GCCorrector(gcContentByTarget, inputCounts.getColumnVector(n))).collect(Collectors.toList());
 
         // gc correct the input counts in-place
-        final RealMatrix correctedCounts = inputCounts.copy();
-        correctedCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+        inputCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(int target, int column, double coverage) {
                 return gcCorrectors.get(column).correctedCoverage(coverage, gcContentByTarget[target]);
@@ -104,8 +102,8 @@ public class GCCorrector {
         // we would like the average correction factor to be 1.0 in the sense that average coverage before and after
         // correction should be equal
         final double[] columnNormalizationFactors = IntStream.range(0, inputCounts.getColumnDimension())
-                .mapToDouble(c -> inputCounts.getColumnVector(c).getL1Norm() / correctedCounts.getColumnVector(c).getL1Norm()).toArray();
-        correctedCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+                .mapToDouble(c -> inputCounts.getColumnVector(c).getL1Norm() / inputCounts.getColumnVector(c).getL1Norm()).toArray();
+        inputCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(int target, int column, double coverage) {
                 return coverage * columnNormalizationFactors[column];
@@ -120,8 +118,7 @@ public class GCCorrector {
                 .mapToObj(n -> new GCCorrector(gcContentByTarget, inputCounts.getRowVector(n))).collect(Collectors.toList());
 
         // gc correct the input counts in-place
-        final RealMatrix correctedCounts = inputCounts.copy();
-        correctedCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+        inputCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(int row, int target, double coverage) {
                 return gcCorrectors.get(row).correctedCoverage(coverage, gcContentByTarget[target]);
@@ -131,8 +128,8 @@ public class GCCorrector {
         // we would like the average correction factor to be 1.0 in the sense that average coverage before and after
         // correction should be equal
         final double[] rowNormalizationFactors = IntStream.range(0, inputCounts.getRowDimension())
-                .mapToDouble(c -> inputCounts.getRowVector(c).getL1Norm() / correctedCounts.getRowVector(c).getL1Norm()).toArray();
-        correctedCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+                .mapToDouble(c -> inputCounts.getRowVector(c).getL1Norm() / inputCounts.getRowVector(c).getL1Norm()).toArray();
+        inputCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
             public double visit(int row, int target, double coverage) {
                 return coverage * rowNormalizationFactors[row];
