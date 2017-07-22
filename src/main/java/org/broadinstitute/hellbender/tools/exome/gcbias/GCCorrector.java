@@ -111,7 +111,33 @@ public class GCCorrector {
                 return coverage * columnNormalizationFactors[column];
             }
         });
+    }
 
+    //correct in place
+    public static void correctTransposedCoverage(final RealMatrix inputCounts, final double[] gcContentByTarget) {
+        // each column (sample) has its own GC bias curve, hence its own GC corrector
+        final List<GCCorrector> gcCorrectors = IntStream.range(0, inputCounts.getRowDimension())
+                .mapToObj(n -> new GCCorrector(gcContentByTarget, inputCounts.getRowVector(n))).collect(Collectors.toList());
+
+        // gc correct the input counts in-place
+        final RealMatrix correctedCounts = inputCounts.copy();
+        correctedCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(int row, int target, double coverage) {
+                return gcCorrectors.get(row).correctedCoverage(coverage, gcContentByTarget[target]);
+            }
+        });
+
+        // we would like the average correction factor to be 1.0 in the sense that average coverage before and after
+        // correction should be equal
+        final double[] rowNormalizationFactors = IntStream.range(0, inputCounts.getRowDimension())
+                .mapToDouble(c -> inputCounts.getRowVector(c).getL1Norm() / correctedCounts.getRowVector(c).getL1Norm()).toArray();
+        correctedCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(int row, int target, double coverage) {
+                return coverage * rowNormalizationFactors[row];
+            }
+        });
     }
 
     private double correctedCoverage(final double coverage, final double gcContent) {

@@ -453,7 +453,7 @@ public final class SVDDenoisingUtils {
                                                         final double[] intervalGCContent) {
         if (intervalGCContent != null) {
             logger.info("Performing GC-bias correction...");
-            GCCorrector.correctCoverage(m.transpose(), intervalGCContent); //GCCorrector expects intervals x samples
+            GCCorrector.correctTransposedCoverage(m, intervalGCContent); //GCCorrector expects intervals x samples
         }
     }
 
