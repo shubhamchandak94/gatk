@@ -220,7 +220,7 @@ public final class GenotypeGVCFs extends VariantWalker {
      * Re-genotype (and re-annotate) a combined genomic VC
      * @return a new VariantContext or null if the site turned monomorphic and we don't want such sites
      */
-    private VariantContext regenotypeVC(final VariantContext originalVC, final ReferenceContext ref, final FeatureContext features, boolean includeNonVariants) {
+    private VariantContext  regenotypeVC(final VariantContext originalVC, final ReferenceContext ref, final FeatureContext features, boolean includeNonVariants) {
         Utils.nonNull(originalVC);
 
         final VariantContext result;

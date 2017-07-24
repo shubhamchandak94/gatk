@@ -2,15 +2,24 @@ package org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific;
 
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.TextCigarCodec;
+import htsjdk.variant.variantcontext.VariantContext;
+import org.broadinstitute.hellbender.engine.FeatureDataSource;
 import org.broadinstitute.hellbender.tools.walkers.annotator.ReadPosRankSumTest;
 import org.broadinstitute.hellbender.utils.QualityUtils;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
+import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
-public class AlleleSpecificReadPosRankSumTestUnitTest {
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
+public class AS_ReadPosRankSumTestUnitTest extends ReducibleAnnotationBaseTest {
 
     @DataProvider(name = "dataIsUsableRead")
     private Object[][] dataIsUsableRead(){
@@ -36,4 +45,15 @@ public class AlleleSpecificReadPosRankSumTestUnitTest {
         read.setPosition("1", start);
         Assert.assertEquals(as_readPosRankSumTest.isUsableRead(read, refLoc), isUsable);
     }
+
+    @Override
+    protected List<String> getAnnotationsToUse() {
+        return Collections.singletonList(AS_ReadPosRankSumTest.class.getSimpleName());
+    }
+
+    @Override
+    protected String getRawKey() {
+        return GATKVCFConstants.AS_RAW_READ_POS_RANK_SUM_KEY;
+    }
+
 }

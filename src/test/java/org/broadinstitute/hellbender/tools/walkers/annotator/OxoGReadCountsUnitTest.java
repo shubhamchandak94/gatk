@@ -112,7 +112,7 @@ public final class OxoGReadCountsUnitTest {
         badRead.setMappingQuality(20);
 
         final ReadLikelihoods<Allele> likelihoods =
-                AnnotationArtificialData.makeLikelihoods(sample1, refReads, altReads, Arrays.asList(badRead), -100.0, -10.0, -1.1, refAllele, altAllele);
+                ArtificialAnnotationUtils.makeLikelihoods(sample1, refReads, altReads, Arrays.asList(badRead), -100.0, -10.0, -1.1, refAllele, altAllele);
 
         return ImmutablePair.of(new VariantContextBuilder("test", "20", 10, 10, alleles).genotypes(Arrays.asList(g)).make(),
                 likelihoods);

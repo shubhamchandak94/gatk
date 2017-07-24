@@ -31,7 +31,7 @@ public final class BaseQualityRankSumTestUnitTest {
     private static final Allele ALT = Allele.create("A", false);
 
     private GATKRead makeRead(final int qual) {
-        return AnnotationArtificialData.makeRead(qual, 50);
+        return ArtificialAnnotationUtils.makeRead(qual, 50);
     }
 
     private VariantContext makeVC(final Allele refAllele, final Allele altAllele) {
@@ -57,7 +57,7 @@ public final class BaseQualityRankSumTestUnitTest {
         final List<GATKRead> refReads = Arrays.stream(refBaseQuals).mapToObj(i -> makeRead(i)).collect(Collectors.toList());
         final List<GATKRead> altReads = Arrays.stream(altBaseQuals).mapToObj(i -> makeRead(i)).collect(Collectors.toList());
         final ReadLikelihoods<Allele> likelihoods =
-                AnnotationArtificialData.makeLikelihoods(SAMPLE_1, refReads, altReads, -100.0, -100.0, REF, ALT);
+                ArtificialAnnotationUtils.makeLikelihoods(SAMPLE_1, refReads, altReads, -100.0, -100.0, REF, ALT);
 
         final ReferenceContext ref = null;
         final VariantContext vc = makeVC(REF, ALT);
@@ -74,7 +74,7 @@ public final class BaseQualityRankSumTestUnitTest {
         Assert.assertEquals(ann.getKeyNames().get(0), key);
     }
 
-    @Test
+    @Test  //To be consistent with annotate raw data now produces the the ranksum, making this test incorrect
     public void testBaseQualRawAnnotate() {
         final AS_RankSumTest ann =  new AS_BaseQualityRankSumTest();
         final String key1 = GATKVCFConstants.AS_RAW_BASE_QUAL_RANK_SUM_KEY;
@@ -85,7 +85,7 @@ public final class BaseQualityRankSumTestUnitTest {
         final List<GATKRead> refReads = Arrays.stream(refBaseQuals).mapToObj(i -> makeRead(i)).collect(Collectors.toList());
         final List<GATKRead> altReads = Arrays.stream(altBaseQuals).mapToObj(i -> makeRead(i)).collect(Collectors.toList());
         final ReadLikelihoods<Allele> likelihoods =
-                AnnotationArtificialData.makeLikelihoods(SAMPLE_1, refReads, altReads, -100.0, -100.0, REF, ALT);
+                ArtificialAnnotationUtils.makeLikelihoods(SAMPLE_1, refReads, altReads, -100.0, -100.0, REF, ALT);
 
         final ReferenceContext ref = null;
         final VariantContext vc = makeVC(REF, ALT);
