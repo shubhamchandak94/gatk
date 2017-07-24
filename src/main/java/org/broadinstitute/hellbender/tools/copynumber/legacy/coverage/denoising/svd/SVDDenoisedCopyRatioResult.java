@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd;
 
 import org.apache.commons.math3.linear.RealMatrix;
 import org.broadinstitute.hellbender.exceptions.UserException;

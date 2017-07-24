@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd;
 
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.util.Lazy;

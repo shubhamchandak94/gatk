@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd;
 
 import htsjdk.samtools.util.Locatable;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;

@@ -1,11 +1,11 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd;
 
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.DefaultRealMatrixChangingVisitor;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.random.RandomDataGenerator;
 import org.broadinstitute.hdf5.HDF5File;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd.HDF5RandomizedSVDReadCountPanelOfNormals.HDF5ChunkedDoubleMatrixHelper;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.HDF5RandomizedSVDReadCountPanelOfNormals.HDF5ChunkedDoubleMatrixHelper;
 import org.broadinstitute.hellbender.tools.pon.PoNTestUtils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
@@ -14,8 +14,6 @@ import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import java.io.File;
-
-import static org.testng.Assert.*;
 
 /**
  * TODO

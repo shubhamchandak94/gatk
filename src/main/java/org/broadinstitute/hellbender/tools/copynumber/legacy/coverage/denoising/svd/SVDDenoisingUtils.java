@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.rsvd;
+package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd;
 
 import com.google.common.primitives.Doubles;
 import htsjdk.samtools.util.Locatable;
@@ -194,18 +194,17 @@ public final class SVDDenoisingUtils {
                                                                   final double maximumZerosInIntervalPercentage,
                                                                   final double extremeSampleMedianPercentile,
                                                                   final double extremeOutlierTruncationPercentile) {
+        transformToFractionalCoverage(readCounts);
+        performOptionalGCBiasCorrection(readCounts, intervalGCContent);
+
         final int numOriginalSamples = readCounts.getRowDimension();
         final int numOriginalIntervals = readCounts.getColumnDimension();
 
         final boolean[] filterSamples = new boolean[numOriginalSamples];
         final boolean[] filterIntervals = new boolean[numOriginalIntervals];
 
-        transformToFractionalCoverage(readCounts);
-        performOptionalGCBiasCorrection(readCounts, intervalGCContent);
-
-        final double[] originalIntervalMedians = MatrixSummaryUtils.getColumnMedians(readCounts);
-
         //filter intervals by fractional median
+        final double[] originalIntervalMedians = MatrixSummaryUtils.getColumnMedians(readCounts);
         if (minimumIntervalMedianPercentile == 0.) {
             logger.info(String.format("A value of 0 was provided for argument %s, so the corresponding filtering step will be skipped...",
                     CreateReadCountPanelOfNormals.MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME));
@@ -300,6 +299,12 @@ public final class SVDDenoisingUtils {
                 .filter(intervalIndex -> !filterIntervals[intervalIndex])
                 .mapToDouble(intervalIndex -> originalIntervalMedians[intervalIndex]).toArray();
 
+        //garbage collection to clean up readCounts
+        logHeapUsage();
+        logger.info("Performing garbage collection...");
+        System.gc();
+        logHeapUsage();
+
         //impute zeros as median of non-zero values in interval
         //TODO make this optional
         final int numPanelIntervals = panelIntervalIndices.length;
@@ -349,6 +354,21 @@ public final class SVDDenoisingUtils {
         }
         return new PreprocessedStandardizedResult(
                 preprocessedReadCounts, panelIntervalFractionalMedians, filterSamples, filterIntervals);
+    }
+
+    private static void logHeapUsage() {
+        final int mb = 1024 * 1024;
+        //Getting the runtime reference from system
+        final Runtime runtime = Runtime.getRuntime();
+        logger.info("##### Heap utilization statistics [MB] #####");
+        //Print used memory
+        logger.info("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
+        //Print free memory
+        logger.info("Free Memory:" + runtime.freeMemory() / mb);
+        //Print total available memory
+        logger.info("Total Memory:" + runtime.totalMemory() / mb);
+        //Print Maximum available memory
+        logger.info("Max Memory:" + runtime.maxMemory() / mb);
     }
 
     /**
