@@ -20,11 +20,12 @@ import java.util.stream.Stream;
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
  */
 @SuppressWarnings({"rawtypes","unchecked"}) //TODO fix uses of untyped Comparable.
-final class ReferenceConfidenceVariantContextMerger {
+public class ReferenceConfidenceVariantContextMerger {
 
     private final GenotypeLikelihoodCalculators calculators;
 
-    ReferenceConfidenceVariantContextMerger(){
+    @VisibleForTesting
+    public ReferenceConfidenceVariantContextMerger(){
         calculators = new GenotypeLikelihoodCalculators();
     }
 
@@ -129,7 +130,7 @@ final class ReferenceConfidenceVariantContextMerger {
      * @param vc   VariantContext with the alleles to replace
      * @return non-null list of alleles
      */
-    private static List<Allele> replaceWithNoCallsAndDels(final VariantContext vc) {
+    protected static List<Allele> replaceWithNoCallsAndDels(final VariantContext vc) {
         Utils.nonNull(vc);
 
         final List<Allele> result = new ArrayList<>(vc.getNAlleles());
@@ -167,7 +168,7 @@ final class ReferenceConfidenceVariantContextMerger {
      */
     //TODO as part of a larger refactoring effort {@link #remapAlleles} can be merged with {@link GATKVariantContextUtils#remapAlleles}.
     @VisibleForTesting
-    static List<Allele> remapAlleles(final VariantContext vc, final Allele refAllele) {
+    protected static List<Allele> remapAlleles(final VariantContext vc, final Allele refAllele) {
         final Allele vcRef = vc.getReference();
         final byte[] refBases = refAllele.getBases();
         final int extraBaseCount = refBases.length - vcRef.getBases().length;
@@ -191,12 +192,12 @@ final class ReferenceConfidenceVariantContextMerger {
     }
 
     @VisibleForTesting
-    static class VCWithNewAlleles {
+    protected static class VCWithNewAlleles {
         private final VariantContext vc;
         private final List<Allele> newAlleles;
         private final boolean isSpanningEvent;
 
-        VCWithNewAlleles(final VariantContext vc, final List<Allele> newAlleles, final boolean isSpanningEvent) {
+        public VCWithNewAlleles(final VariantContext vc, final List<Allele> newAlleles, final boolean isSpanningEvent) {
             this.vc = vc;
             this.newAlleles = newAlleles;
             this.isSpanningEvent = isSpanningEvent;
@@ -230,7 +231,7 @@ final class ReferenceConfidenceVariantContextMerger {
         }
     }
 
-    private static List<Allele> collectTargetAlleles(final List<VCWithNewAlleles> vcAndNewAllelePairs, final Allele refAllele, final boolean removeNonRefSymbolicAllele) {
+    protected static List<Allele> collectTargetAlleles(final List<VCWithNewAlleles> vcAndNewAllelePairs, final Allele refAllele, final boolean removeNonRefSymbolicAllele) {
         // FinalAlleleSet contains the alleles of the new resulting VC
         // Using linked set in order to guarantee a stable order
         final Set<Allele> finalAlleleSet = new LinkedHashSet<>(10);
@@ -258,7 +259,7 @@ final class ReferenceConfidenceVariantContextMerger {
     /**
      * lookup the depth from the VC DP field or calculate by summing the depths of the genotypes
      */
-    private static int calculateVCDepth(VariantContext vc) {
+    protected static int calculateVCDepth(VariantContext vc) {
         if ( vc.hasAttribute(VCFConstants.DEPTH_KEY) ) {
             return vc.getAttributeAsInt(VCFConstants.DEPTH_KEY, 0);
         } else { // handle the gVCF case from the HaplotypeCaller
@@ -268,7 +269,7 @@ final class ReferenceConfidenceVariantContextMerger {
         }
     }
 
-    private static Map<String, Object> mergeAttributes(int depth, Map<String, List<Comparable>> annotationMap) {
+    public Map<String, Object> mergeAttributes(int depth, Map<String, List<Comparable>> annotationMap) {
         final Map<String, Object> attributes = new LinkedHashMap<>();
 
         // when combining annotations use the median value from all input vcs which had annotations provided
@@ -299,7 +300,7 @@ final class ReferenceConfidenceVariantContextMerger {
      * @param alleles  the original alleles alleles
      * @return a non-null alleles of non-symbolic alleles
      */
-    private static List<Allele> nonSymbolicAlleles(final List<Allele> alleles) {
+    protected static List<Allele> nonSymbolicAlleles(final List<Allele> alleles) {
         return alleles.stream()
                 .filter(a -> !a.isSymbolic())
                 .collect(Collectors.toList());
@@ -313,7 +314,7 @@ final class ReferenceConfidenceVariantContextMerger {
      * @param refBase the reference allele to use if all contexts in the VC are spanning
      * @return new Allele or null if no reference allele/base is available
      */
-    private static Allele determineReferenceAlleleGivenReferenceBase(final List<VariantContext> VCs, final Locatable loc, final Byte refBase) {
+    protected static Allele determineReferenceAlleleGivenReferenceBase(final List<VariantContext> VCs, final Locatable loc, final Byte refBase) {
         final Allele refAllele = GATKVariantContextUtils.determineReferenceAllele(VCs, loc);
         if ( refAllele == null ) {
             if (refBase == null) {
@@ -331,7 +332,7 @@ final class ReferenceConfidenceVariantContextMerger {
      *
      * @param attributes the attribute map
      */
-    private static void removeStaleAttributesAfterMerge(final Map<String, Object> attributes) {
+    protected static void removeStaleAttributesAfterMerge(final Map<String, Object> attributes) {
         attributes.remove(VCFConstants.ALLELE_COUNT_KEY);
         attributes.remove(VCFConstants.ALLELE_FREQUENCY_KEY);
         attributes.remove(VCFConstants.ALLELE_NUMBER_KEY);
@@ -347,8 +348,8 @@ final class ReferenceConfidenceVariantContextMerger {
      * @param annotationMap              map of annotations for combining later
      */
     @VisibleForTesting
-    static <T extends Comparable<? super T>> void addReferenceConfidenceAttributes(final Map<String, Object> myAttributes,
-                                                         final Map<String, List<Comparable>> annotationMap) {
+    protected static <T extends Comparable<? super T>> void addReferenceConfidenceAttributes(final Map<String, Object> myAttributes,
+                                                                                             final Map<String, List<Comparable>> annotationMap) {
         for ( final Map.Entry<String, Object> p : myAttributes.entrySet() ) {
             final String key = p.getKey();
             final Object value = p.getValue();
@@ -397,10 +398,10 @@ final class ReferenceConfidenceVariantContextMerger {
      * @param targetAlleles         the list of target alleles
      * @param samplesAreUniquified  true if sample names have been uniquified
      */
-    private GenotypesContext mergeRefConfidenceGenotypes(final VariantContext vc,
-                                                    final List<Allele> remappedAlleles,
-                                                    final List<Allele> targetAlleles,
-                                                    final boolean samplesAreUniquified) {
+    protected GenotypesContext mergeRefConfidenceGenotypes(final VariantContext vc,
+                                                           final List<Allele> remappedAlleles,
+                                                           final List<Allele> targetAlleles,
+                                                           final boolean samplesAreUniquified) {
         final GenotypesContext mergedGenotypes = GenotypesContext.create();
         final int maximumPloidy = vc.getMaxPloidy(GATKVariantContextUtils.DEFAULT_PLOIDY);
         // the map is different depending on the ploidy, so in order to keep this method flexible (mixed ploidies)
