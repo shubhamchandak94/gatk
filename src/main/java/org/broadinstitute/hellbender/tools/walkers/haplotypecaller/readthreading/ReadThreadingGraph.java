@@ -1139,8 +1139,8 @@ public class ReadThreadingGraph extends BaseGraph<MultiDeBruijnVertex, MultiSamp
     }
 
     /**
-     * Add the given read to the sequence graph.  Ultimately the read will get sent through addSequence(), but first
-     * this method ensures we only use high quality bases and accounts for reduced reads, etc.
+     * Add a read to the sequence graph.  Finds maximal consecutive runs of bases with sufficient quality
+     * and applies addSequence() to these subreads if they are longer than the kmer size.
      *
      * @param read a non-null read
      */
