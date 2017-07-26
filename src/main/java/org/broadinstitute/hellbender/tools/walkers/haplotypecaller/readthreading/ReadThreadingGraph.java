@@ -788,6 +788,17 @@ public class ReadThreadingGraph extends BaseGraph<MultiDeBruijnVertex, MultiSamp
         return findPath(vertex, pruneFactor, v -> isReferenceNode(v) || outDegreeOf(v) != 1, v -> isReferenceNode(v), v -> outgoingEdgeOf(v), e -> getEdgeTarget(e));
     }
 
+    /**
+     * Finds a path starting from a given vertex and satisfying various predicates
+     *
+     * @param vertex   the original vertex
+     * @param pruneFactor  the prune factor to use in ignoring chain pieces
+     * @param done predicate on vertices testing whether the end of the path has been reached
+     * @param returnPath predicate on the final vertex in the path determining whether to return the path
+     * @param nextEdge function on vertices returning the next edge in the path
+     * @param nextNode function of edges returning the next vertex in the path
+     * @return a path, if one satisfying all predicates is found, {@code null} otherwise
+     */
     private  List<MultiDeBruijnVertex> findPath(final MultiDeBruijnVertex vertex, final int pruneFactor,
                                             final Predicate<MultiDeBruijnVertex> done,
                                             final Predicate<MultiDeBruijnVertex> returnPath,

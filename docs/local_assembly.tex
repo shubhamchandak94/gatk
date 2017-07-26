@@ -1,0 +1,77 @@
+\documentclass[nofootinbib,amssymb,amsmath]{revtex4}
+\usepackage{mathtools}
+\usepackage{amsthm}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{color}
+
+%Put an averaged random variable between brackets
+\newcommand{\ave}[1]{\left\langle #1 \right\rangle}
+\newcommand{\HC}{\texttt{HaplotypeCaller}}
+\newcommand{\Mutect}{\texttt{Mutect}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+
+\def\SL#1{{\color [rgb]{0,0,0.8} [SL: #1]}}
+\def\DB#1{{\color [rgb]{0,0.8,0} [DB: #1]}}
+
+\begin{document}
+
+\title{Local Assembly in HaplotypeCaller and Mutect}
+\author{David Benjamin\footnote{The author took no part in development of the methods described below -- credit belongs to several others on the GATK team. }}
+\email{davidben@broadinstitute.org}
+\affiliation{Broad Institute, 75 Ames Street, Cambridge, MA 02142}
+
+\date{\today}
+
+\begin{abstract}
+The GATK tool \HC~ and \Mutect~ assemble reads aligned within a window of several hundred base pairs into a de Bruijn graph of local variation.  Local haplotypes correspond to paths in this de Bruijn graph, and the downstream likelihood calculations in both tools involve aligning reads to these haplotypes.  Here we describe how this de Bruijn graph is generated.
+\end{abstract}
+
+\maketitle
+
+\section{Correcting Reads} \label{correcting-reads}
+Read error correction is turned off by default in \HC~ and \Mutect~ and we are not familiar with it.  The idea is as follows: large kmers are good because they contain more phasing information and therefore yield a simpler de Bruijn graph.  For example, two SNVs 20 bases apart with sequenced with error-free reads yield a de Bruijn graph with $2 \times 2 = 4$ paths if $k = 10$ but only $2$ paths if $k = 40$, because the latter spans the phased SNVs.  The drawback is that larger kmers are more liable to be lost due to sequencing error simply because they contain more bases.  The idea of read error correction is to rescue kmers from the occasional error.
+
+First, the \code{ReadErrorCorrector} kmerizes every read and counts the occurrences of each kmer.  Then it builds a map of kmer corrections where kmers that appear often\footnote{By default, 20 times or more.  This threshold is set by the \code{minObservationsForKmerToBeSolid} command line argument.} map to themselves and kmers that appear only once\footnote{This is a hardcoded threshold.} map to their nearest neighbor in Hamming distance\footnote{For simplicity we consider only substitution errors, eg the distance between ACGGT and AGGTG is 3} within a maximum of two mismatches\footnote{This is a hardcoded threshold.}.  Kmers that appear between 1 and 20 times are not part of the correction map.
+
+Then, for every base in every read, the \code{ReadErrorCorrector} queries the kmer correction map for each overlapping kmer.  For example, to correct the fourth base of read ACGTATTC if k = 3, it looks at the corrections for CGT, GTA, and TAT at their thirds, second, and first positions, respectively.  If and only if the corrections are unanimous, the base is corrected.  Note that corrected reads are used only for assembly and the original reads are used downstream.
+
+\section{Building the graph} \label{graph-assembly}
+Next, the \code{ReadThreadingAssembler} assembles the (corrected) reads over several different kmer sizes specified by the \code{kmerSize} argument\footnote{By default, 10 and 25.  This size is a compromise and no single value is the best choice for all regions.  Large kmers are more likely to be unique and to yield a graph with no cycles, which is especially important in low-complexity regions, but they are more sensitive to errors and low coverage.}.  If the given kmer sizes fail to produce a graph without cycles, the \code{ReadThreadingAssembler} repeatedly increases $k$ by 10 bases until assembly succeeds.
+
+The first step is to create a set of sequences to be kmerized and put into the de Bruijn graph.  These sequences are: the reference haplotype, any requested alleles in \HC's GGA mode, and maximal subsequences of reads with base quality at least 10 and at least one kmer long.  That is, a read with 100 bases and a base of quality 7 at position 70 yields sequences of length 69 and 30 if $k = 10$ and a single sequence of length 69 if $k = 40$.
+
+Before building the graph, the \code{ReadThreadingAssembler} finds the set of all kmers that appear twice in the same sequence i.e. twice in the reference or twice in any read.  Then each sequence is kmerized starting from the first kmer that is not in this set.  When a new kmer appears, a vertex is added to the graph; otherwise an edge is added (or the multiplicity of an existing edge incremented) from the preceding kmer to the current one.  Up to this point, we have produced a de Bruijn graph in textbook fashion, with the exception that we have excluded kmers containing low-quality bases and non-unique kmers at the beginning of reads.  Note that this is a directed graph of kmers from aligned reads (i.e. aligned to the forward strand of the reference), not a bidirected graph of unaligned reads that could come from either strand, with the complications of associating a kmer with its reverse complement.
+
+
+\section{Cleaning the Graph} \label{graph-cleaning}
+Before deciding on candidate haplotypes, the assembler simplifies the graph with the following heuristics to remove spurious paths and to merge variant paths that diverge from the reference.
+\begin{itemize}
+\item pruning: the assembler finds all maximal non-branching subgraphs and removes those that 1) do not share an edge with the reference path and 2) contain no edges with sufficient multiplicity\footnote{By default 2.  This is controlled by the \code{minPruning} argument.}  While the default multiplicity threshold of 2 is quite permissive, it \textit{does} cause \Mutect~ to lose sensitivity for deletions occurring in a single read\footnote{While a SNV occurring on a single read would never be called due to its low likelihood, a long deletion in a non-STR context could easily be supported by a single read.}.
+\item dangling tails: The assembler only outputs haplotypes that start and end with a reference kmer, so it attempts to rescue paths in the graph that do not.  To rescue a ``dangling tails" -- a path that ends in a non-reference kmer vertex -- the assembler first traverses the graph backwards from this vertex to a reference vertex.  If during traversal it encounters a vertex with more than one incoming edge it gives up\footnote{as opposed to doing eg depth-first search of all possible paths back to the reference.}  It also gives up if it encounters a vertex with more than one outgoing edge, that is, if the path branches again after diverging from the reference\footnote{It seems like this could be changed to increase sensitivity.}.  Then it generates the Smith-Waterman alignment of the branching path versus the reference path after the vertex at which they diverge.  If the alignment's CIGAR contains three or fewer elements, that is, if the alignment has at most one indel,
+
+To merge the dangling tail back into the reference path, the assembler finds the beginning of the maximal common suffix of the dangling path and the reference path, that is, the point at which the sequences coverges\footnote{this is \textit{not} where the \textit{paths in the graph} converge (they don't) because kmers in the suffix disagree with the ref at upstream bases.} and adds an edge between the dangling path's vertex and the reference path's vertex at this position.  Note that this means that the graph is no longer a valid de Bruijn graph because the dangling vertex kmer and its succeeding reference vertex kmer do not overlap by $k - 1$ bases.  Nonetheless, this graph yields valid haplotypes when we later ``zip'' the graph by accumulating the last base of each kmer.
+
+\item dangling heads: This is the mirror image of dangling tails.
+
+\item non-reference paths: after attempting to merge dangling heads and tails into the reference path, the assembler deletes edges and vertices belonging to dead ends i.e. non-branching subgraphs that start at non-reference source vertices or end at non-reference sink vertices.  This is achieved by performing a breadth-first search of vertices moving forward from the reference source and a breadth-first search of vertices moving backwards from the reference sink and keeping only vertices found in both searches.
+
+\item zipping chains: a de Bruijn graph of kmers is convenient for performing assembly but is inefficient for summarizing the results of assembly.  In this step the assembler converts the de Bruijn graph\footnote{or rather, if dangling paths have been merged, an \textit{almost} de Bruijn graph.} into a sequence graph by combining all vertices in each maximal non-branching subgraph (i.e. each linear chain) into a single vertex containing the sequence implied by those vertices' kmers\footnote{That is, the concatenation of the last bases of all kmers, except for the first vertex which contributes its entire kmer if and only if it is a source.}.  Thus, for example, a de Bruijn graph containing one reference path and one bubble for a single variant yields a sequence graph with four vertices: the reference subgraphs before and after the bubble and the two sides of the bubble.
+
+\item merging diamonds: the assembler looks for nodes $A$ and $C$ such that multiple paths $A \rightarrow B_i \rightarrow C$ exist and absorbs the common prefix of $\{B_i\}$ into $A$ and the common suffix of $\{ B_i \}$ into $C$.  For example, if $k = 10$ and there was a single SNV bubble in the de Bruijn graph, the zipped sequence graph has a reference source path  ($A$), a reference sink path ($C$) and two sides of the bubble ($B_1$ and $B_2$) that are each $10$ bases long.  Since $B_1$ and $B_2$ differ only in a single base, their common bases can be absorbed into $A$ and $C$ such that $B_1$ and $B_2$ contain only a single base each.  Merging tails works the same way without the terminal vertex $C$ and merging common suffixes works the same way without the terminal vertex $A$.
+
+\item splitting common prefixes and suffixes: if there are multiple nodes $S_i$ with a common predecessor and successor of the form $S_i = A + x_i + B$, where $A$ is a common prefix, $B$ is a common suffix, and $x_i$ is unique to $S_i$, the assembler splits each $S_i$ such that $A$ and $B$ become independent nodes, with the $x_i$ in between.
+
+\item the clean-up steps of zipping chains, merging diamonds, tails, and common suffixes, and splitting common prefixes and suffixes are repeated until no more transformations occur.
+
+\end{itemize}
+
+\section{Finding Haplotypes} \label{finding-haplotypes}
+At this point there is one cleaned sequence graph for each successful kmer size.  For each graph we find the best haplotypes\footnote{This is 128 by default and set by the \code{maxNumHaplotypesInPopulation} argument.} according the following score: the score of a path (haplotype) in a sequence graph is the sum over all branching vertices in the path of the log of the multiplicity of the outgoing edge in the path minus the log of the total multiplicity of all outgoing edges.  This description completely defines the best haplotypes; the actual implementation is a somewhat complicated recursive algorithm with lots of polymorphism.
+
+\end{document}
