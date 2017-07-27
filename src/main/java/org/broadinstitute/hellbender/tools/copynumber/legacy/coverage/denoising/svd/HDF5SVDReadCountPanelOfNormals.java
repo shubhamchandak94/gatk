@@ -232,17 +232,24 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
                         numEigensamplesRequested, numEigensamples));
             }
             logger.info(String.format("Performing SVD (truncated at %d eigensamples) of standardized counts (transposed to %d x %d)...",
-                    Math.min(numEigensamples, numPanelSamples), numPanelIntervals, numPanelSamples));
+                    numEigensamples, numPanelIntervals, numPanelSamples));
             final SingularValueDecomposition<RowMatrix, Matrix> svd = SparkConverter.convertRealMatrixToSparkRowMatrix(
                     ctx, preprocessedStandardizedResult.preprocessedStandardizedProfile.transpose(), NUM_SLICES_FOR_SPARK_MATRIX_CONVERSION)
                     .computeSVD(numEigensamples, true, EPSILON);
             final double[] singularValues = svd.s().toArray();    //should be in decreasing order (with corresponding matrices below)
+            if (singularValues.length == 0) {
+                throw new UserException("No non-zero singular values were found.  Stricter filtering criteria may be required.");
+            }
+            if (singularValues.length < numEigensamplesRequested) {
+                logger.warn(String.format("Attempted to truncate at %d eigensamples, but only %d non-zero singular values were found...",
+                        numEigensamples, singularValues.length));
+            }
             final double[][] eigensampleVectors = SparkConverter.convertSparkRowMatrixToRealMatrix(svd.U(), numPanelIntervals).getData();
 
             logger.info(String.format("Writing singular values (%d)...", singularValues.length));
             pon.writeSingularValues(singularValues);
 
-            logger.info(String.format("Writing eigensample vectors (transposed to %d x %d)...", eigensampleVectors.length, eigensampleVectors[0].length));
+            logger.info(String.format("Writing eigensample vectors (transposed to %d x %d)...", eigensampleVectors[0].length, eigensampleVectors.length));
             pon.writeEigensampleVectors(eigensampleVectors);
         } catch (final RuntimeException e) {
             //if any exceptions encountered, delete partial output and rethrow
