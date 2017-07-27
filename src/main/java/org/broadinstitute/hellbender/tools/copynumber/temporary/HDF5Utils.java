@@ -72,8 +72,8 @@ public class HDF5Utils {
         file.makeDoubleMatrix(path + INTERVAL_MATRIX_SUB_PATH, matrix);
     }
 
-    private static final String NUMBER_OF_ROWS_SUB_PATH = "/num_rows";
-    private static final String NUMBER_OF_COLUMNS_SUB_PATH = "/num_columns";
+    public static final String NUMBER_OF_ROWS_SUB_PATH = "/num_rows";
+    public static final String NUMBER_OF_COLUMNS_SUB_PATH = "/num_columns";
     private static final String NUMBER_OF_CHUNKS_SUB_PATH = "/num_chunks";
     private static final String CHUNK_INDEX_PATH_SUFFIX = "/chunk_";
 

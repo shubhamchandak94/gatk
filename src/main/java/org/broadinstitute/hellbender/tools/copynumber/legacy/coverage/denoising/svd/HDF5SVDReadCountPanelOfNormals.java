@@ -64,6 +64,7 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
     private static final String PANEL_INTERVAL_FRACTIONAL_MEDIANS_PATH = PANEL_GROUP_NAME + "/interval_fractional_medians";
     private static final String PANEL_SINGULAR_VALUES_PATH = PANEL_GROUP_NAME + "/singular_values";
     private static final String PANEL_EIGENSAMPLE_VECTORS_PATH = PANEL_GROUP_NAME + "/transposed_eigensamples_samples_by_intervals";
+    private static final String PANEL_NUM_EIGENSAMPLES_PATH = PANEL_EIGENSAMPLE_VECTORS_PATH + HDF5Utils.NUMBER_OF_ROWS_SUB_PATH;
 
     private final Lazy<List<Locatable>> originalIntervals;
     private final Lazy<List<Locatable>> panelIntervals;
@@ -93,7 +94,7 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
 
     @Override
     public int getNumEigensamples() {
-        return file.readStringArray(PANEL_SAMPLE_FILENAMES_PATH).length;
+        return (int) file.readDouble(PANEL_NUM_EIGENSAMPLES_PATH);
     }
 
     @Override
