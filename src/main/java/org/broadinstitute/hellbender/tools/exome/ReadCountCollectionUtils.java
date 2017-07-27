@@ -13,9 +13,10 @@ import org.apache.commons.math3.stat.descriptive.rank.Percentile;
 import org.apache.commons.math3.util.FastMath;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hdf5.HDF5File;
+import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.copynumber.temporary.HDF5ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.samplenamefinder.SampleNameFinder;
-import org.broadinstitute.hellbender.tools.pon.coverage.coveragehdf5.HDF5Coverage;
 import org.broadinstitute.hellbender.utils.MatrixSummaryUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -423,7 +424,7 @@ public final class ReadCountCollectionUtils {
     }
 
     /**
-     *  Write a simple target to number mapping as a HDF5 file.
+     *  Write a simple interval to number mapping as a HDF5 file.
      *
      *  When this file is read, all numbers will have been converted to double.  See {@link ReadCountCollectionUtils::parseHdf5AsDouble}
      *
@@ -447,20 +448,18 @@ public final class ReadCountCollectionUtils {
             newTargets.add(new Target(entry.getKey()));
             newTargetValues[i][0] = entry.getValue().doubleValue();
         }
-        HDF5Coverage.create(outFile, newTargets, newTargetValues, Collections.singletonList(sampleName));
+        HDF5ReadCountCollection.create(outFile, newTargets, newTargetValues, Collections.singletonList(sampleName));
     }
 
     /**
      *
-     * @param hdf5File hdf5 file written by {@link ReadCountCollectionUtils::writeReadCountsFromSimpleIntervalToHdf5}
+     * @param file hdf5 file written by {@link ReadCountCollectionUtils::writeReadCountsFromSimpleIntervalToHdf5}
      * @return ReadCountCollection with data stored as doubles.
-     * @throws IOException when HDF5 file cannot be read properly.
      */
-    public static ReadCountCollection parseHdf5AsDouble(final File hdf5File) throws IOException {
-        try (final HDF5File hdf5ReadCountCollectionReader = new HDF5File(hdf5File, HDF5File.OpenMode.READ_ONLY)) {
-            final HDF5Coverage hdf5Coverage = new HDF5Coverage(hdf5ReadCountCollectionReader);
-            final double[][] targetValues = hdf5Coverage.getTargetValues();
-            return new ReadCountCollection(hdf5Coverage.getRawTargets(), hdf5Coverage.getSampleNames(), new Array2DRowRealMatrix(targetValues));
+    public static ReadCountCollection parseHdf5AsDouble(final File file) {
+        try (final HDF5File hdf5ReadCountCollectionReader = new HDF5File(file, HDF5File.OpenMode.READ_ONLY)) {
+            final HDF5ReadCountCollection hdf5Read = new HDF5ReadCountCollection(hdf5ReadCountCollectionReader);
+            return new ReadCountCollection(hdf5Read.getTargets(), hdf5Read.getSampleNames(), hdf5Read.getReadCounts());
         }
     }
 

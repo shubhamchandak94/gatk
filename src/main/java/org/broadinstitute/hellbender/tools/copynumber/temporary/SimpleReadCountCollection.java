@@ -1,10 +1,11 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd;
+package org.broadinstitute.hellbender.tools.copynumber.temporary;
 
 import htsjdk.samtools.util.Locatable;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -91,6 +92,11 @@ public final class SimpleReadCountCollection {
         } catch (final IOException e) {
             throw new UserException.CouldNotReadInputFile(file);
         }
+    }
+
+    public static SimpleReadCountCollection read(final HDF5File file) {
+        final HDF5ReadCountCollection hdf5ReadCountCollection = new HDF5ReadCountCollection(file);
+        return new SimpleReadCountCollection(hdf5ReadCountCollection.getIntervals(), hdf5ReadCountCollection.getReadCounts());
     }
 
     private static int countRows(final File file) {

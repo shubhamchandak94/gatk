@@ -66,7 +66,7 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
     private static final Set<String> NONAUTOSOMALCONTIGS = new HashSet<>(Arrays.asList("X", "Y", "MT", "M", "x", "y",
             "m", "chrX", "chrY", "chrMT", "chrM", "chrm"));
 
-    protected static final String DROP_NON_AUTOSOMES_SHORT_NAME = "keepxy";
+    protected static final String DROP_NON_AUTOSOMES_SHORT_NAME = "keepXYMT";
     protected static final String DROP_NON_AUTOSOMES_LONG_NAME = "keepXYMT";
 
     @Argument(doc = "Keep X, Y, GL*, NC_*, and MT regions.  If this option is not specified, these regions will be dropped, regardless of intervals specified.  Use -L (or -XL) and enable this option for exact specification of intervals.  This option may be removed in the future.",

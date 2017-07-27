@@ -8,13 +8,14 @@ import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hdf5.HDF5File;
+import org.broadinstitute.hdf5.HDF5LibException;
 import org.broadinstitute.hdf5.HDF5Library;
 import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
 import org.broadinstitute.hellbender.cmdline.ExomeStandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.HDF5RandomizedSVDReadCountPanelOfNormals;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.HDF5SVDReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.SVDDenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.SVDDenoisingUtils;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.SVDReadCountPanelOfNormals;
@@ -115,19 +116,15 @@ public final class DenoiseReadCounts extends CommandLineProgram {
         IOUtils.canReadFile(inputReadCountFile);
         logger.info(String.format("Reading read-count file (%s)...", inputReadCountFile));
         //TODO clean this up once Targets are removed and updated ReadCountCollection is available
-        final ReadCountCollection readCounts;
-        try {
-            readCounts = ReadCountCollectionUtils.parse(inputReadCountFile);
-        } catch (final IOException e) {
-            throw new UserException.CouldNotReadInputFile(inputReadCountFile);
-        }
+        final ReadCountCollection readCounts = parseReadCountFile(inputReadCountFile);
+
         //check that read-count collection contains single sample and integer counts
         SVDDenoisingUtils.validateReadCounts(readCounts);
 
         if (inputPanelOfNormalsFile != null) {  //denoise using panel of normals
             IOUtils.canReadFile(inputPanelOfNormalsFile);
             try (final HDF5File hdf5PanelOfNormalsFile = new HDF5File(inputPanelOfNormalsFile)) {  //HDF5File implements AutoCloseable
-                final SVDReadCountPanelOfNormals panelOfNormals = HDF5RandomizedSVDReadCountPanelOfNormals.read(hdf5PanelOfNormalsFile);
+                final SVDReadCountPanelOfNormals panelOfNormals = HDF5SVDReadCountPanelOfNormals.read(hdf5PanelOfNormalsFile);
 
                 if (annotatedIntervalArguments.readTargetCollection(true) != null &&
                         panelOfNormals.getOriginalIntervalGCContent() != null) {
@@ -169,6 +166,18 @@ public final class DenoiseReadCounts extends CommandLineProgram {
         logger.info("Read counts successfully denoised.");
 
         return "SUCCESS";
+    }
+
+    private static ReadCountCollection parseReadCountFile(final File inputReadCountFile) {
+        try {
+            return ReadCountCollectionUtils.parseHdf5AsDouble(inputReadCountFile);
+        } catch (final HDF5LibException e) {
+            try {
+                return ReadCountCollectionUtils.parse(inputReadCountFile);
+            } catch (final IOException ioe) {
+                throw new UserException.CouldNotReadInputFile(inputReadCountFile);
+            }
+        }
     }
 
     private static double[] getIntervalGCContent(final Logger logger,

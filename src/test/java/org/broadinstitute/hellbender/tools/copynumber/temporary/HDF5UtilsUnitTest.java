@@ -1,14 +1,12 @@
-package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd;
+package org.broadinstitute.hellbender.tools.copynumber.temporary;
 
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.DefaultRealMatrixChangingVisitor;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.random.RandomDataGenerator;
 import org.broadinstitute.hdf5.HDF5File;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.HDF5RandomizedSVDReadCountPanelOfNormals.HDF5ChunkedDoubleMatrixHelper;
 import org.broadinstitute.hellbender.tools.pon.PoNTestUtils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
-import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -16,9 +14,10 @@ import org.testng.annotations.Test;
 import java.io.File;
 
 /**
- * TODO
+ * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
-public final class HDF5RandomizedSVDReadCountPanelOfNormalsUnitTest extends BaseTest {
+public final class HDF5UtilsUnitTest {
+
     private static final int CHUNK_DIVISOR = 256;
 
     @DataProvider(name = "testCreateLargeMatrixData")
@@ -38,15 +37,13 @@ public final class HDF5RandomizedSVDReadCountPanelOfNormalsUnitTest extends Base
         final String matrixPath = "/test/matrix";
 
         final RealMatrix largeMatrix = createMatrixOfGaussianValues(numRows, numColumns, mean, sigma);
-        logger.debug("Large matrix created.");
         final File tempOutputHD5 = IOUtils.createTempFile("large-matrix-", ".hd5");
         try (final HDF5File hdf5File = new HDF5File(tempOutputHD5, HDF5File.OpenMode.CREATE)) {
-            HDF5ChunkedDoubleMatrixHelper.writeMatrix(hdf5File, matrixPath, largeMatrix.getData(), CHUNK_DIVISOR);
+            HDF5Utils.writeChunkedDoubleMatrix(hdf5File, matrixPath, largeMatrix.getData(), CHUNK_DIVISOR);
         }
-        logger.debug("Large matrix written.");
 
         try (final HDF5File hdf5FileForReading = new HDF5File(tempOutputHD5, HDF5File.OpenMode.READ_ONLY)) {
-            final double[][] result = HDF5ChunkedDoubleMatrixHelper.readMatrix(hdf5FileForReading, matrixPath);
+            final double[][] result = HDF5Utils.readChunkedDoubleMatrix(hdf5FileForReading, matrixPath);
             final RealMatrix resultAsRealMatrix = new Array2DRowRealMatrix(result, false);
             Assert.assertTrue(resultAsRealMatrix.getRowDimension() == numRows);
             Assert.assertTrue(resultAsRealMatrix.getColumnDimension() == numColumns);

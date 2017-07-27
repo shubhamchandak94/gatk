@@ -9,13 +9,15 @@ import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
+import org.broadinstitute.hdf5.HDF5File;
+import org.broadinstitute.hdf5.HDF5LibException;
 import org.broadinstitute.hdf5.HDF5Library;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
 import org.broadinstitute.hellbender.engine.spark.SparkCommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.HDF5RandomizedSVDReadCountPanelOfNormals;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.SimpleReadCountCollection;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.HDF5SVDReadCountPanelOfNormals;
+import org.broadinstitute.hellbender.tools.copynumber.temporary.SimpleReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.Target;
 import org.broadinstitute.hellbender.tools.exome.TargetAnnotation;
 import org.broadinstitute.hellbender.tools.exome.TargetArgumentCollection;
@@ -217,7 +219,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
 
         //create the PoN
         logger.info("Creating the panel of normals...");
-        HDF5RandomizedSVDReadCountPanelOfNormals.create(outputPanelOfNormalsFile, getCommandLine(),
+        HDF5SVDReadCountPanelOfNormals.create(outputPanelOfNormalsFile, getCommandLine(),
                 readCountMatrix, sampleFilenames, intervals, intervalGCContent,
                 minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
                 extremeSampleMedianPercentile, extremeOutlierTruncationPercentile, numEigensamplesRequested, ctx);
@@ -277,7 +279,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             final int sampleIndex = inputReadCountFilesIterator.nextIndex();
             final File inputReadCountFile = inputReadCountFilesIterator.next();
             logger.info(String.format("Aggregating read-count file %s (%d / %d)", inputReadCountFile, sampleIndex + 1, numSamples));
-            final SimpleReadCountCollection readCounts = SimpleReadCountCollection.read(inputReadCountFile);
+            final SimpleReadCountCollection readCounts = parseReadCountFile(inputReadCountFile);
             Utils.validateArg(readCounts.getIntervals().equals(intervals),
                     String.format("Intervals for read-count file %s do not match those in other read-count files.", inputReadCountFile));
             readCountMatrix.setRow(sampleIndex, readCounts.getReadCounts().getRow(0));
@@ -285,16 +287,11 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         return readCountMatrix;
     }
 
-//    /**
-//     * Read interval variances from an HDF5 PoN file and write the corresponding weights
-//     * to a file that can be read in by R CBS.
-//     */
-//    private static void writeIntervalWeightsFile(final File ponFile, final File outputFile) {
-//        IOUtils.canReadFile(ponFile);
-//        try (final HDF5File file = new HDF5File(ponFile, HDF5File.OpenMode.READ_ONLY)) {
-//            final HDF5PCACoveragePoN pon = new HDF5PCACoveragePoN(file);
-//            final double[] intervalWeights = DoubleStream.of(pon.getIntervalVariances()).map(v -> 1 / v).toArray();
-//            ParamUtils.writeValuesToFile(intervalWeights, outputFile);
-//        }
-//    }
+    private static SimpleReadCountCollection parseReadCountFile(final File inputReadCountFile) {
+        try (final HDF5File hdf5ReadCountFile = new HDF5File(inputReadCountFile)) {
+            return SimpleReadCountCollection.read(hdf5ReadCountFile);
+        } catch (final HDF5LibException e) {
+            return SimpleReadCountCollection.read(inputReadCountFile);
+        }
+    }
 }

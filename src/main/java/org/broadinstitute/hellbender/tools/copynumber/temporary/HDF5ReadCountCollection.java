@@ -1,0 +1,143 @@
+package org.broadinstitute.hellbender.tools.copynumber.temporary;
+
+import htsjdk.samtools.util.Lazy;
+import htsjdk.samtools.util.Locatable;
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.broadinstitute.hdf5.HDF5File;
+import org.broadinstitute.hellbender.exceptions.GATKException;
+import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
+import org.broadinstitute.hellbender.tools.exome.Target;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.Utils;
+
+import java.io.File;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+/**
+ * NOTE: There is code duplication in here, since some of the older code is going to be removed in the future.
+ *
+ * HDF5 paths are chosen to reflect that these files will ultimately only store data for a single sample,
+ * but code supports multiple samples.
+ */
+public class HDF5ReadCountCollection {
+    private static final String INTERVALS_GROUP_NAME = "/intervals";
+    private static final String SAMPLE_NAME_PATH = "/sample_name/value";
+    private static final String READ_COUNTS_PATH = "/read_counts/values";
+
+    private static final String TARGET_NAMES_PATH = "/target_names/values";
+
+    private final HDF5File file;
+    private Lazy<List<Locatable>> intervals;
+    private Lazy<List<String>> sampleNames;
+    private Lazy<List<String>> targetNames;
+
+    public HDF5ReadCountCollection(final HDF5File file) {
+        Utils.nonNull(file, "The input file cannot be null.");
+        this.file = file;
+        intervals = new Lazy<>(() -> HDF5Utils.readIntervals(file, INTERVALS_GROUP_NAME));
+        sampleNames = new Lazy<>(() -> readNames(file, SAMPLE_NAME_PATH));
+        targetNames  = new Lazy<>(() -> readNames(file, TARGET_NAMES_PATH));
+    }
+
+    public List<Locatable> getIntervals() {
+        return intervals.get();
+    }
+
+    public List<String> getSampleNames() {
+        return sampleNames.get();
+    }
+
+    public RealMatrix getReadCounts() {
+        final double[][] values = file.readDoubleMatrix(READ_COUNTS_PATH);
+        if (values.length != intervals.get().size()) {
+            throw new GATKException(String.format("Wrong number of elements in the read counts recovered " +
+                            "from file '%s': number of read counts found in file (%d) != number of intervals (%d).",
+                    file.getFile(), values.length, intervals.get().size()));
+        }
+        if (values[0].length != 1) {
+            throw new GATKException(String.format("Wrong number of elements in the read counts recovered " +
+                            "from file '%s': number of read counts found in file (%d) != number of samples (%d).",
+                    file.getFile(), values[0].length, sampleNames.get().size()));
+        }
+        return new Array2DRowRealMatrix(values);
+    }
+
+    public List<Target> getTargets() {
+        return IntStream.range(0, intervals.get().size()).boxed()
+                .map(i -> new Target(targetNames.get().get(i), intervals.get().get(i))).collect(Collectors.toList());
+    }
+
+    /**
+     *  Create (or modify) HDF5 file.
+     *
+     * @param outFile Path to the final HDF5 file.  Not {@code null}
+     * @param openMode See {@link HDF5File.OpenMode}.  Must be {@link HDF5File.OpenMode} CREATE or READ_WRITE.  Not {@code null}
+     * @param targets the intervals and names for each target.  Not {@code null}
+     * @param values a T x S matrix where T is the number of targets and S is the number of samples.  Not {@code null}
+     * @param sampleNames the column names for each of the value columns.  Not {@code null}
+     */
+    public static void write(final File outFile,
+                             final HDF5File.OpenMode openMode,
+                             final List<Target> targets, final double[][] values, final List<String> sampleNames) {
+        if (!openMode.equals(HDF5File.OpenMode.CREATE) && !openMode.equals(HDF5File.OpenMode.READ_WRITE)) {
+            throw new GATKException("The write method can only be used for HDF5 CREATE or READ_WRITE.");
+        }
+        Utils.nonNull(outFile);
+        Utils.nonNull(openMode);
+        Utils.nonNull(targets);
+        Utils.nonNull(values);
+        Utils.nonNull(sampleNames);
+
+        if (values.length != targets.size()) {
+            throw new GATKException("The shape of the values array (" + values.length + " x " + values[0].length + ") does not match the number of targets (" + targets.size() + ").");
+        }
+        if (values[0].length != sampleNames.size()) {
+            throw new GATKException("The shape of the values array (" + values.length + " x " + values[0].length + ") does not match the number of samples (" + sampleNames.size() + ").");
+        }
+
+        try (final HDF5File file = new HDF5File(outFile, openMode)) {
+            final HDF5ReadCountCollection hdf5ReadCountCollection = new HDF5ReadCountCollection(file);
+            hdf5ReadCountCollection.writeIntervals(targets);
+            hdf5ReadCountCollection.writeNames(SAMPLE_NAME_PATH, sampleNames);
+            hdf5ReadCountCollection.writeReadCounts(values);
+            hdf5ReadCountCollection.writeNames(TARGET_NAMES_PATH, targets.stream().map(Target::getName).collect(Collectors.toList()));
+        }
+    }
+
+    /**
+     *  See {@link HDF5ReadCountCollection ::write}, but only creates new files.  Will fail if file exists.
+     *
+     *  This is the recommended method for creating HDF5 files.
+     */
+    public static void create(final File outFile, final List<Target> targets, final double[][] values, final List<String> sampleNames) {
+        if (outFile.exists()) {
+            throw new UserException.BadInput(outFile.getAbsolutePath() + " already exists.  This only allows creation of new files.");
+        }
+        write(outFile, HDF5File.OpenMode.CREATE, targets, values, sampleNames);
+    }
+
+    private static List<String> readNames(final HDF5File reader, final String namesPath) {
+        final String[] values = reader.readStringArray(namesPath);
+        return Collections.unmodifiableList(Arrays.asList(values));
+    }
+
+    private <T extends Locatable> void writeIntervals(final List<T> intervals) {
+        HDF5Utils.writeIntervals(file, INTERVALS_GROUP_NAME, intervals);
+    }
+
+    private void writeNames(final String path, final List<String> names) {
+        file.makeStringArray(path, names.toArray(new String[names.size()]));
+    }
+
+    private void writeReadCounts(final double[][] readCounts) {
+        file.makeDoubleMatrix(READ_COUNTS_PATH, readCounts);
+    }
+}

@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.pon.coverage.coveragehdf5;
+package org.broadinstitute.hellbender.tools.copynumber.temporary;
 
 import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
@@ -15,23 +15,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
 
-public class HDF5CoverageUnitTest extends BaseTest {
+public class HDF5ReadCountCollectionUnitTest extends BaseTest {
 
     @Test
-    public void basicTest() throws IOException {
-        final File outputFile = createTempFile("HDF5Coverage", ".cov");
+    public void basicTest() {
+        final File outputFile = createTempFile("HDF5ReadCountCollection", ".cov");
         final List<Target> newTargets = new ArrayList<>();
         newTargets.add(new Target("target1", new SimpleInterval("1", 1000, 2000)));
         newTargets.add(new Target("target2", new SimpleInterval("1", 5000, 6000)));
 
         final List<String> sampleNames = new ArrayList<>();
         sampleNames.add("SAMPLE1");
-        sampleNames.add("SAMPLE2");
 
-        final double[][] newTargetValues = {{2,4}, {10,12}};
+        final double[][] newTargetValues = {{2}, {10}};
 
         // The output file already exists at this point, since it is a temp file.
-        HDF5Coverage.write(outputFile, HDF5File.OpenMode.READ_WRITE, newTargets, newTargetValues, sampleNames);
+        HDF5ReadCountCollection.write(outputFile, HDF5File.OpenMode.READ_WRITE, newTargets, newTargetValues, sampleNames);
 
         final ReadCountCollection rcc = ReadCountCollectionUtils.parseHdf5AsDouble(outputFile);
         Assert.assertEquals(rcc.columnNames(), sampleNames);
