@@ -25,7 +25,7 @@ public class HDF5ReadCountCollectionUnitTest extends BaseTest {
         final List<String> sampleNames = new ArrayList<>();
         sampleNames.add("SAMPLE1");
 
-        final double[][] newTargetValues = {{2}, {10}};
+        final double[][] newTargetValues = {{2, 10}};
 
         // The output file already exists at this point, since it is a temp file.
         HDF5ReadCountCollection.write(outputFile, newTargets, newTargetValues, sampleNames);
@@ -36,13 +36,10 @@ public class HDF5ReadCountCollectionUnitTest extends BaseTest {
         Assert.assertFalse(rcc.targets() == newTargets);
         Assert.assertFalse(rcc.columnNames() == sampleNames);
 
-        for (int j = 0; j < newTargetValues.length; j ++) {
-            final int j0 = j;
-            Assert.assertTrue(IntStream.range(0, newTargetValues[j0].length).allMatch(i -> newTargetValues[j0][i] == rcc.counts().getData()[j0][i]));
-        }
+        Assert.assertTrue(IntStream.range(0, newTargetValues.length).allMatch(i -> newTargetValues[i][0] == rcc.counts().getData()[0][i]));
 
-        Assert.assertEquals(rcc.counts().getData().length, newTargetValues.length);
-        Assert.assertEquals(rcc.counts().getData()[0].length, newTargetValues[0].length);
-        Assert.assertFalse(rcc.counts().getData() == newTargetValues);
+        Assert.assertEquals(rcc.counts().transpose().getData().length, newTargetValues.length);
+        Assert.assertEquals(rcc.counts().transpose().getData()[0].length, newTargetValues[0].length);
+        Assert.assertFalse(rcc.counts().transpose().getData() == newTargetValues);
     }
 }

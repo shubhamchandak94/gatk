@@ -53,15 +53,15 @@ public class HDF5ReadCountCollection {
 
     public RealMatrix getReadCounts() {
         final double[][] values = file.readDoubleMatrix(READ_COUNTS_PATH);
-        if (values.length != intervals.get().size()) {
-            throw new GATKException(String.format("Wrong number of elements in the read counts recovered " +
-                            "from file '%s': number of read counts found in file (%d) != number of intervals (%d).",
-                    file.getFile(), values.length, intervals.get().size()));
-        }
-        if (values[0].length != 1) {
+        if (values.length != sampleNames.get().size()) {
             throw new GATKException(String.format("Wrong number of elements in the read counts recovered " +
                             "from file '%s': number of read counts found in file (%d) != number of samples (%d).",
-                    file.getFile(), values[0].length, sampleNames.get().size()));
+                    file.getFile(), values.length, sampleNames.get().size()));
+        }
+        if (values[0].length != intervals.get().size()) {
+            throw new GATKException(String.format("Wrong number of elements in the read counts recovered " +
+                            "from file '%s': number of read counts found in file (%d) != number of intervals (%d).",
+                    file.getFile(), values[0].length, intervals.get().size()));
         }
         return new Array2DRowRealMatrix(values);
     }
@@ -86,11 +86,11 @@ public class HDF5ReadCountCollection {
         Utils.nonNull(values);
         Utils.nonNull(sampleNames);
 
-        if (values.length != targets.size()) {
-            throw new GATKException("The shape of the values array (" + values.length + " x " + values[0].length + ") does not match the number of targets (" + targets.size() + ").");
-        }
-        if (values[0].length != sampleNames.size()) {
+        if (values.length != sampleNames.size()) {
             throw new GATKException("The shape of the values array (" + values.length + " x " + values[0].length + ") does not match the number of samples (" + sampleNames.size() + ").");
+        }
+        if (values[0].length != targets.size()) {
+            throw new GATKException("The shape of the values array (" + values.length + " x " + values[0].length + ") does not match the number of targets (" + targets.size() + ").");
         }
 
         try (final HDF5File file = new HDF5File(outFile, HDF5File.OpenMode.CREATE)) {

@@ -439,12 +439,12 @@ public final class ReadCountCollectionUtils {
         Utils.nonNull(byKeySorted, "Targets cannot be null.");
 
         final List<Target> newTargets = new ArrayList<>(byKeySorted.size());
-        final double[][] newTargetValues = new double[byKeySorted.size()][1];
+        final double[][] newTargetValues = new double[1][byKeySorted.size()];
         final Iterator<Map.Entry<SimpleInterval, N>> iterator = byKeySorted.entrySet().iterator();
         for (int i = 0; i < byKeySorted.entrySet().size(); i++) {
             Map.Entry<SimpleInterval, N> entry = iterator.next();
             newTargets.add(new Target(entry.getKey()));
-            newTargetValues[i][0] = entry.getValue().doubleValue();
+            newTargetValues[0][i] = entry.getValue().doubleValue();
         }
         HDF5ReadCountCollection.write(outFile, newTargets, newTargetValues, Collections.singletonList(sampleName));
     }
@@ -457,7 +457,7 @@ public final class ReadCountCollectionUtils {
     public static ReadCountCollection parseHdf5AsDouble(final File file) {
         try (final HDF5File hdf5ReadCountCollectionReader = new HDF5File(file, HDF5File.OpenMode.READ_ONLY)) {
             final HDF5ReadCountCollection hdf5Read = new HDF5ReadCountCollection(hdf5ReadCountCollectionReader);
-            return new ReadCountCollection(hdf5Read.getTargets(), hdf5Read.getSampleNames(), hdf5Read.getReadCounts());
+            return new ReadCountCollection(hdf5Read.getTargets(), hdf5Read.getSampleNames(), hdf5Read.getReadCounts().transpose());
         }
     }
 
