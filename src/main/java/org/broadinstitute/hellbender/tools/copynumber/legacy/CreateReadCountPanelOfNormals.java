@@ -262,7 +262,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
                                                                       final List<File> inputReadCountFiles) {
         final File firstReadCountFile = inputReadCountFiles.get(0);
         logger.info(String.format("Retrieving intervals from first read-count file (%s)...", firstReadCountFile));
-        final SimpleReadCountCollection readCounts = SimpleReadCountCollection.read(firstReadCountFile);
+        final SimpleReadCountCollection readCounts = parseReadCountFile(firstReadCountFile);
         return readCounts.getIntervals();
     }
 
