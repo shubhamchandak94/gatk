@@ -438,7 +438,6 @@ public final class ReadCountCollectionUtils {
         Utils.nonNull(outFile, "Output file cannot be null.");
         Utils.nonNull(sampleName, "Sample name cannot be null.");
         Utils.nonNull(byKeySorted, "Targets cannot be null.");
-        if (outFile.exists()) {throw new UserException("Cannot overwrite HDF5 file that already exists.");}
 
         final List<Target> newTargets = new ArrayList<>(byKeySorted.size());
         final double[][] newTargetValues = new double[byKeySorted.size()][1];
@@ -448,7 +447,7 @@ public final class ReadCountCollectionUtils {
             newTargets.add(new Target(entry.getKey()));
             newTargetValues[i][0] = entry.getValue().doubleValue();
         }
-        HDF5ReadCountCollection.create(outFile, newTargets, newTargetValues, Collections.singletonList(sampleName));
+        HDF5ReadCountCollection.write(outFile, newTargets, newTargetValues, Collections.singletonList(sampleName));
     }
 
     /**

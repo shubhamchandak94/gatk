@@ -75,19 +75,13 @@ public class HDF5ReadCountCollection {
      *  Create (or modify) HDF5 file.
      *
      * @param outFile Path to the final HDF5 file.  Not {@code null}
-     * @param openMode See {@link HDF5File.OpenMode}.  Must be {@link HDF5File.OpenMode} CREATE or READ_WRITE.  Not {@code null}
      * @param targets the intervals and names for each target.  Not {@code null}
      * @param values a T x S matrix where T is the number of targets and S is the number of samples.  Not {@code null}
      * @param sampleNames the column names for each of the value columns.  Not {@code null}
      */
     public static void write(final File outFile,
-                             final HDF5File.OpenMode openMode,
                              final List<Target> targets, final double[][] values, final List<String> sampleNames) {
-        if (!openMode.equals(HDF5File.OpenMode.CREATE) && !openMode.equals(HDF5File.OpenMode.READ_WRITE)) {
-            throw new GATKException("The write method can only be used for HDF5 CREATE or READ_WRITE.");
-        }
         Utils.nonNull(outFile);
-        Utils.nonNull(openMode);
         Utils.nonNull(targets);
         Utils.nonNull(values);
         Utils.nonNull(sampleNames);
@@ -99,24 +93,12 @@ public class HDF5ReadCountCollection {
             throw new GATKException("The shape of the values array (" + values.length + " x " + values[0].length + ") does not match the number of samples (" + sampleNames.size() + ").");
         }
 
-        try (final HDF5File file = new HDF5File(outFile, openMode)) {
+        try (final HDF5File file = new HDF5File(outFile, HDF5File.OpenMode.CREATE)) {
             final HDF5ReadCountCollection hdf5ReadCountCollection = new HDF5ReadCountCollection(file);
             hdf5ReadCountCollection.writeIntervals(targets);
             hdf5ReadCountCollection.writeNames(SAMPLE_NAME_PATH, sampleNames);
             hdf5ReadCountCollection.writeReadCounts(values);
         }
-    }
-
-    /**
-     *  See {@link HDF5ReadCountCollection ::write}, but only creates new files.  Will fail if file exists.
-     *
-     *  This is the recommended method for creating HDF5 files.
-     */
-    public static void create(final File outFile, final List<Target> targets, final double[][] values, final List<String> sampleNames) {
-        if (outFile.exists()) {
-            throw new UserException.BadInput(outFile.getAbsolutePath() + " already exists.  This only allows creation of new files.");
-        }
-        write(outFile, HDF5File.OpenMode.CREATE, targets, values, sampleNames);
     }
 
     private static List<String> readNames(final HDF5File reader, final String namesPath) {
