@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.copynumber.temporary;
 
-import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollectionUtils;
 import org.broadinstitute.hellbender.tools.exome.Target;
@@ -10,7 +9,6 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -30,7 +28,7 @@ public class HDF5ReadCountCollectionUnitTest extends BaseTest {
         final double[][] newTargetValues = {{2}, {10}};
 
         // The output file already exists at this point, since it is a temp file.
-        HDF5ReadCountCollection.write(outputFile, HDF5File.OpenMode.READ_WRITE, newTargets, newTargetValues, sampleNames);
+        HDF5ReadCountCollection.write(outputFile, newTargets, newTargetValues, sampleNames);
 
         final ReadCountCollection rcc = ReadCountCollectionUtils.parseHdf5AsDouble(outputFile);
         Assert.assertEquals(rcc.columnNames(), sampleNames);
