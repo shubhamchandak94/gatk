@@ -13,7 +13,6 @@ import org.apache.commons.math3.stat.descriptive.rank.Percentile;
 import org.apache.commons.math3.util.FastMath;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hdf5.HDF5File;
-import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.temporary.HDF5ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.samplenamefinder.SampleNameFinder;
