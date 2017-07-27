@@ -21,8 +21,8 @@ public class HDF5ReadCountCollectionUnitTest extends BaseTest {
     public void basicTest() {
         final File outputFile = createTempFile("HDF5ReadCountCollection", ".cov");
         final List<Target> newTargets = new ArrayList<>();
-        newTargets.add(new Target("target1", new SimpleInterval("1", 1000, 2000)));
-        newTargets.add(new Target("target2", new SimpleInterval("1", 5000, 6000)));
+        newTargets.add(new Target(new SimpleInterval("1", 1000, 2000)));
+        newTargets.add(new Target(new SimpleInterval("1", 5000, 6000)));
 
         final List<String> sampleNames = new ArrayList<>();
         sampleNames.add("SAMPLE1");

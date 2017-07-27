@@ -32,19 +32,15 @@ public class HDF5ReadCountCollection {
     private static final String SAMPLE_NAME_PATH = "/sample_name/value";
     private static final String READ_COUNTS_PATH = "/read_counts/values";
 
-    private static final String TARGET_NAMES_PATH = "/target_names/values";
-
     private final HDF5File file;
     private Lazy<List<Locatable>> intervals;
     private Lazy<List<String>> sampleNames;
-    private Lazy<List<String>> targetNames;
 
     public HDF5ReadCountCollection(final HDF5File file) {
         Utils.nonNull(file, "The input file cannot be null.");
         this.file = file;
         intervals = new Lazy<>(() -> HDF5Utils.readIntervals(file, INTERVALS_GROUP_NAME));
         sampleNames = new Lazy<>(() -> readNames(file, SAMPLE_NAME_PATH));
-        targetNames  = new Lazy<>(() -> readNames(file, TARGET_NAMES_PATH));
     }
 
     public List<Locatable> getIntervals() {
@@ -72,7 +68,7 @@ public class HDF5ReadCountCollection {
 
     public List<Target> getTargets() {
         return IntStream.range(0, intervals.get().size()).boxed()
-                .map(i -> new Target(targetNames.get().get(i), intervals.get().get(i))).collect(Collectors.toList());
+                .map(i -> new Target((SimpleInterval) intervals.get().get(i))).collect(Collectors.toList());
     }
 
     /**
@@ -108,7 +104,6 @@ public class HDF5ReadCountCollection {
             hdf5ReadCountCollection.writeIntervals(targets);
             hdf5ReadCountCollection.writeNames(SAMPLE_NAME_PATH, sampleNames);
             hdf5ReadCountCollection.writeReadCounts(values);
-            hdf5ReadCountCollection.writeNames(TARGET_NAMES_PATH, targets.stream().map(Target::getName).collect(Collectors.toList()));
         }
     }
 
