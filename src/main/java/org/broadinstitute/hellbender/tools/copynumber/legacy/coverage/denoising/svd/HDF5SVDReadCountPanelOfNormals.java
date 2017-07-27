@@ -226,6 +226,8 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
 
             final int numPanelSamples = preprocessedStandardizedResult.preprocessedStandardizedProfile.getRowDimension();
             final int numPanelIntervals = preprocessedStandardizedResult.preprocessedStandardizedProfile.getColumnDimension();
+
+            //perform SVD, handling number of eigensamples requested vs. that available in filtered panel vs. that available from actual decomposition
             final int numEigensamples = Math.min(numEigensamplesRequested, numPanelSamples);
             if (numEigensamples < numEigensamplesRequested) {
                 logger.warn(String.format("%d eigensamples were requested but only %d are available in the panel of normals...",
