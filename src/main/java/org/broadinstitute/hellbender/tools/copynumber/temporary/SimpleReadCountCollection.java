@@ -1,22 +1,14 @@
 package org.broadinstitute.hellbender.tools.copynumber.temporary;
 
+import com.opencsv.CSVReader;
 import htsjdk.samtools.util.Locatable;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
-import org.supercsv.cellprocessor.ParseInt;
-import org.supercsv.cellprocessor.constraint.NotNull;
-import org.supercsv.cellprocessor.ift.CellProcessor;
-import org.supercsv.comment.CommentStartsWith;
-import org.supercsv.io.CsvListReader;
-import org.supercsv.io.ICsvListReader;
-import org.supercsv.prefs.CsvPreference;
 
 import java.io.File;
 import java.io.FileReader;
@@ -29,17 +21,11 @@ import java.util.List;
 /**
  * //TODO replace this class with updated ReadCountCollection
  *
- * Simple class to enable input and output of a TSV containing a list of {@link Locatable} and integer read counts.
+ * Simple class to enable input of a TSV or HDF5 file containing a list of {@link Locatable} and integer read counts.
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class SimpleReadCountCollection {
-    private static final Logger logger = LogManager.getLogger(SimpleReadCountCollection.class);
-
-    private static final String COMMENT_STRING = "#";
-    private static final CsvPreference TAB_SKIP_COMMENTS_PREFERENCE = new CsvPreference.Builder(CsvPreference.TAB_PREFERENCE)
-            .skipComments(new CommentStartsWith("#")).build();
-
     private final List<Locatable> intervals;
     private final RealMatrix readCounts;
 
@@ -65,33 +51,7 @@ public final class SimpleReadCountCollection {
     }
 
     public static SimpleReadCountCollection read(final File file) {
-        IOUtils.canReadFile(file);
-        final int numRows = countRows(file);
-        final List<Locatable> intervals = new ArrayList<>(numRows);
-        final List<Integer> readCounts = new ArrayList<>(numRows);
-        try (final FileReader fileReader = new FileReader(file);
-             final ICsvListReader listReader = new CsvListReader(fileReader, TAB_SKIP_COMMENTS_PREFERENCE)) {
-            listReader.getHeader(true);
-            final CellProcessor[] processors = new CellProcessor[]{
-                    new NotNull(),  //contig
-                    new ParseInt(), //start
-                    new ParseInt(), //stop
-                    null,           //ignore name
-                    new ParseInt()  //count
-            };
-
-            List<Object> row;
-            while ((row = listReader.read(processors)) != null) {
-                final Locatable interval = new SimpleInterval(row.get(0).toString(), (int) row.get(1), (int) row.get(2));
-                intervals.add(interval);
-                readCounts.add((int) row.get(4));
-            }
-            final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(1, readCounts.size());
-            readCountsMatrix.setRow(0, readCounts.stream().mapToDouble(Integer::doubleValue).toArray());
-            return new SimpleReadCountCollection(intervals, readCountsMatrix);
-        } catch (final IOException e) {
-            throw new UserException.CouldNotReadInputFile(file);
-        }
+        return TSVReader.read(file);
     }
 
     public static SimpleReadCountCollection read(final HDF5File file) {
@@ -99,11 +59,61 @@ public final class SimpleReadCountCollection {
         return new SimpleReadCountCollection(hdf5ReadCountCollection.getIntervals(), hdf5ReadCountCollection.getReadCounts());
     }
 
-    private static int countRows(final File file) {
-        try {
-            return (int) Files.lines(file.toPath()).filter(l -> !l.startsWith(COMMENT_STRING)).count() - 1;
-        } catch (final IOException e) {
-            throw new UserException.BadInput("Could not determine number of lines in TSV file.");
+    private static final class TSVReader {
+        private static final String COMMENT_STRING = "#";
+        private static final char SEPARATOR_CHAR = '\t';
+
+        private enum TSVColumn {
+            CONTIG (0),
+            START (1),
+            STOP (2),
+            NAME (3),
+            READ_COUNT (4);
+
+            private final int index;
+
+            TSVColumn(final int index) {
+                this.index = index;
+            }
+        }
+
+        private static SimpleReadCountCollection read(final File file) {
+            IOUtils.canReadFile(file);
+            final int numRows = countRows(file);
+            final List<Locatable> intervals = new ArrayList<>(numRows);
+            final List<Integer> readCounts = new ArrayList<>(numRows);
+            try (final FileReader fileReader = new FileReader(file);
+                 final CSVReader csvReader = new CSVReader(fileReader, SEPARATOR_CHAR)) {
+
+                String[] row;
+                while ((row = csvReader.readNext()) != null) {
+                    if (!row[0].startsWith(COMMENT_STRING)) {  //skip comment lines
+                        csvReader.readNext();   //skip column header
+                        break;
+                    }
+                }
+                while ((row = csvReader.readNext()) != null) {
+                    final Locatable interval = new SimpleInterval(
+                            row[TSVColumn.CONTIG.index],
+                            Integer.parseInt(row[TSVColumn.START.index]),
+                            Integer.parseInt(row[TSVColumn.STOP.index]));
+                    intervals.add(interval);
+                    readCounts.add(Integer.parseInt(row[TSVColumn.READ_COUNT.index]));
+                }
+                final RealMatrix readCountsMatrix = new Array2DRowRealMatrix(1, readCounts.size());
+                readCountsMatrix.setRow(0, readCounts.stream().mapToDouble(Integer::doubleValue).toArray());
+                return new SimpleReadCountCollection(intervals, readCountsMatrix);
+            } catch (final IOException e) {
+                throw new UserException.CouldNotReadInputFile(file);
+            }
+        }
+
+        private static int countRows(final File file) {
+            try {
+                return (int) Files.lines(file.toPath()).filter(l -> !l.startsWith(COMMENT_STRING)).count() - 1;
+            } catch (final IOException e) {
+                throw new UserException.BadInput("Could not determine number of lines in TSV file.");
+            }
         }
     }
 }
