@@ -171,7 +171,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private double extremeOutlierTruncationPercentile = DEFAULT_EXTREME_OUTLIER_TRUNCATION_PERCENTILE;
 
     @Argument(
-            doc = "Number of eigensamples to use for randomized SVD and to store in the panel of normals.  " +
+            doc = "Number of eigensamples to use for truncated SVD and to store in the panel of normals.  " +
                     "The number of samples retained after filtering will be used instead if it is smaller than this.",
             fullName = NUMBER_OF_EIGENSAMPLES_LONG_NAME,
             shortName = NUMBER_OF_EIGENSAMPLES_SHORT_NAME,
