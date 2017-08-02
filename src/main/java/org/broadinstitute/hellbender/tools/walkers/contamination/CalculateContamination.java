@@ -116,8 +116,6 @@ public class CalculateContamination extends CommandLineProgram {
         logger.info(String.format("We expect %.3f +/- %.3f hom alts", expectedNumberOfHomAlts, stdOfNumberOfHomAlts));
         final TargetCollection<PileupSummary> tc = new HashedListTargetCollection<>(sites);
         final double averageCoverage = sites.stream().mapToInt(PileupSummary::getTotalCount).average().getAsDouble();
-        final List<Double> smoothedCopyRatios = new ArrayList<>();
-        final List<Double> hetRatios = new ArrayList<>();
 
         final List<PileupSummary> potentialHomAltSites = sites.stream()
                 .filter(s -> s.getAltFraction() > 0.8)
@@ -125,45 +123,34 @@ public class CalculateContamination extends CommandLineProgram {
 
         logger.info(String.format("We find %d potential hom alt sites", potentialHomAltSites.size()));
 
+        final List<PileupSummary> filteredHomAltSites = new ArrayList<>();
         for (final PileupSummary site : potentialHomAltSites) {
+            logger.info(String.format("Considering hom alt site $s:%d.", site.getContig(), site.getStart()));
             final SimpleInterval nearbySpan = new SimpleInterval(site.getContig(), Math.max(1, site.getStart() - CNV_SCALE), site.getEnd() + CNV_SCALE);
             final List<PileupSummary> nearbySites = tc.targets(nearbySpan);
 
             final double averageNearbyCopyRatio = nearbySites.stream().mapToDouble(s -> s.getTotalCount()/averageCoverage).average().orElseGet(() -> 0);
-            smoothedCopyRatios.add(averageNearbyCopyRatio);
-
+            logger.info(String.format("The average copy ratio in the vicinity of this site is %.2f", averageNearbyCopyRatio));
             final double expectedNumberOfNearbyConfidentHets = (1 - P_VALUE_THRESHOLD_FOR_HETS) * nearbySites.stream().mapToDouble(PileupSummary::getAlleleFrequency).map(x -> 2*x*(1-x)).sum();
             final long numberOfNearbyConfidentHets = nearbySites.stream().filter(ps -> isConfidentHet(ps, P_VALUE_THRESHOLD_FOR_HETS)).count();
-            final double hetRatio = numberOfNearbyConfidentHets / expectedNumberOfNearbyConfidentHets;
-            hetRatios.add(hetRatio);
+            logger.info(String.format("We expect %.1f hets near here and found %.1f", expectedNumberOfNearbyConfidentHets, numberOfNearbyConfidentHets));
+            if (numberOfNearbyConfidentHets > 0.5 * expectedNumberOfHomAlts) {
+                if (averageNearbyCopyRatio > 0.6 && averageNearbyCopyRatio < 3.0) {
+                    filteredHomAltSites.add(site);
+                } else {
+                    logger.info("We reject this site due to anomalous copy ratio");
+                }
+            } else {
+                logger.info("We reject this site due to potential loss of heterozygosity.");
+            }
+
+            //TODO: as extra security, filter out sites that are near too many hom alts
+
         }
 
-        final double medianSmoothedCopyRatio = new Median().evaluate(smoothedCopyRatios.stream().mapToDouble(x->x).toArray());
-        final List<Integer> indicesWithAnomalousCopyRatio = IntStream.range(0, sites.size())
-                .filter(n -> smoothedCopyRatios.get(n) < 0.8 * medianSmoothedCopyRatio || smoothedCopyRatios.get(n) > 2 *medianSmoothedCopyRatio)
-                .boxed().collect(Collectors.toList());
+        logger.info(String.format("We excluded %d candidate hom alt sites.", potentialHomAltSites.size() - filteredHomAltSites.size()));
 
-        final double medianHetRatio = new Median().evaluate(hetRatios.stream().mapToDouble(x->x).toArray());
-        final List<Integer> indicesWithLossOfHeterozygosity = IntStream.range(0, sites.size())
-                .filter(n -> hetRatios.get(n) < medianHetRatio * 0.5)
-                .boxed().collect(Collectors.toList());
-
-        //TODO: as extra security, filter out sites that are near too many hom alts
-
-        logger.info(String.format("Excluding %d sites with low or high copy ratio and %d sites with potential loss of heterozygosity",
-                indicesWithAnomalousCopyRatio.size(), indicesWithLossOfHeterozygosity.size()));
-
-        logger.info(String.format("The average ratio of hets within distance %d to theoretically expected number of hets is %.3f", CNV_SCALE, medianHetRatio));
-
-        final Set<Integer> badSites = new TreeSet<>();
-        badSites.addAll(indicesWithAnomalousCopyRatio);
-        badSites.addAll(indicesWithLossOfHeterozygosity);
-
-        return IntStream.range(0, sites.size())
-                .filter(n -> !badSites.contains(n))
-                .mapToObj(sites::get)
-                .filter(s -> s.getAltFraction() > 0.8)
-                .collect(Collectors.toList());
+        return filteredHomAltSites;
     }
 
     // Can we reject the null hypothesis that a site is het?
