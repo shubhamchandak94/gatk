@@ -119,7 +119,13 @@ public class CalculateContamination extends CommandLineProgram {
         final List<Double> smoothedCopyRatios = new ArrayList<>();
         final List<Double> hetRatios = new ArrayList<>();
 
-        for (final PileupSummary site : sites) {
+        final List<PileupSummary> potentialHomAltSites = sites.stream()
+                .filter(s -> s.getAltFraction() > 0.8)
+                .collect(Collectors.toList());
+
+        logger.info(String.format("We find %d potential hom alt sites", potentialHomAltSites.size()));
+
+        for (final PileupSummary site : potentialHomAltSites) {
             final SimpleInterval nearbySpan = new SimpleInterval(site.getContig(), Math.max(1, site.getStart() - CNV_SCALE), site.getEnd() + CNV_SCALE);
             final List<PileupSummary> nearbySites = tc.targets(nearbySpan);
 
