@@ -113,7 +113,7 @@ public class CalculateContamination extends CommandLineProgram {
         final double stdOfNumberOfHomAlts = Math.sqrt(sites.stream()
                 .mapToDouble(PileupSummary::getAlleleFrequency).map(MathUtils::square).map(x -> x*(1-x)).sum());
 
-        logger.info(String.format("We expect %.3f +/- %.3f hom alts", expectedNumberOfHomAlts, stdOfNumberOfHomAlts));
+        logger.info(String.format("We expect %.1f +/- %.1f hom alts", expectedNumberOfHomAlts, stdOfNumberOfHomAlts));
         final TargetCollection<PileupSummary> tc = new HashedListTargetCollection<>(sites);
         final double averageCoverage = sites.stream().mapToInt(PileupSummary::getTotalCount).average().getAsDouble();
 
