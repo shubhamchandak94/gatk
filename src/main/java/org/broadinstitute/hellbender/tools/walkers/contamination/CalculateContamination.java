@@ -66,7 +66,9 @@ public class CalculateContamination extends CommandLineProgram {
             doc="The output table", optional = false)
     private final File outputTable = null;
 
-    private static final int CNV_SCALE = 1000000;
+    private static final int CNV_SCALE = 10000000;
+
+    private static final Median MEDIAN = new Median();
 
     @Override
     public Object doWork() {
@@ -105,52 +107,55 @@ public class CalculateContamination extends CommandLineProgram {
             return new ArrayList<>();
         }
 
-        // the probability of a hom alt is f^2
-        final double expectedNumberOfHomAlts = sites.stream()
-                .mapToDouble(PileupSummary::getAlleleFrequency).map(MathUtils::square).sum();
+        final double expectedNumberOfHomAlts = expectedHomAltCount(sites);
+        final double stdOfNumberOfHomAlts = standardDeviationOfHomAltCount(sites);
 
-        // the variance in the Bernoulli count with hom alt probability p = f^2 is p(1-p)
-        final double stdOfNumberOfHomAlts = Math.sqrt(sites.stream()
-                .mapToDouble(PileupSummary::getAlleleFrequency).map(MathUtils::square).map(x -> x*(1-x)).sum());
+        final TargetCollection<PileupSummary> allSites = new HashedListTargetCollection<>(sites);
+        final double medianCoverage = MEDIAN.evaluate(sites.stream().mapToDouble(PileupSummary::getTotalCount).toArray());
 
-        logger.info(String.format("We expect %.1f +/- %.1f hom alts", expectedNumberOfHomAlts, stdOfNumberOfHomAlts));
-        final TargetCollection<PileupSummary> tc = new HashedListTargetCollection<>(sites);
-        final double averageCoverage = sites.stream().mapToInt(PileupSummary::getTotalCount).average().getAsDouble();
-
-        final List<PileupSummary> potentialHomAltSites = sites.stream()
+        final TargetCollection<PileupSummary> potentialHomAltSites = new HashedListTargetCollection<>(sites.stream()
                 .filter(s -> s.getAltFraction() > 0.8)
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
 
-        logger.info(String.format("We find %d potential hom alt sites", potentialHomAltSites.size()));
+        logger.info(String.format("We expect %.1f +/- %.1f and find %d hom alts.", expectedNumberOfHomAlts, stdOfNumberOfHomAlts, potentialHomAltSites.targetCount()));
 
         final List<PileupSummary> filteredHomAltSites = new ArrayList<>();
-        for (final PileupSummary site : potentialHomAltSites) {
-            logger.info(String.format("Considering hom alt site %s:%d.", site.getContig(), site.getStart()));
+        for (final PileupSummary site : potentialHomAltSites.targets()) {
+
             final SimpleInterval nearbySpan = new SimpleInterval(site.getContig(), Math.max(1, site.getStart() - CNV_SCALE), site.getEnd() + CNV_SCALE);
-            final List<PileupSummary> nearbySites = tc.targets(nearbySpan);
+            final List<PileupSummary> nearbySites = allSites.targets(nearbySpan);
+            final int localHomAltCount = potentialHomAltSites.targets(nearbySpan).size();
+            final double expectedLocalHomAltCount = expectedHomAltCount(nearbySites);
+            final long localHetCount = nearbySites.stream().filter(ps -> isConfidentHet(ps, P_VALUE_THRESHOLD_FOR_HETS)).count();
+            final double expectedLocalHetCount = (1 - P_VALUE_THRESHOLD_FOR_HETS) * nearbySites.stream().mapToDouble(PileupSummary::getAlleleFrequency).map(x -> 2 * x * (1 - x)).sum();
+            final double localCopyRatio = MEDIAN.evaluate(nearbySites.stream().mapToDouble(s -> s.getTotalCount()).toArray()) / medianCoverage;
 
-            final double averageNearbyCopyRatio = nearbySites.stream().mapToDouble(s -> s.getTotalCount()/averageCoverage).average().orElseGet(() -> 0);
-            logger.info(String.format("The average copy ratio in the vicinity of this site is %.2f", averageNearbyCopyRatio));
-            final double expectedNumberOfNearbyConfidentHets = (1 - P_VALUE_THRESHOLD_FOR_HETS) * nearbySites.stream().mapToDouble(PileupSummary::getAlleleFrequency).map(x -> 2*x*(1-x)).sum();
-            final long numberOfNearbyConfidentHets = nearbySites.stream().filter(ps -> isConfidentHet(ps, P_VALUE_THRESHOLD_FOR_HETS)).count();
-            logger.info(String.format("We expect %.1f hets near here and found %d", expectedNumberOfNearbyConfidentHets, numberOfNearbyConfidentHets));
-            if (numberOfNearbyConfidentHets > 0.5 * expectedNumberOfHomAlts) {
-                if (averageNearbyCopyRatio > 0.6 && averageNearbyCopyRatio < 3.0) {
-                    filteredHomAltSites.add(site);
-                } else {
-                    logger.info("We reject this site due to anomalous copy ratio");
-                }
+            final boolean tooFewHets = localHetCount < 0.5 * expectedLocalHetCount;
+            final boolean tooManyHomAlts = localHomAltCount > 3 * expectedLocalHomAltCount && localHomAltCount > expectedLocalHetCount / 4;
+            if (tooFewHets && tooManyHomAlts) {
+                logger.info(String.format("Rejecting candidate hom alt site %s:%d due to suspected loss of heterozygosity.  " +
+                                "We expect %.1f and observe %d hets nearby, while we expect %.1f and observe %d hom alts nearby.", site.getContig(), site.getStart(),
+                        expectedLocalHetCount, localHetCount, expectedLocalHomAltCount, localHomAltCount));
+            } else if (localCopyRatio < 0.6 || localCopyRatio > 3.0) {
+                logger.info(String.format("We reject this site due to anomalous copy ratio %.3f", localCopyRatio));
             } else {
-                logger.info("We reject this site due to potential loss of heterozygosity.");
+                filteredHomAltSites.add(site);
             }
-
-            //TODO: as extra security, filter out sites that are near too many hom alts
-
         }
 
-        logger.info(String.format("We excluded %d candidate hom alt sites.", potentialHomAltSites.size() - filteredHomAltSites.size()));
+        logger.info(String.format("We excluded %d candidate hom alt sites.", potentialHomAltSites.targetCount() - filteredHomAltSites.size()));
 
         return filteredHomAltSites;
+    }
+
+    // the probability of a hom alt is f^2
+    private static double expectedHomAltCount(List<PileupSummary> sites) {
+        return sites.stream().mapToDouble(PileupSummary::getAlleleFrequency).map(MathUtils::square).sum();
+    }
+
+    // the variance in the Bernoulli count with hom alt probability p = f^2 is p(1-p)
+    private static double standardDeviationOfHomAltCount(List<PileupSummary> sites) {
+        return Math.sqrt(sites.stream().mapToDouble(PileupSummary::getAlleleFrequency).map(MathUtils::square).map(x -> x*(1-x)).sum());
     }
 
     // Can we reject the null hypothesis that a site is het?
