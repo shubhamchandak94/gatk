@@ -13,6 +13,7 @@ import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.VariantProgramGroup;
 import org.broadinstitute.hellbender.tools.exome.HashedListTargetCollection;
 import org.broadinstitute.hellbender.tools.exome.TargetCollection;
+import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.tools.walkers.mutect.FilterMutectCalls;
 
@@ -103,6 +104,16 @@ public class CalculateContamination extends CommandLineProgram {
         if (sites.isEmpty()) {
             return new ArrayList<>();
         }
+
+        // the probability of a hom alt is f^2
+        final double expectedNumberOfHomAlts = sites.stream()
+                .mapToDouble(PileupSummary::getAlleleFrequency).map(MathUtils::square).sum();
+
+        // the variance in the Bernoulli count with hom alt probability p = f^2 is p(1-p)
+        final double stdOfNumberOfHomAlts = Math.sqrt(sites.stream()
+                .mapToDouble(PileupSummary::getAlleleFrequency).map(MathUtils::square).map(x -> x*(1-x)).sum());
+
+        logger.info(String.format("We expect %.3f +/- %.3f hom alts", expectedNumberOfHomAlts, stdOfNumberOfHomAlts));
         final TargetCollection<PileupSummary> tc = new HashedListTargetCollection<>(sites);
         final double averageCoverage = sites.stream().mapToInt(PileupSummary::getTotalCount).average().getAsDouble();
         final List<Double> smoothedCopyRatios = new ArrayList<>();
