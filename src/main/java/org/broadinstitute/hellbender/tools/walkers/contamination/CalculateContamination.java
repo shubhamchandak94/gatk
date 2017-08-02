@@ -133,7 +133,7 @@ public class CalculateContamination extends CommandLineProgram {
             logger.info(String.format("The average copy ratio in the vicinity of this site is %.2f", averageNearbyCopyRatio));
             final double expectedNumberOfNearbyConfidentHets = (1 - P_VALUE_THRESHOLD_FOR_HETS) * nearbySites.stream().mapToDouble(PileupSummary::getAlleleFrequency).map(x -> 2*x*(1-x)).sum();
             final long numberOfNearbyConfidentHets = nearbySites.stream().filter(ps -> isConfidentHet(ps, P_VALUE_THRESHOLD_FOR_HETS)).count();
-            logger.info(String.format("We expect %.1f hets near here and found %.1f", expectedNumberOfNearbyConfidentHets, numberOfNearbyConfidentHets));
+            logger.info(String.format("We expect %.1f hets near here and found %d", expectedNumberOfNearbyConfidentHets, numberOfNearbyConfidentHets));
             if (numberOfNearbyConfidentHets > 0.5 * expectedNumberOfHomAlts) {
                 if (averageNearbyCopyRatio > 0.6 && averageNearbyCopyRatio < 3.0) {
                     filteredHomAltSites.add(site);
