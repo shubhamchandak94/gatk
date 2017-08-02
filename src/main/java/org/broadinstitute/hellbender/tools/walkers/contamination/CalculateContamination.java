@@ -125,7 +125,7 @@ public class CalculateContamination extends CommandLineProgram {
 
         final List<PileupSummary> filteredHomAltSites = new ArrayList<>();
         for (final PileupSummary site : potentialHomAltSites) {
-            logger.info(String.format("Considering hom alt site $s:%d.", site.getContig(), site.getStart()));
+            logger.info(String.format("Considering hom alt site %s:%d.", site.getContig(), site.getStart()));
             final SimpleInterval nearbySpan = new SimpleInterval(site.getContig(), Math.max(1, site.getStart() - CNV_SCALE), site.getEnd() + CNV_SCALE);
             final List<PileupSummary> nearbySites = tc.targets(nearbySpan);
 
