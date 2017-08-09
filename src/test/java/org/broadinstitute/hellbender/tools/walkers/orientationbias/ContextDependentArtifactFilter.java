@@ -8,6 +8,10 @@ import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.VariantProgramGroup;
 import org.broadinstitute.hellbender.engine.*;
+import org.broadinstitute.hellbender.engine.filters.MappingQualityReadFilter;
+import org.broadinstitute.hellbender.engine.filters.ReadFilter;
+import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
+import org.broadinstitute.hellbender.engine.filters.WellformedReadFilter;
 import org.broadinstitute.hellbender.utils.BaseUtils;
 import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -48,15 +52,19 @@ public class ContextDependentArtifactFilter extends LocusWalker {
     @Argument(fullName = "", shortName = "", doc = "", optional = true)
     static final int MINIMUM_MEDIAN_MQ_THRESHOLD = 20;
 
+    private ContextDependentArtifactFilterEngine engine;
+
+    public static Map<String, PerContextData> contextDependentDataMap;
 
     @Override
     public boolean requiresReference(){
         return true;
     }
 
-    private ContextDependentArtifactFilterEngine engine;
-
-    public static Map<String, PerContextData> contextDependentDataMap;
+    @Override
+    public List<ReadFilter> getDefaultReadFilters() {
+        return ReadUtils.makeStandardReadFilters();
+    }
 
     @Override
     public void onTraversalStart(){
@@ -90,10 +98,11 @@ public class ContextDependentArtifactFilter extends LocusWalker {
 
         // skip INDELs
 
-        // skip MQ = 0
-
+        // skip MQ=0 loci
         List<Integer> mappingQualities = new ArrayList<>(pileup.size());
-        // there is not shortcut or a standard API for converting an int[] to List<Integer> (we don't want List<int[]>)
+
+        // there is no shortcut or a standard API for converting an int[] to List<Integer> (we don't want List<int[]>)
+        // so we must convert int[] to a List<Integer> with a for loop
         for (final int mq : pileup.getMappingQuals()) {
             mappingQualities.add(mq);
         }
@@ -118,7 +127,7 @@ public class ContextDependentArtifactFilter extends LocusWalker {
 
         // FIXME: choose the correct allele
         final Allele allele = isVariantSite ? Allele.create(altBase.get(), false) : Allele.create(refBase, true);
-        contextDependentDataMap.get(reference3mer).addNewSample(depth, altDepth, altF1R2Depth, allele);
+        contextDependentDataMap.get(reference3mer).addNewSample(depth, altDepth, altF1R2Depth, allele, alignmentContext);
         return;
     }
 
@@ -133,7 +142,7 @@ public class ContextDependentArtifactFilter extends LocusWalker {
 
         // now that we know there are multiple bases observed at the locus,
         // find the max out of the bases that are not ref
-        // FIXME: also impose a minimum alt allele count and perhaps allele fraction (we're in heuristic land anyway)
+        // FIXME: also impose a minimum alt allele count and perhaps allele fraction (we're in the heuristic land anyway)
         baseCountsCopy[BaseUtils.simpleBaseToBaseIndex(refBase)] = 0;
         return Optional.of(BaseUtils.baseIndexToSimpleBase(MathUtils.argmax(baseCountsCopy)));
     }
