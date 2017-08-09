@@ -12,8 +12,10 @@ import org.broadinstitute.hellbender.engine.FeatureContext;
 import org.broadinstitute.hellbender.engine.MultiVariantWalker;
 import org.broadinstitute.hellbender.engine.ReadsContext;
 import org.broadinstitute.hellbender.engine.ReferenceContext;
+import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.utils.GATKProtectedVariantContextUtils;
 import org.broadinstitute.hellbender.utils.pileup.ReadPileup;
+import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -75,6 +77,11 @@ public class GetPileupSummaries extends MultiVariantWalker {
     private final List<PileupSummary> pileupSummaries = new ArrayList<>();
 
     private VariantContext lastVariant = null;
+
+    @Override
+    public List<ReadFilter> getDefaultReadFilters() {
+        return ReadUtils.makeStandardReadFilters();
+    }
 
     @Override
     public boolean requiresReads() {
