@@ -163,15 +163,15 @@ where $R$ is the number of reads at site $n$, and the asterisk over $\gamma^*_{n
 \end{align}
 
 \subsubsection{M step}
-In the M step, we maximize the expectation of the complete-data log likelihood with respect to the posterior distribution over $z$ (so $\E$ is a shorthand for $\E_{Z \sim p(Z|X,M)}$). The complete-data log likelihood $p(X, M, Z | \vpi, \vp, \vtheta)$ follows directly from the graphical model, and its expectation is
+In the M step, we maximize the expectation of the complete-data log likelihood with respect to the posterior distribution over $z$ (so $\E$ is a shorthand for $\E_{Z \sim p(Z|X,M)}$). We may read the form of the complete-data log likelihood $p(X, M, Z | \vpi, \vp, \vtheta)$ from the graphical model, and its expectation is
 
 \begin{align}
 \E [ \ln p(X, M , Z | \vpi, \vp, \vtheta) ] &= \E [ \ln \prod_{n = 1}^{N}  p(Z) p(M | Z, p_{z} ) p(X | M, Z ) ] \nonumber \\
-							&= \E [ \ln \prod_{n = 1}^{N} \{ \prod_{k = 1}^{K} \pi_k^{z_{kn}} \} \{ \prod_{k = 1}^{K} ( f_k^{m_n} (1-f_k)^{R - m_n} ) ^{z_{nk}} \} \{ \prod_{k = 1}^{K} ( \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} )^{z_{nk}} \} ] \notag \\
-							&= \E [ \ln \prod_{n = 1}^{N} \prod_{k = 1}^{K} ( \pi_k  f_{k}^{m_n} (1-f_k)^{R - m_n} \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} )^{z_{nk}} ]  \nonumber \\
-							&= \E [ \sum_{n = 1}^{N} \sum_{k = 1}^{K} z_{nk} \{ \ln \pi_k  + m_n \ln f_k + (R - m_n) \ln (1-f_k) + \notag \\
+							&= \E [ \ln \prod_{n = 1}^{N} \{ \prod_{k = 1}^{K} \pi_k^{z_{kn}} \} \{ \prod_{k = 1}^{K} ( f_k^{m_n} (1-f_k)^{R_n - m_n} ) ^{z_{nk}} \} \{ \prod_{k = 1}^{K} ( \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} )^{z_{nk}} \} ] \notag \\
+							&= \E [ \ln \prod_{n = 1}^{N} \prod_{k = 1}^{K} ( \pi_k  f_{k}^{m_n} (1-f_k)^{R_n - m_n} \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} )^{z_{nk}} ]  \nonumber \\
+							&= \E [ \sum_{n = 1}^{N} \sum_{k = 1}^{K} z_{nk} \{ \ln \pi_k  + m_n \ln f_k + (R_n - m_n) \ln (1-f_k) + \notag \\
 							&\phantom{---------------} x_n \ln \theta_k + (m_n - x_n) \ln (1 - \theta_k) \} ]  \nonumber \\
-							&= \sum_{n = 1}^{N} \sum_{k = 1}^{K} \gamma_{nk} \{ \ln \pi_k  + m_n \ln f_k + (R - m_n) \ln (1-f_k) + \notag \\
+							&= \sum_{n = 1}^{N} \sum_{k = 1}^{K} \gamma_{nk} \{ \ln \pi_k  + m_n \ln f_k + (R_n - m_n) \ln (1-f_k) + \notag \\
 						    &\phantom{---------------} x_n \ln \theta_k + (m_n - x_n) \ln (1 - \theta_k) \label{eq:expjointLL} \}
 \end{align} 
 
@@ -180,10 +180,11 @@ where $K = |Z|$, $X$ is the design matrix whose $n$th row is $x_n$ ($M$ and $Z$ 
 \begin{align}
 N_k      &= \sum_n \gamma_{nk} \label{eq:nk} \\
 \bar{x}_k  &= \frac{1}{N_k} \sum_n \gamma_{nk} x_n \label{eq:xbar} \\
-\bar{m}_k &= \frac{1}{N_k} \sum_n \gamma_{nk} m_n \label{eq:mbar}
+\bar{m}_k &= \frac{1}{N_k} \sum_n \gamma_{nk} m_n \label{eq:mbar} \\
+\bar{R}_k  &= \frac{1}{N_k} \sum_n \gamma_{nk} R_n \label{eq:Rbar}
 \end{align}
 
-$N_k$ is the effective number of samples that were in state $z = z_k$, while $\bar{x}_k$ and $\bar{m}_k$ are the effective sample means of $x_k$ and $m_k$. We now take the derivative of (\ref{eq:expjointLL}) with respect to $\theta_k, p_k, \pi_k$ and set each equal to 0, which yields:
+$N_k$ is the effective number of samples that were in state $z_k$, while $\bar{x}_k$ and $\bar{m}_k$ are the effective sample means of $x_k$ and $m_k$ and $\bar{R}_k$ the effective mean depth over the sites in state $z_k$. We now take the derivative of (\ref{eq:expjointLL}) with respect to $\theta_k, p_k, \pi_k$ and set each equal to 0, which yields:
 
 \begin{align}
 \frac{\partial}{\partial \theta_k} &= \sum_n \gamma_{nk} \Big( \frac{ x_n}{\theta_k} - \frac{m_n - x_n}{1- \theta_k} \Big)\\
@@ -199,7 +200,7 @@ where we used (\ref{eq:xbar}) and (\ref{eq:mbar}). Solving for $\theta_k$, we ge
 Derivative with respect to $f_k$ is completely analogous:
 
 \begin{align}
-\hat{f}_k = \frac{\bar{m}_k}{R} \label{eq:f}
+\hat{f}_k = \frac{\bar{m}_k}{\bar{R}_k} \label{eq:f}
 \end{align}
 
 Finally we take the derivative with respect to $\pi_k$ under the constraint $\sum_k \pi_k = 1$. Using a Lagrange multiplier to account for the constraint, we get
