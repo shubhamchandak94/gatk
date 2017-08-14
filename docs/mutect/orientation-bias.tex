@@ -19,6 +19,7 @@
 % Note the substitute command needs to be enclosed in double brackets
 % otherwise the bold font spills out of the command
 \newcommand{\vzero}{{\bf 0}}
+\newcommand{\va}{{\bf a}}
 \newcommand{\vI}{{\bf I}}
 \newcommand{\vb}{{\bf b}}
 \newcommand{\vd}{{\bf d}}
@@ -148,12 +149,12 @@ $z \sim \mathrm{Categorical}(\vpi^a_c)$, where $\pi^a_{ck}$ is the context depen
 We estimate the hyperparameters $\vpi$ and $\vp$ that maximize likelihood using the EM algorithm. We can then compute the posterior probability of the latent variable $z$ to determine whether a variant is an orientation artifact and thus should be filtered.
 
 \subsubsection{E step}
-In the E step, we compute the responsibility of the $k$th component of $z$, denoted $\gamma_{nk} = p(z_{nk} | x_n, m_n)$. $\gamma_{nk}$ is the posterior probability of $k$th component of $z$ given the observed variables $x_n$ and $m_n$. By Bayes rule we have
+In the E step, we compute the responsibilities $\gamma_{nk} = p(z_{nk} | x_n, m_n, a)$. $\gamma_{nk}$ is the posterior probability of $k$th component of $z$ given the observed variables $x_n$ and $m_n$ and the observed allele $a$. By Bayes rule we have
 
 \begin{align}
-\gamma^*_{nk} &\propto p(z_{k} | x_n) \nonumber \\
-		        &\propto p(z_{k}) p(m_n | z_k, f_{k} ) p(x_n | m_n ) \nonumber \\
-		        &= \pi_k  \{ f_{k}^{m_n} (1-f_k)^{R - m_n} \} \{ \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} \}
+\gamma^*_{nk} &\propto p(z_{k} | x_n, m_n, a) \nonumber \\
+		        &\propto p(z_{k} | a) p(m_n | z_k, f_{k} ) p(x_n | m_n ) \nonumber \\
+		        &= \pi_{ak}  \{ f_{k}^{m_n} (1-f_k)^{R - m_n} \} \{ \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} \}
 \end{align}
 
 where $R$ is the number of reads at site $n$, and the asterisk over $\gamma^*_{nk}$ denotes that the responsibility is not normalized and thus is not a probability. Normalizing responsibilities gives us
@@ -162,29 +163,32 @@ where $R$ is the number of reads at site $n$, and the asterisk over $\gamma^*_{n
 \gamma_{nk} = \frac{\gamma^*_{nk}}{\sum_{k'} \gamma^*_{nk'}}
 \end{align}
 
+Make a mention of the allele lurking in the background here. The allele $a$, a deterministic parameter, much like the depth, picks out the appropriate $\pi$ estimates for us.  \todo{Refine this explanation}. 
+
 \subsubsection{M step}
 In the M step, we maximize the expectation of the complete-data log likelihood with respect to the posterior distribution over $z$ (so $\E$ is a shorthand for $\E_{Z \sim p(Z|X,M)}$). We may read the form of the complete-data log likelihood $p(X, M, Z | \vpi, \vp, \vtheta)$ from the graphical model, and its expectation is
 
 \begin{align}
-\E [ \ln p(X, M , Z | \vpi, \vp, \vtheta) ] &= \E [ \ln \prod_{n = 1}^{N}  p(Z) p(M | Z, p_{z} ) p(X | M, Z ) ] \nonumber \\
-							&= \E [ \ln \prod_{n = 1}^{N} \{ \prod_{k = 1}^{K} \pi_k^{z_{kn}} \} \{ \prod_{k = 1}^{K} ( f_k^{m_n} (1-f_k)^{R_n - m_n} ) ^{z_{nk}} \} \{ \prod_{k = 1}^{K} ( \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} )^{z_{nk}} \} ] \notag \\
-							&= \E [ \ln \prod_{n = 1}^{N} \prod_{k = 1}^{K} ( \pi_k  f_{k}^{m_n} (1-f_k)^{R_n - m_n} \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} )^{z_{nk}} ]  \nonumber \\
-							&= \E [ \sum_{n = 1}^{N} \sum_{k = 1}^{K} z_{nk} \{ \ln \pi_k  + m_n \ln f_k + (R_n - m_n) \ln (1-f_k) + \notag \\
+\E [ \ln p(X, M , Z | \vpi, \vp, \vtheta, \va) ] &= \E [ \ln \prod_{n = 1}^{N}  p(z_n | a_n) p(m_n | z_n, p_{z} ) p(x_n | m_n, z_n, \theta_n ) ] \nonumber \\
+							&= \E [ \ln \prod_{n = 1}^{N} \{ \prod_{k = 1}^{K} \pi_{ak}^{z_{kn}} \} \{ \prod_{k = 1}^{K} ( f_k^{m_n} (1-f_k)^{R_n - m_n} ) ^{z_{nk}} \} \{ \prod_{k = 1}^{K} ( \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} )^{z_{nk}} \} ] \notag \\
+							&= \E [ \ln \prod_{n = 1}^{N} \prod_{k = 1}^{K} \{ \pi_{ak}  f_{k}^{m_n} (1-f_k)^{R_n - m_n} \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} \}^{z_{nk}} ]  \nonumber \\
+							&= \E [ \sum_{n = 1}^{N} \sum_{k = 1}^{K} z_{nk} \{ \ln \pi_{ak}  + m_n \ln f_k + (R_n - m_n) \ln (1-f_k) + \notag \\
 							&\phantom{---------------} x_n \ln \theta_k + (m_n - x_n) \ln (1 - \theta_k) \} ]  \nonumber \\
-							&= \sum_{n = 1}^{N} \sum_{k = 1}^{K} \gamma_{nk} \{ \ln \pi_k  + m_n \ln f_k + (R_n - m_n) \ln (1-f_k) + \notag \\
+							&= \sum_{n = 1}^{N} \sum_{k = 1}^{K} \gamma_{nk} \{ \ln \pi_{ak}  + m_n \ln f_k + (R_n - m_n) \ln (1-f_k) + \notag \\
 						    &\phantom{---------------} x_n \ln \theta_k + (m_n - x_n) \ln (1 - \theta_k) \label{eq:expjointLL} \}
 \end{align} 
 
-where $K = |Z|$, $X$ is the design matrix whose $n$th row is $x_n$ ($M$ and $Z$ are defined analogously), and $\E [ z_{nk} ] = \gamma_{nk}$. We define the following three terms mainly for convenience, but also because they have nice interpretations.
+where $K = |Z|$, $X$ is the design matrix whose $n$th row is $x_n$ ($M$ and $Z$ are defined analogously), and $\E [ z_{nk} ] = \gamma_{nk}$. We define the following terms to simplify the expected complete-data log likelihood.
 
 \begin{align}
 N_k      &= \sum_n \gamma_{nk} \label{eq:nk} \\
+N_{ak}      &= \sum_{n : a_n = a} \gamma_{nk} \label{eq:nk} \\
 \bar{x}_k  &= \frac{1}{N_k} \sum_n \gamma_{nk} x_n \label{eq:xbar} \\
 \bar{m}_k &= \frac{1}{N_k} \sum_n \gamma_{nk} m_n \label{eq:mbar} \\
 \bar{R}_k  &= \frac{1}{N_k} \sum_n \gamma_{nk} R_n \label{eq:Rbar}
 \end{align}
 
-$N_k$ is the effective number of samples that were in state $z_k$, while $\bar{x}_k$ and $\bar{m}_k$ are the effective sample means of $x_k$ and $m_k$ and $\bar{R}_k$ the effective mean depth over the sites in state $z_k$. We now take the derivative of (\ref{eq:expjointLL}) with respect to $\theta_k, p_k, \pi_k$ and set each equal to 0, which yields:
+$N_k$ is the effective number of samples that were in state $z_k$ and $N_{ak}$ the effective number of samples in state $z_k$ \textit{ and } have allele $a$. $\bar{x}_k$ and $\bar{m}_k$ are the effective sample means of $x_k$ and $m_k$, and $\bar{R}_k$ is the effective mean depth over the sites in state $z_k$. We now take the derivative of (\ref{eq:expjointLL}) with respect to $\theta_k, p_k, \pi_{ak}$, set them equal to 0, and solve for those parameters to get the update equations.
 
 \begin{align}
 \frac{\partial}{\partial \theta_k} &= \sum_n \gamma_{nk} \Big( \frac{ x_n}{\theta_k} - \frac{m_n - x_n}{1- \theta_k} \Big)\\
@@ -203,24 +207,24 @@ Derivative with respect to $f_k$ is completely analogous:
 \hat{f}_k = \frac{\bar{m}_k}{\bar{R}_k} \label{eq:f}
 \end{align}
 
-Finally we take the derivative with respect to $\pi_k$ under the constraint $\sum_k \pi_k = 1$. Using a Lagrange multiplier to account for the constraint, we get
+Finally we take the derivative with respect to $\pi_{ak}$ under the constraint $\sum_k \pi_{ak} = 1$. Using a Lagrange multiplier to account for the constraint, we get
 
 \begin{align}
-\frac{\partial}{\partial \pi_k} \{ \E [ \ln p(X, M , Z | \vpi, \vp, \vtheta) ] + \lambda ( \sum_k \pi_k - 1)\} &= \sum_n \frac{\gamma_{nk}}{\pi_k} + \lambda \nonumber \\
-																   &= \frac{N_k}{\pi_k} + \lambda = 0 \label{eq:dpi}
+\frac{\partial}{\partial \pi_{ak}} \{ \E [ \ln p(X, M , Z | \vpi, \vp, \vtheta) ] + \lambda ( \sum_k \pi_{ak} - 1)\} &= \sum_{n : a_n = a} \frac{\gamma_{nk}}{\pi_{ak}} + \lambda \nonumber \\
+																   &= \frac{N_{ak}}{\pi_{ak}} + \lambda = 0 \label{eq:dpi}
 \end{align}
 
 where $\lambda$ is the Lagrange multiplier. Rearranging (\ref{eq:dpi}) and summing over $k$, we get
 
 \begin{align*}
-\sum_k N_k &= \sum_k - \lambda \pi_k \\
-      \lambda &= - N 
+\sum_k N_{ak} &= \sum_k - \lambda \pi_{ak} \\
+      \lambda &= - N_a 
 \end{align*}
 
-Plugging in for $\lambda$ in (\ref{eq:dpi}) we obtain
+where $N_a = \sum_k N_{ak} $ is the number of observed sites with allele $a$. Plugging in for $\lambda$ in (\ref{eq:dpi}) gives us
 
 \begin{equation}
-\hat{\pi}_k = \frac{N_k}{N}
+\hat{\pi}_{ak} = \frac{N_{ak}}{N_a}
 \end{equation}
 
 % TODO: Discuss the forms of these update equations
