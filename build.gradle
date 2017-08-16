@@ -113,7 +113,6 @@ dependencies {
 
     // Library for configuration:
     compile 'org.aeonbits.owner:owner:1.0.9'
-//    compile 'org.aeonbits.owner:owner:1.0.10-SNAPSHOT'
 
     compile 'org.broadinstitute:barclay:1.1.0'
     compile ('com.intel:genomicsdb:' + genomicsdbVersion)  {
@@ -220,8 +219,6 @@ processResources {
 processTestResources {
     //Don't waste time packaging our test data into the test jar
     exclude "**/large/**"
-    //TODO: DON"T MERGE THIS!!!!!!!!11!!!11!!!
-//    exclude "**/org/broadinstitute/hellbender/**"
 }
 
 sourceCompatibility = 1.8
