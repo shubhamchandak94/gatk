@@ -5,6 +5,8 @@ import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.vcf.VCFConstants;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.AlleleSpecificAnnotationData;
+import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.ReducibleAnnotationData;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.GenotypeLikelihoodCalculators;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
@@ -56,7 +58,7 @@ public class ReferenceConfidenceVariantContextMerger {
      * @return new VariantContext representing the merge of all vcs or null if it not relevant
      */
     public VariantContext merge(final List<VariantContext> vcs, final Locatable loc, final Byte refBase,
-                                       final boolean removeNonRefSymbolicAllele, final boolean samplesAreUniquified) {
+                                final boolean removeNonRefSymbolicAllele, final boolean samplesAreUniquified) {
         Utils.nonEmpty(vcs);
 
         // establish the baseline info (sometimes from the first VC)
@@ -82,7 +84,7 @@ public class ReferenceConfidenceVariantContextMerger {
 
         final Set<String> rsIDs = new LinkedHashSet<>(1); // most of the time there's one id
         int depth = 0;
-        final Map<String, List<Comparable>> annotationMap = new LinkedHashMap<>();
+        final Map<String, List<ReducibleAnnotationData<Object>>> annotationMap = new LinkedHashMap<>();
 
         final GenotypesContext genotypes = GenotypesContext.create();
 
@@ -103,10 +105,10 @@ public class ReferenceConfidenceVariantContextMerger {
             }
 
             // add attributes
-            addReferenceConfidenceAttributes(vc.getAttributes(), annotationMap);
+            addReferenceConfidenceAttributes(vcWithNewAlleles, annotationMap);
         }
 
-        final Map<String, Object> attributes = mergeAttributes(depth, annotationMap);
+        final Map<String, Object> attributes = mergeAttributes(depth, allelesList, annotationMap);
 
         final String ID = rsIDs.isEmpty() ? VCFConstants.EMPTY_ID_FIELD : String.join(",", rsIDs);
 
@@ -521,6 +523,56 @@ public class ReferenceConfidenceVariantContextMerger {
 
         return newAD;
     }
+
+
+
+
+    protected <T extends Comparable<? super T>> void addReferenceConfidenceAttributes(final VCWithNewAlleles vcPair,
+                                                                                      final Map<String, List<ReducibleAnnotationData<Object>>> annotationMap) {
+        for (final Map.Entry<String, Object> p : vcPair.getVc().getAttributes().entrySet()) {
+            final String key = p.getKey();
+            final List<Object> valueList = vcPair.getVc().getAttributeAsList(key);
+
+            // add the annotation values to a list for combining later
+            List<ReducibleAnnotationData<Object>> values = annotationMap.get(key);
+            if (values == null) {
+                values = new ArrayList<>();
+                annotationMap.put(key, values);
+            }
+            String combinedString = "";
+            for(int i=0; i < valueList.size(); i++) {
+                if (i > 0)
+                    combinedString += ",";
+                combinedString += valueList.get(i);
+            }
+
+            ReducibleAnnotationData<Object> pairData = new AlleleSpecificAnnotationData<>(vcPair.getNewAlleles(), combinedString);
+            values.add(pairData);
+            annotationMap.put(key, values);
+        }
+
+    }
+
+
+    public Map<String, Object> mergeAttributes(int depth, List<Allele> alleleList, Map<String, List<ReducibleAnnotationData<Object>>> annotationMap) {
+        final Map<String, Object> attributes = new LinkedHashMap<>();
+
+        attributes.putAll(annotatorEngine.combineAnnotations(alleleList, annotationMap));
+        annotationMap.entrySet().stream()
+                .filter(p -> !p.getValue().isEmpty())
+                .forEachOrdered(p -> attributes.put(p.getKey(), (p.getValue()))
+                );
+
+        if ( depth > 0 ) {
+            attributes.put(VCFConstants.DEPTH_KEY, String.valueOf(depth));
+        }
+
+        // remove stale AC and AF based attributes
+        removeStaleAttributesAfterMerge(attributes);
+        return attributes;
+    }
+}
+
 
 
 }
