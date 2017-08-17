@@ -85,18 +85,20 @@ public final class CombineGVCFs extends MultiVariantWalker {
      * The rsIDs from this file are used to populate the ID column of the output.  Also, the DB INFO flag will be set when appropriate. Note that dbSNP is not used in any way for the calculations themselves.
      */
     @ArgumentCollection
-    protected DbsnpArgumentCollection dbsnp = new DbsnpArgumentCollection();
-    public FeatureInput<VariantContext> getDbsnpRodBinding() { return dbsnp.dbsnp; }
-    public List<RodBinding<VariantContext>> getCompRodBindings() { return Collections.emptyList(); }
-    public RodBinding<VariantContext> getSnpEffRodBinding() { return null; }
-    public List<RodBinding<VariantContext>> getResourceRodBindings() { return Collections.emptyList(); }
-    public boolean alwaysAppendDbsnpId() { return false; }
+//    protected DbsnpArgumentCollection dbsnp = new DbsnpArgumentCollection();
+//    public FeatureInput<VariantContext> getDbsnpRodBinding() { return dbsnp.dbsnp; }
+//    public List<RodBinding<VariantContext>> getCompRodBindings() { return Collections.emptyList(); }
+//    public RodBinding<VariantContext> getSnpEffRodBinding() { return null; }
+//    public List<RodBinding<VariantContext>> getResourceRodBindings() { return Collections.emptyList(); }
+//    public boolean alwaysAppendDbsnpId() { return false; }
 
     // the annotation engine
     private VariantAnnotatorEngine annotationEngine;
 
     @Override
     public void apply(VariantContext variant, ReadsContext readsContext, ReferenceContext referenceContext, FeatureContext featureContext) {
+        map(,referenceContext, )
+
 
     }
 
@@ -142,7 +144,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     @Override
     public void onTraversalStart() {
         // take care of the VCF headers
-        final Map<String, VCFHeader> vcfHeaders = GATKVCFUtils.getVCFHeadersFromRods(getToolkit());
+        final Map<String, VCFHeader> vcfHeaders = GATKVCFU.getVCFHeadersFromRods(getToolkit());
         final Set<VCFHeaderLine> headerLines = VCFUtils.smartMergeHeaders(vcfRods.values(), true);
         headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));   // needed for gVCFs without DP tags
 
@@ -169,8 +171,6 @@ public final class CombineGVCFs extends MultiVariantWalker {
     }
 
     public PositionalState map(final RefMetaDataTracker tracker, final ReferenceContext ref, final AlignmentContext context) {
-        if ( tracker == null ) // RodWalkers can make funky map calls
-            return null;
 
         final GenomeLoc loc = ref.getLocus();
         return new PositionalState(tracker.getValues(variants, loc), ref.getBases(), loc);
