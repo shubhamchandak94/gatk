@@ -23,6 +23,7 @@ import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 import org.broadinstitute.hellbender.utils.variant.VcfUtils;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Combine per-sample gVCF files produced by HaplotypeCaller into a multi-sample gVCF file
@@ -81,6 +82,11 @@ public final class CombineGVCFs extends MultiVariantWalker {
     protected String[] annotationGroupsToUse = { StandardAnnotation.class.getSimpleName() };
 
 
+    @Advanced
+    @Argument(fullName="annotationsToExclude", shortName="AX", doc="One or more specific annotations to exclude from recomputation", optional=true)
+    private List<String> annotationsToExclude = new ArrayList<>();
+
+
     /**
      * The rsIDs from this file are used to populate the ID column of the output.  Also, the DB INFO flag will be set when appropriate. Note that dbSNP is not used in any way for the calculations themselves.
      */
@@ -94,10 +100,16 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
     // the annotation engine
     private VariantAnnotatorEngine annotationEngine;
+    final LinkedList<VariantContext> VCs = new LinkedList<>();
+    final Set<String> samples = new HashSet<>();
+    GenomeLoc prevPos = null;
+    byte refAfterPrevPos;
+
 
     @Override
     public void apply(VariantContext variant, ReadsContext readsContext, ReferenceContext referenceContext, FeatureContext featureContext) {
-        map(,referenceContext, )
+        variant.star
+        return new PositionalState(tracker.getValues(variants, loc), ref.getBases(), loc);
 
 
     }
@@ -117,16 +129,13 @@ public final class CombineGVCFs extends MultiVariantWalker {
         }
     }
 
-    protected final class OverallState {
-        final LinkedList<VariantContext> VCs = new LinkedList<>();
-        final Set<String> samples = new HashSet<>();
-        GenomeLoc prevPos = null;
-        byte refAfterPrevPos;
+    PriorityQueue<VariantContext> VCs;
 
-        public OverallState() {}
+    protected final class OverallState {
+
     }
 
-    @Argument(fullName="convertToBasePairResolution", shortName="bpResolution", doc = "If specified, convert banded gVCFs to all-sites gVCFs", required=false)
+    @Argument(fullName="convertToBasePairResolution", shortName="bpResolution", doc = "If specified, convert banded gVCFs to all-sites gVCFs", optional=true)
     protected boolean USE_BP_RESOLUTION = false;
 
     /**
@@ -136,7 +145,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
      *
      * Note that the --convertToBasePairResolution argument is just a special case of this argument with a value of 1.
      */
-    @Argument(fullName="breakBandsAtMultiplesOf", shortName="breakBandsAtMultiplesOf", doc = "If > 0, reference bands will be broken up at genomic positions that are multiples of this number", required=false)
+    @Argument(fullName="breakBandsAtMultiplesOf", shortName="breakBandsAtMultiplesOf", doc = "If > 0, reference bands will be broken up at genomic positions that are multiples of this number", optional=true)
     protected int multipleAtWhichToBreakBands = 0;
 
     private GenomeLocParser genomeLocParser;
@@ -144,13 +153,18 @@ public final class CombineGVCFs extends MultiVariantWalker {
     @Override
     public void onTraversalStart() {
         // take care of the VCF headers
-        final Map<String, VCFHeader> vcfHeaders = GATKVCFU.getVCFHeadersFromRods(getToolkit());
-        final Set<VCFHeaderLine> headerLines = VCFUtils.smartMergeHeaders(vcfRods.values(), true);
-        headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));   // needed for gVCFs without DP tags
 
+        headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));   // needed for gVCFs without DP tags
+        // TODO make this important
+
+        final List<VCFHeader> VCFheaders = getDrivingVariantsFeatureInputs()
+                .stream()
+                .map(ds -> getHeaderWithUpdatedSequenceDictionary(ds))
+                .collect(Collectors.toList());
         final Set<String> samples = VcfUtils.getSortedSampleSet(vcfHeaders, GATKVariantContextUtils.GenotypeMergeType.REQUIRE_UNIQUE);
 
-        final VCFHeader vcfHeader = new VCFHeader(headerLines, samples);
+
+        final VCFHeader vcfHeader = getHeaderForVariants();
         vcfWriter.writeHeader(vcfHeader);
 
         // collect the actual rod bindings into a list for use later
@@ -160,10 +174,12 @@ public final class CombineGVCFs extends MultiVariantWalker {
         genomeLocParser = getToolkit().getGenomeLocParser();
 
         // create the annotation engine
-        annotationEngine = new VariantAnnotatorEngine(Arrays.asList(annotationGroupsToUse), annotationsToUse, Collections.<String>emptyList(), this, getToolkit());
+        annotationEngine = new VariantAnnotatorEngine.ofSelectedMinusExcluded(Arrays.asList(annotationGroupsToUse), annotationsToUse, annotationsToExclude, Collections.<String>emptyList(), this);
 
         //now that we have all the VCF headers, initialize the annotations (this is particularly important to turn off RankSumTest dithering in integration tests)
         annotationEngine.invokeAnnotationInitializationMethods(headerLines);
+
+        VCs = new
 
         // optimization to prevent mods when we always just want to break bands
         if ( multipleAtWhichToBreakBands == 1 )
