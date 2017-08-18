@@ -153,18 +153,18 @@ public final class CombineGVCFs extends MultiVariantWalker {
     @Override
     public void onTraversalStart() {
         // take care of the VCF headers
-
-        headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));   // needed for gVCFs without DP tags
         // TODO make this important
 
-        final List<VCFHeader> VCFheaders = getDrivingVariantsFeatureInputs()
+        final List<VCFHeader> vcfHeaders = getDrivingVariantsFeatureInputs()
                 .stream()
-                .map(ds -> getHeaderWithUpdatedSequenceDictionary(ds))
+                //.map(ds -> getHeaderWithUpdatedSequenceDictionary(ds)) possibly unnecissary
                 .collect(Collectors.toList());
         final Set<String> samples = VcfUtils.getSortedSampleSet(vcfHeaders, GATKVariantContextUtils.GenotypeMergeType.REQUIRE_UNIQUE);
 
+        final VCFHeader vcfHeader = getHeaderForVariants().sam;
+        vcfHeader.addMetaDataLine(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));
 
-        final VCFHeader vcfHeader = getHeaderForVariants();
+
         vcfWriter.writeHeader(vcfHeader);
 
         // collect the actual rod bindings into a list for use later
