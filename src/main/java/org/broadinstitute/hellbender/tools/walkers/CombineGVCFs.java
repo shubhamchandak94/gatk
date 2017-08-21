@@ -104,11 +104,17 @@ public final class CombineGVCFs extends MultiVariantWalker {
     final Set<String> samples = new HashSet<>();
     GenomeLoc prevPos = null;
     byte refAfterPrevPos;
+    GenomeLoc currentPos;
+    List<VariantContext> currentVariants = new ArrayList<>();
 
 
     @Override
     public void apply(VariantContext variant, ReadsContext readsContext, ReferenceContext referenceContext, FeatureContext featureContext) {
-        variant.star
+        if (currentVariants.isEmpty() || currentVariants.get(0).getContig()!=variant.getContig()
+                                      || currentVariants.get(0).getStart()<variant.getStart()) {
+            endPreviousStates();
+            currentVariants.
+        }
         return new PositionalState(tracker.getValues(variants, loc), ref.getBases(), loc);
 
 
