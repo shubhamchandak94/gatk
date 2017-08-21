@@ -101,19 +101,21 @@ public final class CombineGVCFs extends MultiVariantWalker {
     // the annotation engine
     private VariantAnnotatorEngine annotationEngine;
     final LinkedList<VariantContext> VCs = new LinkedList<>();
-    final Set<String> samples = new HashSet<>();
-    GenomeLoc prevPos = null;
-    byte refAfterPrevPos;
-    GenomeLoc currentPos;
+    OverallState currentOverallState;
     List<VariantContext> currentVariants = new ArrayList<>();
 
 
     @Override
     public void apply(VariantContext variant, ReadsContext readsContext, ReferenceContext referenceContext, FeatureContext featureContext) {
-        if (currentVariants.isEmpty() || currentVariants.get(0).getContig()!=variant.getContig()
-                                      || currentVariants.get(0).getStart()<variant.getStart()) {
-            endPreviousStates();
-            currentVariants.
+        // Collecting all the reads that start at a particular base into one.
+        if (currentVariants.isEmpty()) {
+            currentVariants.add(variant);
+        } else if (currentVariants.get(0).getContig()!=variant.getContig()
+                || currentVariants.get(0).getStart()<variant.getStart()) {
+            reduce(new PositionalState(currentVariants, referenceContext.getBases(), referenceContext.getInterval()),
+                    currentOverallState);
+            currentVariants.clear();
+            currentVariants.add(variant);
         }
         return new PositionalState(tracker.getValues(variants, loc), ref.getBases(), loc);
 
@@ -135,11 +137,15 @@ public final class CombineGVCFs extends MultiVariantWalker {
         }
     }
 
-    PriorityQueue<VariantContext> VCs;
-
     protected final class OverallState {
+        final LinkedList<VariantContext> VCs = new LinkedList<>();
+        final Set<String> samples = new HashSet<>();
+        GenomeLoc prevPos = null;
+        byte refAfterPrevPos;
 
+        public OverallState() {}
     }
+
 
     @Argument(fullName="convertToBasePairResolution", shortName="bpResolution", doc = "If specified, convert banded gVCFs to all-sites gVCFs", optional=true)
     protected boolean USE_BP_RESOLUTION = false;
