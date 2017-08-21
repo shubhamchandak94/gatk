@@ -8,6 +8,7 @@ import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
+import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.argumentcollections.DbsnpArgumentCollection;
 import org.broadinstitute.hellbender.cmdline.programgroups.VariantProgramGroup;
 import org.broadinstitute.hellbender.engine.*;
@@ -16,11 +17,14 @@ import org.broadinstitute.hellbender.tools.walkers.annotator.VariantAnnotatorEng
 import org.broadinstitute.hellbender.utils.GenomeLoc;
 import org.broadinstitute.hellbender.utils.GenomeLocParser;
 import org.broadinstitute.hellbender.utils.GenotypeUtils;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.genotyper.IndexedSampleList;
 import org.broadinstitute.hellbender.utils.genotyper.SampleList;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 import org.broadinstitute.hellbender.utils.variant.VcfUtils;
+import org.broadinstitute.hellbender.utils.variant.writers.GVCFWriter;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -65,6 +69,8 @@ import java.util.stream.Collectors;
 @DocumentedFeature
 public final class CombineGVCFs extends MultiVariantWalker {
 
+    private static final String GVCF_BLOCK = "GVCFBlock";
+
     /**
      * Which annotations to recompute for the combined output VCF file.
      */
@@ -86,6 +92,10 @@ public final class CombineGVCFs extends MultiVariantWalker {
     @Argument(fullName="annotationsToExclude", shortName="AX", doc="One or more specific annotations to exclude from recomputation", optional=true)
     private List<String> annotationsToExclude = new ArrayList<>();
 
+    @Argument(fullName= StandardArgumentDefinitions.OUTPUT_LONG_NAME,
+            shortName=StandardArgumentDefinitions.OUTPUT_SHORT_NAME,
+            doc="The output recal file used by ApplyRecalibration", optional=false)
+    private String outputFile;
 
     /**
      * The rsIDs from this file are used to populate the ID column of the output.  Also, the DB INFO flag will be set when appropriate. Note that dbSNP is not used in any way for the calculations themselves.
@@ -103,6 +113,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     final LinkedList<VariantContext> VCs = new LinkedList<>();
     OverallState currentOverallState;
     List<VariantContext> currentVariants = new ArrayList<>();
+    GVCFWriter vcfWriter;
 
 
     @Override
@@ -112,13 +123,12 @@ public final class CombineGVCFs extends MultiVariantWalker {
             currentVariants.add(variant);
         } else if (currentVariants.get(0).getContig()!=variant.getContig()
                 || currentVariants.get(0).getStart()<variant.getStart()) {
-            reduce(new PositionalState(currentVariants, referenceContext.getBases(), referenceContext.getInterval()),
+            currentOverallState = reduce(new PositionalState(currentVariants, referenceContext.getBases(), referenceContext.getInterval()),
                     currentOverallState);
             currentVariants.clear();
             currentVariants.add(variant);
-        }
-        return new PositionalState(tracker.getValues(variants, loc), ref.getBases(), loc);
 
+        }
 
     }
 
@@ -126,8 +136,8 @@ public final class CombineGVCFs extends MultiVariantWalker {
         final List<VariantContext> VCs;
         final Set<String> samples = new HashSet<>();
         final byte[] refBases;
-        final GenomeLoc loc;
-        public PositionalState(final List<VariantContext> VCs, final byte[] refBases, final GenomeLoc loc) {
+        final SimpleInterval loc;
+        public PositionalState(final List<VariantContext> VCs, final byte[] refBases, final SimpleInterval loc) {
             this.VCs = VCs;
             for(final VariantContext vc : VCs){
                 samples.addAll(vc.getSampleNames());
@@ -171,12 +181,13 @@ public final class CombineGVCFs extends MultiVariantWalker {
                 .stream()
                 //.map(ds -> getHeaderWithUpdatedSequenceDictionary(ds)) possibly unnecissary
                 .collect(Collectors.toList());
-        final Set<String> samples = VcfUtils.getSortedSampleSet(vcfHeaders, GATKVariantContextUtils.GenotypeMergeType.REQUIRE_UNIQUE);
+        final IndexedSampleList samples = new IndexedSampleList(VcfUtils.getSortedSampleSet(vcfHeaders, GATKVariantContextUtils.GenotypeMergeType.REQUIRE_UNIQUE));
 
         final VCFHeader vcfHeader = getHeaderForVariants().sam;
         vcfHeader.addMetaDataLine(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));
 
 
+        setupVCFWriter(vcfHeader, samples);
         vcfWriter.writeHeader(vcfHeader);
 
         // collect the actual rod bindings into a list for use later
@@ -213,8 +224,10 @@ public final class CombineGVCFs extends MultiVariantWalker {
             return previousState;
 
         if ( !startingStates.VCs.isEmpty() ) {
-            if ( ! okayToSkipThisSite(startingStates, previousState) )
-                endPreviousStates(previousState, startingStates.loc.incPos(-1), startingStates, false);
+            if ( ! okayToSkipThisSite(startingStates, previousState) ) {
+                SimpleInterval loc = startingStates.loc;
+                endPreviousStates(previousState, new SimpleInterval(loc.getContig(),loc.getStart()-1,loc.getEnd()-1), startingStates, false);
+            }
             previousState.VCs.addAll(startingStates.VCs);
             for(final VariantContext vc : previousState.VCs){
                 previousState.samples.addAll(vc.getSampleNames());
@@ -236,7 +249,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
         // Remove GCVFBlocks
         headerLines.removeIf(vcfHeaderLine -> vcfHeaderLine.getKey().startsWith(GVCF_BLOCK));
-asd
+        sf
         headerLines.addAll(annotationEngine.getVCFAnnotationDescriptions());
         headerLines.addAll(genotypingEngine.getAppropriateVCFInfoHeaders());
 
@@ -263,7 +276,7 @@ asd
      *
      * @return true if we should ensure that bands should be broken at the given position, false otherwise
      */
-    private boolean breakBand(final GenomeLoc loc) {
+    private boolean breakBand(final SimpleInterval loc) {
         return USE_BP_RESOLUTION ||
                 (loc != null && multipleAtWhichToBreakBands > 0 && (loc.getStart()+1) % multipleAtWhichToBreakBands == 0);  // add +1 to the loc because we want to break BEFORE this base
     }
@@ -322,7 +335,7 @@ asd
      * @param startingStates the state for the starting VCs
      * @param atCurrentPosition  indicates whether we output a variant at the current position, independent of VCF start/end, i.e. in BP resolution mode
      */
-    private void endPreviousStates(final OverallState state, final GenomeLoc pos, final PositionalState startingStates, boolean atCurrentPosition) {
+    private void endPreviousStates(final OverallState state, final SimpleInterval pos, final PositionalState startingStates, boolean atCurrentPosition) {
 
         final byte refBase = startingStates.refBases[0];
         //if we're in BP resolution mode or a VC ends at the current position then the reference for the next output VC (refNextBase)
