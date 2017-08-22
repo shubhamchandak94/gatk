@@ -412,7 +412,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
         // ref allele and start
         final Allele refAllele;
         final int start;
-        if ( state.prevPos == null || !state.prevPos.getContig().equals(first.getChr()) || first.getStart() >= state.prevPos.getStart() + 1) {
+        if ( state.prevPos == null || !state.prevPos.getContig().equals(first.getContig()) || first.getStart() >= state.prevPos.getStart() + 1) {
             start = first.getStart();
             refAllele = first.getReference();
         } else {
@@ -432,7 +432,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
                 genotypes.add(new GenotypeBuilder(g).alleles(GATKVariantContextUtils.noCallAlleles(g.getPloidy())).make());
         }
 
-        return new VariantContextBuilder("", first.getChr(), start, end, Arrays.asList(refAllele, GATKVCFConstants.NON_REF_SYMBOLIC_ALLELE)).attributes(attrs).genotypes(genotypes).make();
+        return new VariantContextBuilder("", first.getContig(), start, end, Arrays.asList(refAllele, GATKVCFConstants.NON_REF_SYMBOLIC_ALLELE)).attributes(attrs).genotypes(genotypes).make();
     }
 
     /**

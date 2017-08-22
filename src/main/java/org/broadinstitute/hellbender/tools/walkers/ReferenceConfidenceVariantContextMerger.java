@@ -580,7 +580,3 @@ public class ReferenceConfidenceVariantContextMerger {
         return attributes;
     }
 }
-
-
-
-}
