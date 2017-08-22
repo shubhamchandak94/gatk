@@ -181,8 +181,8 @@ public final class CombineGVCFs extends MultiVariantWalker {
     public void onTraversalStart() {
         final List<VCFHeader> vcfHeaders = getDrivingVariantsFeatureInputs()
                 .stream()
-                .map(ds -> getHeaderForVariants())
-                .collect(Collectors.toList());
+                .map(ds -> , getHeaderForVariants())
+                .collect(Collectors.toMap());
         final IndexedSampleList samples = new IndexedSampleList(VcfUtils.getSortedSampleSet(vcfHeaders, GATKVariantContextUtils.GenotypeMergeType.REQUIRE_UNIQUE));
 
         final VCFHeader vcfHeader = new VCFHeader(getHeaderForVariants().getMetaDataInInputOrder());//TODO figure if the samples actually get imported
