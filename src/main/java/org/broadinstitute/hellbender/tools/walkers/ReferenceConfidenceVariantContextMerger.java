@@ -5,6 +5,7 @@ import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.vcf.VCFConstants;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.walkers.annotator.VariantAnnotatorEngine;
 import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.AlleleSpecificAnnotationData;
 import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.ReducibleAnnotationData;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.GenotypeLikelihoodCalculators;
@@ -25,11 +26,18 @@ import java.util.stream.Stream;
 public class ReferenceConfidenceVariantContextMerger {
 
     private final GenotypeLikelihoodCalculators calculators;
+    private VariantAnnotatorEngine annotatorEngine;
 
     @VisibleForTesting
     public ReferenceConfidenceVariantContextMerger(){
         calculators = new GenotypeLikelihoodCalculators();
     }
+
+    ReferenceConfidenceVariantContextMerger(VariantAnnotatorEngine engine){
+        calculators = new GenotypeLikelihoodCalculators();
+        annotatorEngine = engine;
+    }
+
 
     /**
      * Combine annotation values by computing the medianish middle element

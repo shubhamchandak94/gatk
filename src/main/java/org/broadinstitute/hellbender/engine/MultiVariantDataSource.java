@@ -14,7 +14,6 @@ import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.SequenceDictionaryUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.samples.Sample;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 import org.broadinstitute.hellbender.utils.variant.VcfUtils;
 
@@ -58,7 +57,7 @@ public final class MultiVariantDataSource implements GATKDataSource<VariantConte
      * over our feature reader.
      */
     private CloseableIterator<VariantContext> currentIterator;
-    private List<Sample> mergedSamples;
+    private SortedSet<String> mergedSamples;
 
     /**
      * Creates a MultiVariantDataSource backed by the provided FeatureInputs. We will look ahead the specified number of bases
@@ -100,7 +99,7 @@ public final class MultiVariantDataSource implements GATKDataSource<VariantConte
         //
         validateAllSequenceDictionaries();
         mergedHeader = getMergedHeader();
-        mergedSamples = sortSamples();
+        mergedSamples = getSortedSamples();
         if ((mergedHeader == null || mergedHeader.getSequenceDictionary() == null) && featureInputs.size() > 1) {
             throw new UserException(
                     "No sequence dictionary was found for any input. When using multiple inputs, at least one input " +
@@ -229,31 +228,26 @@ public final class MultiVariantDataSource implements GATKDataSource<VariantConte
     }
 
     /**
+     * Merge and sort the samples from each header requiring unique samples
+     */
+    private SortedSet<String> getSortedSamples() {
+        final Map<String, VCFHeader> headers = featureDataSources
+                .stream()
+                .collect(Collectors.toMap(ds -> getName(), ds -> getHeader()));
+
+        // Now merge the headers using htsjdk, which is pretty promiscuous, and which only works properly
+        // because of the cross-dictionary validation done in validateAllSequenceDictionaries.
+        return VcfUtils.getSortedSampleSet(headers, GATKVariantContextUtils.GenotypeMergeType.REQUIRE_UNIQUE);
+    }
+
+    /**
      * Update each individual header with the sequence dictionary returned by the corresponding data source;
      * then merge the resulting headers.
      */
     private VCFHeader getMergedHeader() {
         final List<VCFHeader> headers = featureDataSources
                 .stream()
-                .map(ds -> ds.getName() , getHeaderWithUpdatedSequenceDictionary(ds))
-                .collect(Collectors.toMap());
-
-        // Now merge the headers using htsjdk, which is pretty promiscuous, and which only works properly
-        // because of the cross-dictionary validation done in validateAllSequenceDictionaries.
-        VcfUtils.getSortedSampleSet(headers, GATKVariantContextUtils.GenotypeMergeType.REQUIRE_UNIQUE)
-
-        return headers.size() > 1 ?
-                new VCFHeader(VCFUtils.smartMergeHeaders(headers, true)) :
-                headers.get(0);
-    }
-
-    /**
-     *
-     */
-    private VCFHeader getMergedHeader() {
-        final List<VCFHeader> headers = featureDataSources
-                .stream()
-                .map(ds -> ds.getHeader())
+                .map(ds -> getHeaderWithUpdatedSequenceDictionary(ds))
                 .collect(Collectors.toList());
 
         // Now merge the headers using htsjdk, which is pretty promiscuous, and which only works properly
@@ -403,7 +397,7 @@ public final class MultiVariantDataSource implements GATKDataSource<VariantConte
         };
     }
 
-    public List<Sample> getSamples() {
+    public SortedSet<String> getSamples() {
         return mergedSamples;
     }
 }
