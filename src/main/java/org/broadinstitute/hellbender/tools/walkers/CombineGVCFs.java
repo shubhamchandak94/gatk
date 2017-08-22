@@ -26,6 +26,7 @@ import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 import org.broadinstitute.hellbender.utils.variant.VcfUtils;
 import org.broadinstitute.hellbender.utils.variant.writers.GVCFWriter;
 
+import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -94,13 +95,13 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
     @Argument(fullName= StandardArgumentDefinitions.OUTPUT_LONG_NAME,
             shortName=StandardArgumentDefinitions.OUTPUT_SHORT_NAME,
-            doc="The output recal file used by ApplyRecalibration", optional=false)
-    private String outputFile;
+            doc="The combined GVCF output file", optional=false)
+    private File outputFile;
 
     /**
      * The rsIDs from this file are used to populate the ID column of the output.  Also, the DB INFO flag will be set when appropriate. Note that dbSNP is not used in any way for the calculations themselves.
      */
-    @ArgumentCollection
+
 //    protected DbsnpArgumentCollection dbsnp = new DbsnpArgumentCollection();
 //    public FeatureInput<VariantContext> getDbsnpRodBinding() { return dbsnp.dbsnp; }
 //    public List<RodBinding<VariantContext>> getCompRodBindings() { return Collections.emptyList(); }
@@ -109,11 +110,14 @@ public final class CombineGVCFs extends MultiVariantWalker {
 //    public boolean alwaysAppendDbsnpId() { return false; }
 
     // the annotation engine
+    @ArgumentCollection
+    protected DbsnpArgumentCollection dbsnp = new DbsnpArgumentCollection();
     private VariantAnnotatorEngine annotationEngine;
     final LinkedList<VariantContext> VCs = new LinkedList<>();
     OverallState currentOverallState;
     List<VariantContext> currentVariants = new ArrayList<>();
-    GVCFWriter vcfWriter;
+    VariantContextWriter vcfWriter;
+    ReferenceConfidenceVariantContextMerger referenceConfidenceVariantContextMerger = new ReferenceConfidenceVariantContextMerger();
 
 
     @Override
@@ -123,11 +127,13 @@ public final class CombineGVCFs extends MultiVariantWalker {
             currentVariants.add(variant);
         } else if (currentVariants.get(0).getContig()!=variant.getContig()
                 || currentVariants.get(0).getStart()<variant.getStart()) {
+
+            referenceContext.getInterval()
             currentOverallState = reduce(new PositionalState(currentVariants, referenceContext.getBases(), referenceContext.getInterval()),
                     currentOverallState);
             currentVariants.clear();
             currentVariants.add(variant);
-
+            // TODO BE VERY CLEAR ABOUT THIS
         }
 
     }
@@ -136,8 +142,8 @@ public final class CombineGVCFs extends MultiVariantWalker {
         final List<VariantContext> VCs;
         final Set<String> samples = new HashSet<>();
         final byte[] refBases;
-        final SimpleInterval loc;
-        public PositionalState(final List<VariantContext> VCs, final byte[] refBases, final SimpleInterval loc) {
+        final GenomeLoc loc;
+        public PositionalState(final List<VariantContext> VCs, final byte[] refBases, final GenomeLoc loc) {
             this.VCs = VCs;
             for(final VariantContext vc : VCs){
                 samples.addAll(vc.getSampleNames());
@@ -174,16 +180,13 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
     @Override
     public void onTraversalStart() {
-        // take care of the VCF headers
-        // TODO make this important
-
         final List<VCFHeader> vcfHeaders = getDrivingVariantsFeatureInputs()
                 .stream()
                 //.map(ds -> getHeaderWithUpdatedSequenceDictionary(ds)) possibly unnecissary
                 .collect(Collectors.toList());
         final IndexedSampleList samples = new IndexedSampleList(VcfUtils.getSortedSampleSet(vcfHeaders, GATKVariantContextUtils.GenotypeMergeType.REQUIRE_UNIQUE));
 
-        final VCFHeader vcfHeader = getHeaderForVariants().sam;
+        final VCFHeader vcfHeader = getHeaderForVariants();//TODO figure if the samples actually get imported
         vcfHeader.addMetaDataLine(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));
 
 
@@ -191,29 +194,21 @@ public final class CombineGVCFs extends MultiVariantWalker {
         vcfWriter.writeHeader(vcfHeader);
 
         // collect the actual rod bindings into a list for use later
-        for ( final FeatureDataSource<VariantContext> variantCollection : variantCollections )
-            variants.addAll(variantCollection.getRodBindings());
+//        for ( final FeatureDataSource<VariantContext> variantCollection : variantCollections )
+//            variants.addAll(variantCollection.getRodBindings());
 
-        genomeLocParser = getToolkit().getGenomeLocParser();
+        //genomeLocParser = new GenomeLocParser().getGenomeLocParser();
 
         // create the annotation engine
-        annotationEngine = new VariantAnnotatorEngine.ofSelectedMinusExcluded(Arrays.asList(annotationGroupsToUse), annotationsToUse, annotationsToExclude, Collections.<String>emptyList(), this);
+        annotationEngine = VariantAnnotatorEngine.ofSelectedMinusExcluded(Arrays.asList(annotationGroupsToUse), annotationsToUse, annotationsToExclude, Collections.<String>emptyList(), this);
 
         //now that we have all the VCF headers, initialize the annotations (this is particularly important to turn off RankSumTest dithering in integration tests)
-        annotationEngine.invokeAnnotationInitializationMethods(headerLines);
-
-        VCs = new
 
         // optimization to prevent mods when we always just want to break bands
         if ( multipleAtWhichToBreakBands == 1 )
             USE_BP_RESOLUTION = true;
     }
 
-    public PositionalState map(final RefMetaDataTracker tracker, final ReferenceContext ref, final AlignmentContext context) {
-
-        final GenomeLoc loc = ref.getLocus();
-        return new PositionalState(tracker.getValues(variants, loc), ref.getBases(), loc);
-    }
 
     public OverallState reduceInit() {
         return new OverallState();
@@ -249,9 +244,9 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
         // Remove GCVFBlocks
         headerLines.removeIf(vcfHeaderLine -> vcfHeaderLine.getKey().startsWith(GVCF_BLOCK));
-        sf
+
         headerLines.addAll(annotationEngine.getVCFAnnotationDescriptions());
-        headerLines.addAll(genotypingEngine.getAppropriateVCFInfoHeaders());
+        //headerLines.addAll(genotypingEngine.getAppropriateVCFInfoHeaders());
 
         // add headers for annotations added by this tool
         headerLines.add(GATKVCFHeaderLines.getInfoLine(GATKVCFConstants.MLE_ALLELE_COUNT_KEY));
@@ -335,7 +330,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
      * @param startingStates the state for the starting VCs
      * @param atCurrentPosition  indicates whether we output a variant at the current position, independent of VCF start/end, i.e. in BP resolution mode
      */
-    private void endPreviousStates(final OverallState state, final SimpleInterval pos, final PositionalState startingStates, boolean atCurrentPosition) {
+    private void endPreviousStates(final OverallState state, final GenomeLoc pos, final PositionalState startingStates, boolean atCurrentPosition) {
 
         final byte refBase = startingStates.refBases[0];
         //if we're in BP resolution mode or a VC ends at the current position then the reference for the next output VC (refNextBase)
@@ -347,7 +342,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
         for ( int i = state.VCs.size() - 1; i >= 0; i-- ) {
             final VariantContext vc = state.VCs.get(i);
             //the VC for the previous state will be stopped if its position is previous to the current position or it we've moved to a new contig
-            if ( vc.getStart() <= pos.getStart() || !vc.getChr().equals(pos.getContig())) {
+            if ( vc.getStart() <= pos.getStart() || !vc.getContig().equals(pos.getContig())) {
 
                 stoppedVCs.add(vc);
 
@@ -370,12 +365,12 @@ public final class CombineGVCFs extends MultiVariantWalker {
         // the last write position (state.prevPos)
         //NOTE: BP resolution with have current position == state.prevPos because it gets output via a different control flow
         if ( !stoppedVCs.isEmpty() &&  (state.prevPos == null || pos.isPast(state.prevPos) )) {
-            final GenomeLoc gLoc = genomeLocParser.createGenomeLoc(stoppedVCs.get(0).getChr(), pos.getStart());
+            final GenomeLoc gLoc = genomeLocParser.createGenomeLoc(stoppedVCs.get(0).getContig(), pos.getStart());
 
             // we need the specialized merge if the site contains anything other than ref blocks
             final VariantContext mergedVC;
             if ( containsTrueAltAllele(stoppedVCs) )
-                mergedVC = ReferenceConfidenceVariantContextMerger.merge(stoppedVCs, gLoc, refBase, false, false, annotationEngine);
+                mergedVC = referenceConfidenceVariantContextMerger.merge(stoppedVCs, gLoc, refBase, false, false);
             else
                 mergedVC = referenceBlockMerge(stoppedVCs, state, pos.getStart());
 
