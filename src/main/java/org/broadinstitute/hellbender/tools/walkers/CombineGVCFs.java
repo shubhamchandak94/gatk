@@ -185,7 +185,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
                 .collect(Collectors.toList());
         final IndexedSampleList samples = new IndexedSampleList(VcfUtils.getSortedSampleSet(vcfHeaders, GATKVariantContextUtils.GenotypeMergeType.REQUIRE_UNIQUE));
 
-        final VCFHeader vcfHeader = getHeaderForVariants();//TODO figure if the samples actually get imported
+        final VCFHeader vcfHeader = new VCFHeader(getHeaderForVariants().getMetaDataInInputOrder());//TODO figure if the samples actually get imported
         vcfHeader.addMetaDataLine(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));
 
 
