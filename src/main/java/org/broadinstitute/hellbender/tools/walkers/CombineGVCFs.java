@@ -128,8 +128,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
         } else if (currentVariants.get(0).getContig()!=variant.getContig()
                 || currentVariants.get(0).getStart()<variant.getStart()) {
 
-            referenceContext.getInterval()
-            currentOverallState = reduce(new PositionalState(currentVariants, referenceContext.getBases(), referenceContext.getInterval()),
+            currentOverallState = reduce(new PositionalState(currentVariants, referenceContext.getBases(), genomeLocParser.createGenomeLoc(referenceContext.getInterval())),
                     currentOverallState);
             currentVariants.clear();
             currentVariants.add(variant);
@@ -182,7 +181,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     public void onTraversalStart() {
         final List<VCFHeader> vcfHeaders = getDrivingVariantsFeatureInputs()
                 .stream()
-                //.map(ds -> getHeaderWithUpdatedSequenceDictionary(ds)) possibly unnecissary
+                .map(ds -> getHeaderForVariants())
                 .collect(Collectors.toList());
         final IndexedSampleList samples = new IndexedSampleList(VcfUtils.getSortedSampleSet(vcfHeaders, GATKVariantContextUtils.GenotypeMergeType.REQUIRE_UNIQUE));
 
@@ -197,7 +196,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
 //        for ( final FeatureDataSource<VariantContext> variantCollection : variantCollections )
 //            variants.addAll(variantCollection.getRodBindings());
 
-        //genomeLocParser = new GenomeLocParser().getGenomeLocParser();
+        genomeLocParser = new GenomeLocParser(vcfHeader.getSequenceDictionary());
 
         // create the annotation engine
         annotationEngine = VariantAnnotatorEngine.ofSelectedMinusExcluded(Arrays.asList(annotationGroupsToUse), annotationsToUse, annotationsToExclude, Collections.<String>emptyList(), this);
