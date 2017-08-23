@@ -153,8 +153,16 @@ public final class CombineGVCFs extends MultiVariantWalker {
         } else {
             currentVariants.add(variant);
         }
-        currentPositionalState = new PositionalState(currentVariants, referenceContext.getBases(), genomeLocParser.createGenomeLoc(referenceContext.getInterval()));
+        updatePositionalState(currentVariants, referenceContext);
+    }
 
+    /**
+     * Method which ensures that the currentpositional state object is holding onto the right state
+     *
+     * @param currentVariants
+     */
+    private void updatePositionalState(List<VariantContext> currentVariants, ReferenceContext referenceContext) {
+        currentPositionalState = new PositionalState(currentVariants, referenceContext.getBases(), genomeLocParser.createGenomeLoc(referenceContext.getInterval()));
     }
 
     protected final class PositionalState {
@@ -226,11 +234,14 @@ public final class CombineGVCFs extends MultiVariantWalker {
             USE_BP_RESOLUTION = true;
     }
 
-
-    public OverallState reduceInit() {
-        return new OverallState();
-    }
-
+    /**
+     * Method which calls endPreviousStates at the appropriate places on the given a new startingStates object
+     * and an OverallState object corresponding to the currently accumulated reads.
+     *
+     * @param startingStates
+     * @param previousState
+     * @return
+     */
     public OverallState reduce(final PositionalState startingStates, final OverallState previousState) {
         if ( startingStates == null )
             return previousState;
