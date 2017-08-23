@@ -63,22 +63,24 @@ Forward strand
 Reverse strand
 
 \section{Intro}
-We will first discuss how orientation bias arises during sequencing. To do so we will go over Kap ICE library construction (also known as library prep) and a bit of Illumina sequencing. We will abbreviate and abstract the steps along the way to befit our purpose, which again is to understand how orientation bias arises during sequencing. The sequencing protocol described below is Kapa ICE exome. 
+We will first discuss how orientation bias arises during sequencing. To do so we will go over Kap ICE library construction (also known as library prep) and a bit of Illumina sequencing. We will abbreviate and abstract the steps along the way to facilitate understanding. 
 
-We first take a vial full of DNA molecules and shear them into fragments. The resulting fragments of DNA, as depicted in the Figure \ref{fig:oxog}, are called \textit{inserts}. Without loss of generality we assume that the strand shown on top in blue is the \textit{forward} strand; that is, read from 5' end to 3' end, bases in the blue strand map directly to the reference. The strand in orange, conversely, is a \textit{reverse} strand, as it is a reverse complement of the reference when read from 5' to 3' end.
+We first take a vial full of DNA molecules and shear them into fragments. The resulting fragments of DNA, as depicted in the Figure \ref{fig:oxog}, are called \textit{inserts}. Without loss of generality we assume that the strand shown on top in blue is the \textit{forward} strand; that is, read from 5' end to 3' end, bases in the blue strand happen to map directly to the reference. The strand in orange, conversely, is a \textit{reverse} strand, as it is a reverse complement of the reference when read from 5' to 3' end.
 
-Few years back, folks at GP found that high-power acoustic shearing (as opposed to enzymatic shearing as in Nexome Library Construction) may cause guanine (G) in an insert to oxidize. The oxidized G may base-pair with adenine (A) in addition to the regular cytosine (C). The oxidized G is depicted as a G* with an asterisk in the figures; thus the forward strand at the top of the figure contains an oxidized G near the 5' end.
+Note that, for us, there is nothing magical about the reference bases. Somebody somewhere picked one of the two strands arbitrarily. Given a random piece of DNA, therefore, ... START HERE
 
-Next in library prep we add adapters to the double-stranded inserts. In ICE Kapa Exome protocol, we only use one kind of double-stranded adapter, shown in red and green in Figure \ref{fig:oxog}. What this means is that the clones of the same double-stranded adapter attach to both sides of the insert (they are flipped due to the asymmetry of DNA). Note that the ends of adapters are not base-paired; that is, the sequences on the two strands are not complementary. This will play a crucial role later on. \todo{Must be more specific here} A \textit{library} refers to an insert with adapters attached on both ends. We will subsequently make many copies of each \textit{original library} via PCR.
+Next in library prep we add adapters to the double-stranded inserts. We only use one kind of double-stranded adapter, shown in red and green in Figure \ref{fig:oxog}. What this means is that the clones of the same double-stranded adapter attach to both sides of the insert (they are flipped due to the asymmetry of DNA). Note that the ends of adapters are not base-paired; that is, the sequences on the two strands are not complementary. This will play a crucial role later on. \todo{Must be more specific here} A \textit{library} refers to an insert with adapters attached on both ends. We will subsequently make many copies of each \textit{original library} via PCR.
 
 PCR replicates of the forward strand are shown on the bottom left corner in the figure. Note that during PCR G* in the forward strand base paired with A, which, after another round of PCR, created a third duplicate with a T in place of the original G. PCR replicates the reverse strand, shown in deep orange, faithfully and thus we get only one type of PCR duplicate\footnote{in reality this is unlikely. But since we are talking about an idealized, abstracted world anyway, we are free to suppose that this is the case}. 
 
-Now we pour the libraries on the flowcell, as detailed in Figure \ref{fig:flowcell}. 
+Few years back, folks at GP found that high-power acoustic shearing (as opposed to enzymatic shearing as in Nexome Library Construction) may cause guanine (G) in an insert to oxidize. The oxidized G may base-pair with adenine (A) in addition to the regular cytosine (C). The oxidized G is depicted as a G* with an asterisk in the figures; thus the forward strand at the top of the figure contains an oxidized G near the 5' end.
 
+Now we pour the libraries on the flowcell, as detailed in Figure \ref{fig:flowcell}. 
 
 %%%%%
  
-
+ \section{Scrap yard of things that may be crap}
+ 
 Couple things to note about the adapters; adapters are not symmetric. That is, once adapter is ligated, the two strands in the double stranded insert molecule behave differently. Namely, the way adapter is ligated to the DNA decides which strand, forward or reverse, will be sequenced first. This means that we can sequence the same molecule two different ways, depending on how the adapter is ligated; read the forward strand first, or read the reverse strand first. This happens at random. We mark the read pair in the former case to have F1R2 orientation and the latter F2R1. Since the adapter ligation happens at random, we should see about an equal amount of F1R2 and F2R1 reads. For a fixed insert, the way adapter is ligated does not affect which sequences are read. 
 
 Orientation bias is a form of sequencing artifact in which the alternate allele occurs exclusively in F1R2 reads or F2R1 reads. Since the orientation of reads should be balanced - as we have no reason to believe that the adapter prefers to ligate one way over the other - the skew in read orientation e.g. evidence for SNP all comes from F1R2 reads leads us to suspect the call.
@@ -127,7 +129,9 @@ Our probabilistic graphical model is in Figure (\ref{fig:pgm}). For each referen
 z \in \{ \text{F1R2}, \text{F2R1}, \text{Balanced Hom Ref}, \text{Balanced Het}, \text{Balanced Hom Var} \}
 \end{equation*}
 
-$z \sim \mathrm{Categorical}(\vpi^a_c)$, where $\pi^a_{ck}$ is the context dependent prior probability of kth component $Z$ given allele $a$ and satisfies $\sum_k \pi^a_{ck} = 1$, where $k \in [1, |Z|]$. The number of ALT allele at the site, $m$, is a binomial random variable whose probability of success $f$ (i.e. allele fraction) depends on the state $z$. We explicitly model the number of ALT alleles because its dependence on $z$ encapsulates our knowledge that, when orientation bias is present, we \textit{always} have (artifactual) ALT reads at the site. In other words, if we do not observe ALT reads at all (i.e. $z = \mathrm{Hom ref}$), we cannot have orientation bias at the site. \todo[inline, color = green]{This is not a valid i.e. We cannot assume that $m = 0$ and $z = \text{hom ref}$ go together. Rather, we must design the model such that this is the case. That is, we give it a very low likelihood when $m = 0$ and $z$ is anything other than hom ref.}. We then model the number of $F1R2$ reads among $m$ ALT reads as $x|m,z \sim \mathrm{Binom(\vtheta_z)}$, parameterized by $\theta_z$ that depends on whether the site suffers from orientation bias. In other words, $\theta$ depends on $z$. 
+$z \sim \mathrm{Categorical}(\vpi^a_c)$, where $\pi^a_{ck}$ is the context dependent prior probability of the kth component of $z$ given allele $a$ and satisfies $\sum_k \pi^a_{ck} = 1$, where $k \in [1, |Z|]$. The number of alt alleles at the site, $m$, is a binomial random variable whose probability of success $f$ (i.e. allele fraction) depends on the state $z$. We explicitly model the number of alt alleles because its dependence on $z$ encapsulates our knowledge that, when orientation bias is present, we \textit{always} have (artifactual) alt reads at the site. In other words, if we do not observe alt reads at all (i.e. $z = \mathrm{Hom ref}$), we cannot have orientation bias at the site. \todo[inline, color = green]{This is not a valid asusmption i.e. We cannot assume that $m = 0$ and $z = \text{hom ref}$ go together. Rather, we must design the model such that this is the case. That is, we give it a very low likelihood when $m = 0$ and $z$ is anything other than hom ref.}
+
+We then model the number of $F1R2$ reads among $m$ alt reads as $x|m,z \sim \mathrm{Binom(\vtheta_z)}$, parameterized by $\theta_z$ that depends on whether the site suffers from orientation bias. In other words, $\theta$ depends on $z$. 
 
 \begin{itemize}
 \item $z \sim \mathrm{Categorical}(\vpi^a_c)$
@@ -149,13 +153,14 @@ $z \sim \mathrm{Categorical}(\vpi^a_c)$, where $\pi^a_{ck}$ is the context depen
 We estimate the hyperparameters $\vpi$ and $\vp$ that maximize likelihood using the EM algorithm. We can then compute the posterior probability of the latent variable $z$ to determine whether a variant is an orientation artifact and thus should be filtered.
 
 \subsubsection{E step}
-In the E step, we compute the responsibilities $\gamma_{nk} = p(z_{nk} | x_n, m_n, a)$. $\gamma_{nk}$ is the posterior probability of $k$th component of $z$ given the observed variables $x_n$ and $m_n$ and the observed allele $a$. By Bayes rule we have
+In the E step, we compute the responsibilities $\gamma_{nk} = p(z_{nk} | x_n, m_n, a)$. $\gamma_{nk}$ is the posterior probability of $k$th component of $z$ given random variables $x_n$ and $m_n$ and allele $a$. By Bayes rule we have \todo[inline]{Don't we need the binomial constants?}
 
 \begin{align}
-\gamma^*_{nk} &\propto p(z_{k} | x_n, m_n, a) \nonumber \\
-		        &\propto p(z_{k} | a) p(m_n | z_k, f_{k} ) p(x_n | m_n ) \nonumber \\
+\gamma^*_{nk} &\propto p(z_{nk} | x_n, m_n, a) \nonumber \\
+		        &\propto p(z_{nk} | a) p(m_n | z_{nk}, f_{k} ) p(x_n | m_n ) \nonumber \\
 		        &= \pi_{ak}  \{ f_{k}^{m_n} (1-f_k)^{R - m_n} \} \{ \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} \}
 \end{align}
+
 
 where $R$ is the number of reads at site $n$, and the asterisk over $\gamma^*_{nk}$ denotes that the responsibility is not normalized and thus is not a probability. Normalizing responsibilities gives us
 
@@ -170,7 +175,7 @@ In the M step, we maximize the expectation of the complete-data log likelihood w
 
 \begin{align}
 \E [ \ln p(X, M , Z | \vpi, \vp, \vtheta, \va) ] &= \E [ \ln \prod_{n = 1}^{N}  p(z_n | a_n) p(m_n | z_n, p_{z} ) p(x_n | m_n, z_n, \theta_n ) ] \nonumber \\
-							&= \E [ \ln \prod_{n = 1}^{N} \{ \prod_{k = 1}^{K} \pi_{ak}^{z_{kn}} \} \{ \prod_{k = 1}^{K} ( f_k^{m_n} (1-f_k)^{R_n - m_n} ) ^{z_{nk}} \} \{ \prod_{k = 1}^{K} ( \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} )^{z_{nk}} \} ] \notag \\
+							&= \E [ \ln \prod_{n = 1}^{N} \{ \prod_{k = 1}^{K} \pi_{ak}^{z_{nk}} \} \{ \prod_{k = 1}^{K} ( f_k^{m_n} (1-f_k)^{R_n - m_n} ) ^{z_{nk}} \} \{ \prod_{k = 1}^{K} ( \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} )^{z_{nk}} \} ] \notag \\
 							&= \E [ \ln \prod_{n = 1}^{N} \prod_{k = 1}^{K} \{ \pi_{ak}  f_{k}^{m_n} (1-f_k)^{R_n - m_n} \theta_k^{x_n} (1 - \theta_k)^{m_n - x_n} \}^{z_{nk}} ]  \nonumber \\
 							&= \E [ \sum_{n = 1}^{N} \sum_{k = 1}^{K} z_{nk} \{ \ln \pi_{ak}  + m_n \ln f_k + (R_n - m_n) \ln (1-f_k) + \notag \\
 							&\phantom{---------------} x_n \ln \theta_k + (m_n - x_n) \ln (1 - \theta_k) \} ]  \nonumber \\
@@ -188,11 +193,13 @@ N_{ak}      &= \sum_{n : a_n = a} \gamma_{nk} \label{eq:nk} \\
 \bar{R}_k  &= \frac{1}{N_k} \sum_n \gamma_{nk} R_n \label{eq:Rbar}
 \end{align}
 
-$N_k$ is the effective number of samples that were in state $z_k$ and $N_{ak}$ the effective number of samples in state $z_k$ \textit{ and } have allele $a$. $\bar{x}_k$ and $\bar{m}_k$ are the effective sample means of $x_k$ and $m_k$, and $\bar{R}_k$ is the effective mean depth over the sites in state $z_k$. We now take the derivative of (\ref{eq:expjointLL}) with respect to $\theta_k, p_k, \pi_{ak}$, set them equal to 0, and solve for those parameters to get the update equations.
+$N_k$ is the effective number of samples in state $z_k$, and $N_{ak}$ the effective number of samples that are in state $z_k$ \textit{and} have allele $a$. $\bar{x}_k$ and $\bar{m}_k$ are the effective sample means of $x$ and $m$ weighted by the each sample's responsibility in explaining the state $z_k$, and $\bar{R}_k$ is the effective mean depth over the sites in state $z_k$. 
+
+We now take the derivative of (\ref{eq:expjointLL}) with respect to $\theta_k, p_k, \pi_{ak}$, set them equal to 0, and solve for those parameters to get the update equations.
 
 \begin{align}
-\frac{\partial}{\partial \theta_k} &= \sum_n \gamma_{nk} \Big( \frac{ x_n}{\theta_k} - \frac{m_n - x_n}{1- \theta_k} \Big)\\
-					      &= \frac{N_k \bar{x}_k}{\theta_k} - \frac{N_k \bar{m}_k - N_k \bar{x}_k}{1- \theta_k} = 0
+\frac{\partial}{\partial \theta_k} \E [ \ln p(X, M , Z | \vpi, \vp, \vtheta, \va) ] &= \sum_n \gamma_{nk} \Big( \frac{ x_n}{\theta_k} - \frac{m_n - x_n}{1- \theta_k} \Big)\\
+					         							     &= \frac{N_k \bar{x}_k}{\theta_k} - \frac{N_k \bar{m}_k - N_k \bar{x}_k}{1- \theta_k} = 0
 \end{align}
 
 where we used (\ref{eq:xbar}) and (\ref{eq:mbar}). Solving for $\theta_k$, we get
@@ -201,7 +208,7 @@ where we used (\ref{eq:xbar}) and (\ref{eq:mbar}). Solving for $\theta_k$, we ge
 \hat{\theta}_k = \frac{\bar{x}_k}{\bar{m}_k} \label{eq:theta}
 \end{align}
 
-Derivative with respect to $f_k$ is completely analogous:
+Thus we update $\theta$ to the fraction of F1R2 alt reads, counting only those examples that belong to class $k$ according to the current estimate for responsibilities. Derivative with respect to $f_k$ is completely analogous:
 
 \begin{align}
 \hat{f}_k = \frac{\bar{m}_k}{\bar{R}_k} \label{eq:f}
