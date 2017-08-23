@@ -86,9 +86,9 @@ public final class CombineGVCFs extends MultiVariantWalker {
      * it obscures the specific requirements of individual annotations. Any requirements that are not met (e.g. failing
      * to provide a pedigree file for a pedigree-based annotation) may cause the run to fail.
      */
+    @Advanced
     @Argument(fullName="group", shortName="G", doc="One or more classes/groups of annotations to apply to variant calls", optional=true)
-    protected String[] annotationGroupsToUse = { StandardAnnotation.class.getSimpleName() };
-
+    private List<String> annotationGroupsToUse = new ArrayList<>(Arrays.asList(new String[]{StandardAnnotation.class.getSimpleName()}));
 
     @Advanced
     @Argument(fullName="annotationsToExclude", shortName="AX", doc="One or more specific annotations to exclude from recomputation", optional=true)
@@ -117,6 +117,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     final LinkedList<VariantContext> VCs = new LinkedList<>();
     OverallState currentOverallState;
     List<VariantContext> currentVariants = new ArrayList<>();
+    PositionalState currentPositionalState;
     VariantContextWriter vcfWriter;
     ReferenceConfidenceVariantContextMerger referenceConfidenceVariantContextMerger = new ReferenceConfidenceVariantContextMerger();
 
@@ -142,17 +143,17 @@ public final class CombineGVCFs extends MultiVariantWalker {
         // Collecting all the reads that start at a particular base into one.
         if (currentVariants.isEmpty()) {
             currentVariants.add(variant);
-        } else if (currentVariants.get(0).getContig()!=variant.getContig()
+        } else if (!currentVariants.get(0).getContig().equals(variant.getContig())
                 || currentVariants.get(0).getStart()<variant.getStart()) {
 
-            currentOverallState = reduce(new PositionalState(currentVariants, referenceContext.getBases(), genomeLocParser.createGenomeLoc(referenceContext.getInterval())),
-                    currentOverallState);
+            currentOverallState = reduce(currentPositionalState, currentOverallState);
             currentVariants.clear();
             currentVariants.add(variant);
             // TODO BE VERY CLEAR ABOUT THIS
         } else {
             currentVariants.add(variant);
         }
+        currentPositionalState = new PositionalState(currentVariants, referenceContext.getBases(), genomeLocParser.createGenomeLoc(referenceContext.getInterval()));
 
     }
 
@@ -203,8 +204,10 @@ public final class CombineGVCFs extends MultiVariantWalker {
         final VCFHeader vcfHeader = new VCFHeader(getHeaderForVariants().getMetaDataInInputOrder(), samples);//TODO figure if the samples actually get imported
         vcfHeader.addMetaDataLine(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));
 
+        // create the annotation engine
+        annotationEngine = VariantAnnotatorEngine.ofSelectedMinusExcluded(annotationGroupsToUse, annotationsToUse, annotationsToExclude, dbsnp.dbsnp, Collections.EMPTY_LIST);
+
         setupVCFWriter(vcfHeader, new IndexedSampleList(samples));
-        vcfWriter.writeHeader(vcfHeader);
 
         // collect the actual rod bindings into a list for use later
 //        for ( final FeatureDataSource<VariantContext> variantCollection : variantCollections )
@@ -212,11 +215,9 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
         genomeLocParser = new GenomeLocParser(vcfHeader.getSequenceDictionary());
 
-        // create the annotation engine
-        List<String> annotationGroups = Arrays.asList(annotationGroupsToUse);
-        annotationEngine = VariantAnnotatorEngine.ofSelectedMinusExcluded(annotationGroups, annotationsToUse, annotationsToExclude, dbsnp.dbsnp, Collections.EMPTY_LIST);
-
         referenceConfidenceVariantContextMerger = new ReferenceConfidenceVariantContextMerger(annotationEngine);
+
+        currentOverallState = new OverallState();
 
         //now that we have all the VCF headers, initialize the annotations (this is particularly important to turn off RankSumTest dithering in integration tests)
 
@@ -453,9 +454,12 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
     @Override
     public Object onTraversalSuccess() {
+        // Clearing the store with all the final variants
+        reduce(currentPositionalState,currentOverallState);
         // there shouldn't be any state left unless the user cut in the middle of a gVCF block
         if ( !currentOverallState.VCs.isEmpty() )
             logger.warn("You have asked for an interval that cuts in the middle of one or more gVCF blocks. Please note that this will cause you to lose records that don't end within your interval.");
+        vcfWriter.close();
         return null;
     }
 }

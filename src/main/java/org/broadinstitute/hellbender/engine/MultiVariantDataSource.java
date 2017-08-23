@@ -6,6 +6,7 @@ import htsjdk.samtools.util.CloseableIterator;
 import htsjdk.samtools.util.MergingIterator;
 import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.variantcontext.VariantContextComparator;
+import htsjdk.variant.variantcontext.writer.VariantContextWriter;
 import htsjdk.variant.vcf.VCFHeader;
 import htsjdk.variant.vcf.VCFUtils;
 import org.apache.logging.log4j.LogManager;
@@ -233,7 +234,7 @@ public final class MultiVariantDataSource implements GATKDataSource<VariantConte
     private SortedSet<String> getSortedSamples() {
         final Map<String, VCFHeader> headers = featureDataSources
                 .stream()
-                .collect(Collectors.toMap(ds -> getName(), ds -> getHeader()));
+                .collect(Collectors.toMap(ds -> ds.getName(), ds -> (VCFHeader) ds.getHeader()));
 
         // Now merge the headers using htsjdk, which is pretty promiscuous, and which only works properly
         // because of the cross-dictionary validation done in validateAllSequenceDictionaries.

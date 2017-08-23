@@ -54,7 +54,7 @@ public class CombineGVCFsIntegrationTest extends CommandLineProgramTest {
         return new Object[][]{
                 //combine not supported yet, see https://github.com/broadinstitute/gatk/issues/2429 and https://github.com/broadinstitute/gatk/issues/2584
                 //{"combine.single.sample.pipeline.1.vcf", null, Arrays.asList("-V", getTestFile("combine.single.sample.pipeline.2.vcf").toString() , "-V", getTestFile("combine.single.sample.pipeline.3.vcf").toString()), b37_reference_20_21},
-                {new File[]{getTestFile("leadingDeletion.g.vcf")}, getTestFile("leadingDeletionRestrictToStartExpected.vcf"), Arrays.asList("-L", "20:69512-69513"), b37_reference_20_21}
+                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
         };
     }
 
@@ -170,6 +170,18 @@ This method should be removed after GenotypeGVCFs has been completely validated 
 
         return VCs;
     }
+
+//    @Test
+//    public void testSpanningDeletions() {
+//        WalkerTestSpec spec = new WalkerTestSpec(
+//                "-T CombineGVCFs --no_cmdline_in_header -o %s -R " + b37KGReference +
+//                        " -V " + privateTestDir + "spanningDel.1.g.vcf -V " + privateTestDir + "spanningDel.2.g.vcf",
+//                1,
+//                Arrays.asList("b22238e1ff584a157335429309fbfc5b"));
+//        spec.disableShadowBCF();
+//        executeTest("testSpanningDeletions", spec);
+//    }
+
 
 //    @Test
 //    public void testOneStartsBeforeTwoAndEndsAfterwards() throws Exception {
