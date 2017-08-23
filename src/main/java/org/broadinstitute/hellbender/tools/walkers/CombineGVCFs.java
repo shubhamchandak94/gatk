@@ -120,6 +120,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     PositionalState currentPositionalState;
     VariantContextWriter vcfWriter;
     ReferenceConfidenceVariantContextMerger referenceConfidenceVariantContextMerger = new ReferenceConfidenceVariantContextMerger();
+    GenomeLoc lastBrokenLoc;
 
 
     /**
@@ -246,6 +247,20 @@ public final class CombineGVCFs extends MultiVariantWalker {
         if ( startingStates == null )
             return previousState;
 
+        // Perform any band breaking that needs to be done since the last one
+        if ( multipleAtWhichToBreakBands > 0) {
+            // TODO figure out +1 from previous code
+            for (int i = lastBrokenLoc.getStart()/multipleAtWhichToBreakBands; i < startingStates.loc.getStart()/multipleAtWhichToBreakBands; i++) {
+                //TODO end the previous state properly
+            }
+        }
+
+
+        if ( breakBand(startingStates.loc) || containsEndingContext(previousState.VCs, startingStates.loc.getStart()) ) {
+            endPreviousStates(previousState, startingStates.loc, startingStates, true);
+        }
+        //TODO figure out if containsEndingContext is necessary as a break point
+
         if ( !startingStates.VCs.isEmpty() ) {
             if ( ! okayToSkipThisSite(startingStates, previousState) ) {
                 GenomeLoc loc = startingStates.loc;
@@ -256,10 +271,6 @@ public final class CombineGVCFs extends MultiVariantWalker {
                 previousState.samples.addAll(vc.getSampleNames());
             }
 
-        }
-
-        if ( breakBand(startingStates.loc) || containsEndingContext(previousState.VCs, startingStates.loc.getStart()) ) {
-            endPreviousStates(previousState, startingStates.loc, startingStates, true);
         }
 
         return previousState;
