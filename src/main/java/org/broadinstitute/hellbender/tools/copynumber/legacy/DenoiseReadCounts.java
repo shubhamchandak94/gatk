@@ -11,7 +11,6 @@ import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hdf5.HDF5LibException;
 import org.broadinstitute.hdf5.HDF5Library;
 import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
-import org.broadinstitute.hellbender.cmdline.ExomeStandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
 import org.broadinstitute.hellbender.exceptions.UserException;
@@ -19,6 +18,7 @@ import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.SVDDenoisedCopyRatioResult;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.SVDDenoisingUtils;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.SVDReadCountPanelOfNormals;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.formats.LegacyCopyNumberArgument;
 import org.broadinstitute.hellbender.tools.exome.*;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
@@ -50,14 +50,14 @@ import java.util.stream.Collectors;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 @CommandLineProgramProperties(
-        summary = "Denoise read counts using a panel of normals",
-        oneLineSummary = "Denoise read counts using a panel of normals",
+        summary = "Denoise read counts using a panel of normals.",
+        oneLineSummary = "Denoise read counts using a panel of normals.",
         programGroup = CopyNumberProgramGroup.class
 )
 @DocumentedFeature
 public final class DenoiseReadCounts extends CommandLineProgram {
-    static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
-    static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
+    private static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
+    private static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
 
     @Argument(
             doc = "Input read-count file containing integer read counts in genomic intervals for a single case sample.",
@@ -68,8 +68,8 @@ public final class DenoiseReadCounts extends CommandLineProgram {
 
     @Argument(
             doc = "Input HDF5 file containing the panel of normals (output of CreateReadCountPanelOfNormals).",
-            fullName = ExomeStandardArgumentDefinitions.PON_FILE_LONG_NAME,
-            shortName = ExomeStandardArgumentDefinitions.PON_FILE_SHORT_NAME,
+            fullName = LegacyCopyNumberArgument.PANEL_OF_NORMALS_FILE_FULL_NAME,
+            shortName = LegacyCopyNumberArgument.PANEL_OF_NORMALS_FILE_SHORT_NAME,
             optional = true
     )
     private File inputPanelOfNormalsFile;
@@ -82,16 +82,16 @@ public final class DenoiseReadCounts extends CommandLineProgram {
     private TargetArgumentCollection annotatedIntervalArguments = new TargetArgumentCollection();
 
     @Argument(
-            doc = "Output file for standardized (pre-tangent-normalized) copy-ratio profile.",
-            fullName = ExomeStandardArgumentDefinitions.PRE_TANGENT_NORMALIZED_COUNTS_FILE_LONG_NAME,
-            shortName = ExomeStandardArgumentDefinitions.PRE_TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME
+            doc = "Output file for standardized copy-ratio profile.  GC-bias correction will be performed if annotations for GC content are provided.",
+            fullName = LegacyCopyNumberArgument.STANDARDIZED_COPY_RATIO_PROFILE_FILE_FULL_NAME,
+            shortName = LegacyCopyNumberArgument.STANDARDIZED_COPY_RATIO_PROFILE_FILE_SHORT_NAME
     )
     private File standardizedProfileFile;
 
     @Argument(
-            doc = "Output file for denoised (tangent-normalized) copy-ratio profile.",
-            fullName = ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_LONG_NAME,
-            shortName = ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME
+            doc = "Output file for denoised copy-ratio profile.",
+            fullName = LegacyCopyNumberArgument.DENOISED_COPY_RATIO_PROFILE_FILE_FULL_NAME,
+            shortName = LegacyCopyNumberArgument.DENOISED_COPY_RATIO_PROFILE_FILE_SHORT_NAME
     )
     private File denoisedProfileFile;
 
@@ -180,6 +180,8 @@ public final class DenoiseReadCounts extends CommandLineProgram {
         }
     }
 
+    //TODO move GC-bias correction classes into legacy package, clean up use of TargetCollection, and move this method into appropriate class
+    //code is duplicated in CreateReadCountPanelOfNormals for now
     private static double[] getIntervalGCContent(final Logger logger,
                                                  final List<Locatable> intervals,
                                                  final TargetCollection<Target> annotatedIntervals) {

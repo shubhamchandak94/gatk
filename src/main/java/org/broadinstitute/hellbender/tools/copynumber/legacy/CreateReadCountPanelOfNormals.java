@@ -61,7 +61,7 @@ import java.util.stream.Collectors;
  */
 @CommandLineProgramProperties(
         summary = "Create a panel of normals for copy-ratio denoising given the read counts for samples in the panel.",
-        oneLineSummary = "Create a panel of normals for copy-ratio denoising",
+        oneLineSummary = "Create a panel of normals for copy-ratio denoising.",
         programGroup = CopyNumberProgramGroup.class
 )
 @DocumentedFeature
@@ -79,10 +79,8 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     static final String EXTREME_SAMPLE_MEDIAN_PERCENTILE_SHORT_NAME = "extSampleMedPct";
     public static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_LONG_NAME = "extremeOutlierTruncationPercentile";
     static final String EXTREME_OUTLIER_TRUNCATION_PERCENTILE_SHORT_NAME = "extOutTruncPct";
-    static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
+    private static final String NUMBER_OF_EIGENSAMPLES_LONG_NAME = "numberOfEigensamples";
     static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
-    static final String INTERVAL_WEIGHTS_LONG_NAME = "intervalWeights";
-    static final String INTERVAL_WEIGHTS_SHORT_NAME = "weights";
 
     //default values for filtering (taken from ReCapSeg)
     private static final double DEFAULT_MINIMUM_INTERVAL_MEDIAN_PERCENTILE = 25.0;
@@ -90,9 +88,8 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private static final double DEFAULT_MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE = 5.0;
     private static final double DEFAULT_EXTREME_SAMPLE_MEDIAN_PERCENTILE = 2.5;
     private static final double DEFAULT_EXTREME_OUTLIER_TRUNCATION_PERCENTILE = 0.1;
-    private static final int DEFAULT_NUMBER_OF_EIGENSAMPLES = 10;
 
-    private static final String INTERVAL_WEIGHTS_FILE_SUFFIX = ".interval_weights.txt";
+    private static final int DEFAULT_NUMBER_OF_EIGENSAMPLES = 20;
 
     @Argument(
             doc = "Input read-count files containing integer read counts in genomic intervals for all samples in the panel of normals.  " +
@@ -121,7 +118,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             doc = "Genomic intervals with a median (across samples) of fractional coverage (optionally corrected for GC bias) " +
                     "below this percentile are filtered out.  " +
                     "(This is the first filter applied.)",
-            fullName  = MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME,
+            fullName = MINIMUM_INTERVAL_MEDIAN_PERCENTILE_LONG_NAME,
             shortName = MINIMUM_INTERVAL_MEDIAN_PERCENTILE_SHORT_NAME,
             minValue = 0.,
             maxValue = 100.
@@ -179,16 +176,6 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     )
     private int numEigensamplesRequested = DEFAULT_NUMBER_OF_EIGENSAMPLES;
 
-    @Argument(
-            doc = "Output file for the genomic-interval weights (given by the inverse variance of the denoised copy ratio)." +
-                    "Output is given as a plain-text file.  " +
-                    "By default, " + INTERVAL_WEIGHTS_FILE_SUFFIX + " is appended to the panel-of-normals filename.",
-            shortName = INTERVAL_WEIGHTS_SHORT_NAME,
-            fullName = INTERVAL_WEIGHTS_LONG_NAME,
-            optional = true
-    )
-    private File outputIntervalWeightsFile = null;
-
     @Override
     protected void runPipeline(final JavaSparkContext ctx) {
         if (!new HDF5Library().load(null)) {  //Note: passing null means using the default temp dir.
@@ -198,9 +185,6 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
 
         //validate parameters and parse optional parameters
         validateArguments();
-        if (outputIntervalWeightsFile == null) {
-            outputIntervalWeightsFile = new File(outputPanelOfNormalsFile + INTERVAL_WEIGHTS_FILE_SUFFIX);
-        }
 
         //get sample filenames
         final List<String> sampleFilenames = inputReadCountFiles.stream().map(File::getAbsolutePath).collect(Collectors.toList());
@@ -210,7 +194,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         final List<Locatable> intervals = getIntervalsFromFirstReadCountFile(logger, inputReadCountFiles);
 
         //get GC content (null if not provided)
-        final double[] intervalGCContent = getIntervalGCContent(logger, intervals,
+        final double[] intervalGCContent = validateIntervalGCContent(logger, intervals,
                 annotatedIntervalArguments.readTargetCollection(true));
 
         //validate input read-count files (i.e., check intervals and that only integer counts are contained)
@@ -242,9 +226,11 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         }
     }
 
-    private static double[] getIntervalGCContent(final Logger logger,
-                                                 final List<Locatable> intervals,
-                                                 final TargetCollection<Target> annotatedIntervals) {
+    //TODO move GC-bias correction classes into legacy package, clean up use of TargetCollection, and move this method into appropriate class
+    //code is duplicated in DenoiseReadCounts for now
+    private static double[] validateIntervalGCContent(final Logger logger,
+                                                      final List<Locatable> intervals,
+                                                      final TargetCollection<Target> annotatedIntervals) {
         if (annotatedIntervals == null) {
             logger.info("No GC-content annotations for intervals found; GC-bias correction will not be performed...");
             return null;

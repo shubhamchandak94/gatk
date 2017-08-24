@@ -78,7 +78,7 @@ import java.util.List;
  */
 @CommandLineProgramProperties(
         summary = "Collects ref/alt counts at sites.",
-        oneLineSummary = "Collects ref/alt counts at sites",
+        oneLineSummary = "Collects ref/alt counts at sites.",
         programGroup = CopyNumberProgramGroup.class
 )
 @DocumentedFeature
