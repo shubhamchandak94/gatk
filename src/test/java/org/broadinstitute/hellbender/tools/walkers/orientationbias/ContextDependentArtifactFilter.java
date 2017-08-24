@@ -2,25 +2,18 @@ package org.broadinstitute.hellbender.tools.walkers.orientationbias;
 
 import htsjdk.samtools.util.SequenceUtil;
 import htsjdk.variant.variantcontext.Allele;
-import htsjdk.variant.variantcontext.VariantContext;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.VariantProgramGroup;
 import org.broadinstitute.hellbender.engine.*;
-import org.broadinstitute.hellbender.engine.filters.MappingQualityReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
-import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
-import org.broadinstitute.hellbender.engine.filters.WellformedReadFilter;
 import org.broadinstitute.hellbender.utils.BaseUtils;
 import org.broadinstitute.hellbender.utils.MathUtils;
-import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.pileup.ReadPileup;
-import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -49,12 +42,15 @@ public class ContextDependentArtifactFilter extends LocusWalker {
     @Argument(fullName = "", shortName = "", doc = "", optional = true)
     static final int DEFAULT_INITIAL_LIST_SIZE = 37_000_000/64; // by default we assume that that all 64 reference 3-mers are equally likely
 
-    @Argument(fullName = "", shortName = "", doc = "", optional = true)
-    static final int MINIMUM_MEDIAN_MQ_THRESHOLD = 20;
+    @Argument(fullName = "", shortName = "", doc = "exclude reads below this quality from pileup", optional = true)
+    static final int MINIMUM_MEDIAN_MQ = 20;
 
-    private ContextDependentArtifactFilterEngine engine;
+    @Argument(fullName = "", shortName = "", doc = "exclude bases below this quality from pileup", optional = true)
+    static final int MINIMUM_BASE_QUALITY = 10;
 
     public static Map<String, PerContextData> contextDependentDataMap;
+
+    public static final List<String> ALL_3_MERS = SequenceUtil.generateAllKmers(3).stream().map(String::new).collect(Collectors.toList());
 
     @Override
     public boolean requiresReference(){
@@ -69,9 +65,8 @@ public class ContextDependentArtifactFilter extends LocusWalker {
     @Override
     public void onTraversalStart(){
         contextDependentDataMap = new HashMap<>();
-        List<String> all3mers = SequenceUtil.generateAllKmers(3).stream().map(String::new).collect(Collectors.toList());
 
-        for (final String refContext : all3mers){
+        for (final String refContext : ALL_3_MERS){
             contextDependentDataMap.put(refContext,
                         new PerContextData(refContext));
         }
@@ -86,7 +81,13 @@ public class ContextDependentArtifactFilter extends LocusWalker {
         final String reference3mer = new String(referenceContext.getBases());
         assert reference3mer.length() == 3 : "kmer must have length 3";
 
-        final ReadPileup pileup = alignmentContext.getBasePileup();
+        final ReadPileup pileup = alignmentContext.filter(pe -> pe.getQual() > MINIMUM_BASE_QUALITY).getBasePileup();
+
+        // FIXME; this is not ideal. AlignmentContext should come filtered and not reach here if it's empty
+        if (pileup.size() == 0){
+            return;
+        }
+
         final int[] baseCounts = pileup.getBaseCounts();
 
         // R in the docs
@@ -109,7 +110,7 @@ public class ContextDependentArtifactFilter extends LocusWalker {
 
         final double medianMQ = MathUtils.median(mappingQualities);
 
-        if (medianMQ < MINIMUM_MEDIAN_MQ_THRESHOLD) {
+        if (medianMQ < MINIMUM_MEDIAN_MQ) {
             return;
         }
 
@@ -122,12 +123,13 @@ public class ContextDependentArtifactFilter extends LocusWalker {
         final short altDepth = isVariantSite ? (short) baseCounts[BaseUtils.simpleBaseToBaseIndex(altBase.get())] : 0;
 
         // x in the docs
-        final short altF1R2Depth = isVariantSite ? (short) pileup.getReads().stream().
-                filter(r -> r.getBase(0) == altBase.get() && ReadUtils.isF2R1(r)).count() : 0;
+        final short altF1R2Depth = isVariantSite ? (short) pileup.getNumberOfElements(pe -> pe.getBase() == altBase.get() && ! ReadUtils.isF2R1(pe.getRead())) : 0;
+        assert altDepth >= altF1R2Depth : String.format("altDepth >= altF1R2Depth but got %d, %d", altDepth, altF1R2Depth);
+
 
         // FIXME: choose the correct allele
         final Allele allele = isVariantSite ? Allele.create(altBase.get(), false) : Allele.create(refBase, true);
-        contextDependentDataMap.get(reference3mer).addNewSample(depth, altDepth, altF1R2Depth, allele, alignmentContext);
+        contextDependentDataMap.get(reference3mer).addNewExample(depth, altDepth, altF1R2Depth, allele, alignmentContext);
         return;
     }
 
@@ -149,7 +151,34 @@ public class ContextDependentArtifactFilter extends LocusWalker {
 
     @Override
     public Object onTraversalSuccess() {
-        engine = new ContextDependentArtifactFilterEngine();
+        Map<String, ContextDependentArtifactFilterEngine.Hyperparameters> hyperparameterEstimates = new HashMap<>();
+        // remember we run EM separately for each of 4^3 = 64 ref contexts
+
+
+        // debug
+        for (final String refContext : ALL_3_MERS){
+            PerContextData contextData = contextDependentDataMap.get(refContext);
+            ContextDependentArtifactFilterEngine engine = new ContextDependentArtifactFilterEngine(contextData);
+            final int numSites = contextData.getNumLoci();
+            ContextDependentArtifactFilterEngine.Hyperparameters hyperparameters = engine.runEMAlgorithm();
+            hyperparameterEstimates.put(refContext, hyperparameters);
+
+
+//            List<Integer> activeIndices = IntStream.range(0, numSites).filter(i -> contextData.getAltDepths().get(i) > 0)
+//                    .boxed().collect(Collectors.toList());
+//            List<Short> activeAltDepths = activeIndices.stream().map(i -> contextData.altDepths.get(i)).collect(Collectors.toList());
+//            List<Short> activeAltF1R2Depths = activeIndices.stream().map(i -> contextData.altF1R2Depths.get(i)).collect(Collectors.toList());
+//            List<String> activePositions= activeIndices.stream().map(i -> contextData.positions.get(i)).collect(Collectors.toList());
+//            int bogus = 3;
+        }
+
+        /**
+         *  internal state check - must go to a separate test at some point
+         *  20:21196089-21196089, 9, 5 // ACG;
+         *  20:46952142-46952142, 1, 1 // ACG
+         *  20:53355622-53355622, 9, 2 // AAC
+         */
+
         return null;
     }
 
@@ -169,8 +198,4 @@ public class ContextDependentArtifactFilter extends LocusWalker {
         assert allPossible3Mers.size() == 64 : "there must be 64 kmers";
         return allPossible3Mers;
     }
-
-
-
-
 }
