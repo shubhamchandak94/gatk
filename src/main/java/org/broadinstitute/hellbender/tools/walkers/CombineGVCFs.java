@@ -1,9 +1,14 @@
 package org.broadinstitute.hellbender.tools.walkers;
 
+import com.google.common.annotations.VisibleForTesting;
+import htsjdk.samtools.SAMSequenceDictionary;
+import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
-import htsjdk.variant.vcf.*;
-import org.apache.hadoop.yarn.webapp.hamlet.Hamlet;
+import htsjdk.variant.vcf.VCFConstants;
+import htsjdk.variant.vcf.VCFHeader;
+import htsjdk.variant.vcf.VCFHeaderLine;
+import htsjdk.variant.vcf.VCFStandardHeaderLines;
 import org.broadinstitute.barclay.argparser.Advanced;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
@@ -12,24 +17,21 @@ import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.argumentcollections.DbsnpArgumentCollection;
 import org.broadinstitute.hellbender.cmdline.programgroups.VariantProgramGroup;
-import org.broadinstitute.hellbender.engine.*;
+import org.broadinstitute.hellbender.engine.FeatureContext;
+import org.broadinstitute.hellbender.engine.MultiVariantWalker;
+import org.broadinstitute.hellbender.engine.ReadsContext;
+import org.broadinstitute.hellbender.engine.ReferenceContext;
 import org.broadinstitute.hellbender.tools.walkers.annotator.StandardAnnotation;
 import org.broadinstitute.hellbender.tools.walkers.annotator.VariantAnnotatorEngine;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
-import org.broadinstitute.hellbender.utils.GenotypeUtils;
-import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedSampleList;
 import org.broadinstitute.hellbender.utils.genotyper.SampleList;
-import org.broadinstitute.hellbender.utils.iterators.IntervalLocusIterator;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
-import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
-import org.broadinstitute.hellbender.utils.variant.VcfUtils;
-import org.broadinstitute.hellbender.utils.variant.writers.GVCFWriter;
 
 import java.io.File;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Combine per-sample gVCF files produced by HaplotypeCaller into a multi-sample gVCF file
@@ -131,7 +133,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     PositionalState currentPositionalState;
     VariantContextWriter vcfWriter;
     ReferenceConfidenceVariantContextMerger referenceConfidenceVariantContextMerger = new ReferenceConfidenceVariantContextMerger();
-    SimpleInterval lastBrokenLoc;
+    SAMSequenceDictionary sequenceDictionary;
 
 
     // STATE WHICH IS ACCUMULATED BETWEEN RUNS
@@ -139,6 +141,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     final Set<String> samples = new HashSet<>();
     SimpleInterval prevPos = null;
     byte refAfterPrevPos;
+    byte[] storedReference;
 
 
     /**
@@ -164,8 +167,16 @@ public final class CombineGVCFs extends MultiVariantWalker {
             currentVariants.add(variant);
         } else if (!currentVariants.get(0).getContig().equals(variant.getContig())
                 || currentVariants.get(0).getStart()<variant.getStart()) {
-            createIntermediateVariants(currentPositionalState);
-            reduce(currentPositionalState, getFirstPositionLoc(currentPositionalState));
+            // Emptying any sites between the
+            if (prevPos!=null) {
+                createIntermediateVariants(new SimpleInterval(prevPos.getContig(), prevPos.getStart(),
+                        (prevPos.getContig().equals(currentPositionalState.loc.getContig())
+                                ? currentPositionalState.loc.getStart()
+                                : prevPos.getStart() + storedReference.length)));
+            }
+
+            reduce(currentPositionalState);
+            storedReference = currentPositionalState.refBases;
             currentVariants.clear();
             currentVariants.add(variant);
             // TODO BE VERY CLEAR ABOUT THIS
@@ -176,8 +187,42 @@ public final class CombineGVCFs extends MultiVariantWalker {
         updatePositionalState(currentVariants, referenceContext);
     }
 
-    private void createIntermediateVariants(PositionalState curState, SimpleInterval ) {
-        IntervalLocusIterator it = new IntervalLocusIterator();
+
+    /**
+     * Method which calculates at which sites between the last created variant context and the added ones that a
+     * break should be created and calls the appropriate method.
+     *
+     */
+    @VisibleForTesting
+    void createIntermediateVariants(SimpleInterval intervalToClose) {
+        Set<Integer> sitesToStop = new HashSet<>();
+        // Perform any band breaking that needs to be done since the last one
+        if ( multipleAtWhichToBreakBands > 0) {
+            // TODO figure out +1 from previous code
+            for (int i = prevPos.getStart()/multipleAtWhichToBreakBands; i < (intervalToClose.getEnd()-1)/multipleAtWhichToBreakBands; i++) {
+                sitesToStop.add(multipleAtWhichToBreakBands*(i+1));
+            }
+        }
+
+        for (VariantContext vc : VCs) {
+            if (vc.getNAlleles() > 2) {
+                //TODO figure out which one this should be
+                sitesToStop.add(prevPos.getStart()+1);
+            } else if (vc.getEnd() < intervalToClose.getEnd()) {
+                sitesToStop.add(vc.getEnd());
+            }
+        }
+
+        List<Integer> stoppedPlaces = new ArrayList<>(sitesToStop);
+        stoppedPlaces.sort(Comparator.naturalOrder());//TODO comparitor magic
+
+        for (int i : stoppedPlaces) {
+            //TODO be sure about these reference bases and how to get them
+            byte[] refBases = Arrays.copyOfRange(storedReference,i-prevPos.getStart(),i-prevPos.getStart()+1);
+            PositionalState tmp = new PositionalState(Collections.emptyList(), refBases, new SimpleInterval(prevPos.getContig(),i,i));
+            endPreviousStates(tmp.loc,refBases,tmp,true);
+        }
+
     }
 
     /**
@@ -187,7 +232,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
      */
     private void updatePositionalState(List<VariantContext> currentVariants, ReferenceContext referenceContext) {
         if (currentVariants.size()==1 ) {
-            currentPositionalState = new PositionalState(currentVariants, referenceContext.getBases(), referenceContext.getInterval());
+            currentPositionalState = new PositionalState(new ArrayList<>(currentVariants), referenceContext.getBases(), referenceContext.getInterval());
         } else {
             currentPositionalState.VCs.clear();
             currentPositionalState.VCs.addAll(currentVariants);
@@ -217,20 +262,16 @@ public final class CombineGVCFs extends MultiVariantWalker {
         final SortedSet<String> samples = getSamplesForVariants();
 
         final VCFHeader vcfHeader = new VCFHeader(getHeaderForVariants().getMetaDataInInputOrder(), samples);//TODO figure if the samples actually get imported
-        vcfHeader.addMetaDataLine(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));
 
         // create the annotation engine
         annotationEngine = VariantAnnotatorEngine.ofSelectedMinusExcluded(annotationGroupsToUse, annotationsToUse, annotationsToExclude, dbsnp.dbsnp, Collections.EMPTY_LIST);
 
         setupVCFWriter(vcfHeader, new IndexedSampleList(samples));
 
-        // collect the actual rod bindings into a list for use later
-//        for ( final FeatureDataSource<VariantContext> variantCollection : variantCollections )
-//            variants.addAll(variantCollection.getRodBindings());
-
         referenceConfidenceVariantContextMerger = new ReferenceConfidenceVariantContextMerger(annotationEngine);
 
-        //now that we have all the VCF headers, initialize the annotations (this is particularly important to turn off RankSumTest dithering in integration tests)
+        //now that we have all the VCF headers, initialize the annotations (this is particularly important to turn off RankSumTest dithering in integration tests)'
+        sequenceDictionary = getBestAvailableSequenceDictionary();
 
         // optimization to prevent mods when we always just want to break bands
         if ( multipleAtWhichToBreakBands == 1 )
@@ -244,7 +285,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
      * @param startingStates
      * @return
      */
-    public void reduce(final PositionalState startingStates, SimpleInterval targetLoc) {
+    public void reduce(final PositionalState startingStates) {
 
         if ( !startingStates.VCs.isEmpty() ) {
             if ( ! okayToSkipThisSite(startingStates) ) {
@@ -258,11 +299,11 @@ public final class CombineGVCFs extends MultiVariantWalker {
             }
 
         }
-
-        if ( breakBand(targetLoc) || containsEndingContext(VCs, startingStates.loc.getStart()) ) {
-            SimpleInterval loc = new SimpleInterval( startingStates.loc.getContig(), startingStates.loc.getStart(), startingStates.loc.getStart());
-            endPreviousStates( loc, Arrays.copyOfRange(startingStates.refBases,0,1), startingStates, true);
-        }
+//
+//        if ( breakBand(startingStates.loc) || containsEndingContext(VCs, startingStates.loc.getStart()) ) {
+//            SimpleInterval loc = new SimpleInterval( startingStates.loc.getContig(), startingStates.loc.getStart(), startingStates.loc.getStart());
+//            endPreviousStates( loc, Arrays.copyOfRange(startingStates.refBases,0,1), startingStates, true);
+//        }
     }
 
 
@@ -274,7 +315,6 @@ public final class CombineGVCFs extends MultiVariantWalker {
         headerLines.removeIf(vcfHeaderLine -> vcfHeaderLine.getKey().startsWith(GVCF_BLOCK));
 
         headerLines.addAll(annotationEngine.getVCFAnnotationDescriptions());
-        //headerLines.addAll(genotypingEngine.getAppropriateVCFInfoHeaders());
 
         // add headers for annotations added by this tool
         headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));   // needed for gVCFs without DP tags
@@ -355,8 +395,6 @@ public final class CombineGVCFs extends MultiVariantWalker {
      */
     private void endPreviousStates( final SimpleInterval pos, final byte[] refBases, final PositionalState startingStates, boolean atCurrentPosition) {
 
-        lastBrokenLoc = pos;
-
         final byte refBase = refBases[0];
         //if we're in BP resolution mode or a VC ends at the current position then the reference for the next output VC (refNextBase)
         // will be advanced one base
@@ -389,8 +427,8 @@ public final class CombineGVCFs extends MultiVariantWalker {
         //output the stopped VCs if there is no previous output (state.prevPos == null) or our current position is past
         // the last write position (state.prevPos)
         //NOTE: BP resolution with have current position == state.prevPos because it gets output via a different control flow
-        if ( !stoppedVCs.isEmpty() &&  (prevPos == null || pos.isPast(prevPos) )) {
-            final SimpleInterval gLoc = SimpleIntervalParser.createSimpleInterval(stoppedVCs.get(0).getContig(), pos.getStart());
+        if ( !stoppedVCs.isEmpty() &&  (prevPos == null || isAfter(pos,prevPos,sequenceDictionary) )) {
+            final SimpleInterval gLoc = new SimpleInterval(stoppedVCs.get(0).getContig(), pos.getStart(), pos.getStart());
 
             // we need the specialized merge if the site contains anything other than ref blocks
             final VariantContext mergedVC;
@@ -410,7 +448,6 @@ public final class CombineGVCFs extends MultiVariantWalker {
      * We can't use GATKVariantContextUtils.simpleMerge() because it is just too slow for this sort of thing.
      *
      * @param VCs   the variant contexts to merge
-     * @param state the state object
      * @param end   the end of this block (inclusive)
      * @return a new merged VariantContext
      */
@@ -464,14 +501,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     public Object onTraversalSuccess() {
         // Clearing the accumulator
         reduce(currentPositionalState);
-        // maybe: reduce(new PositionalState(Collecitons.emptyList(), <RefBases>, fals)
-        clearAccumulatedReads();
-//        SimpleInterval loc = SimpleIntervalParser.createSimpleInterval(currentPositionalState.loc.getContig(),currentPositionalState.loc.getEnd(),currentPositionalState.loc.getEnd());
-//        byte[] newRefBase = Arrays.copyOfRange(currentPositionalState.refBases, currentPositionalState.refBases.length - 1, currentPositionalState.refBases.length);
-//        currentPositionalState = new PositionalState(currentPositionalState.VCs, newRefBase, loc);
-//        endPreviousStates(currentOverallState, currentPositionalState.loc,
-//                Arrays.copyOfRange(currentPositionalState.refBases, currentPositionalState.refBases.length, currentPositionalState.refBases.length)
-//                ,currentPositionalState, true);
+        createIntermediateVariants(new SimpleInterval(prevPos.getContig(),prevPos.getStart(),prevPos.getStart()+storedReference.length+1));
 
         //TODO the reference bases are almost certainly wrong here
         // there shouldn't be any state left unless the user cut in the middle of a gVCF block
@@ -481,13 +511,33 @@ public final class CombineGVCFs extends MultiVariantWalker {
         return null;
     }
 
+
+
+    //TODO these methods should reside in IntervalUtils, but these changes are associated with the haplotype caller branch
     /**
-     * Method clears any accumulated reads and calls
+     * Tests whether the first Locatable starts after the end of the second Locatable
+     *
+     * @param first first Locatable
+     * @param second second Locatable
+     * @param dictionary sequence dictionary used to determine contig ordering
+     * @return true if first starts after the end of second, otherwise false
      */
-    private void clearAccumulatedReads() {
-        // Calling reduce on the last set of added variants
-        reduce(currentPositionalState);
+    public static boolean isAfter(final Locatable first, final Locatable second, final SAMSequenceDictionary dictionary) {
+        Utils.nonNull(first);
+        Utils.nonNull(second);
+        Utils.nonNull(dictionary);
 
+        final int contigComparison = compareContigs(first, second, dictionary);
+        return contigComparison == 1 || (contigComparison == 0 && first.getStart() > second.getEnd());
+    }
+    private static int compareContigs(final Locatable first, final Locatable second, final SAMSequenceDictionary dictionary) {
+        int firstIndex = dictionary.getSequenceIndex(first.getContig());
+        int secondIndex = dictionary.getSequenceIndex(second.getContig());
 
+        if (firstIndex == secondIndex)
+            return 0;
+        else if (firstIndex > secondIndex)
+            return 1;
+        return -1;
     }
 }

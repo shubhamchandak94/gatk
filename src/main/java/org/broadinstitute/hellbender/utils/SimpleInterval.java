@@ -329,15 +329,4 @@ public final class SimpleInterval implements Locatable, Serializable {
          return expandWithinContig(padding, contigRecord.getSequenceLength());
      }
 
-     /**
-      * Tests whether this contig is completely after contig 'that'.
-      * @param that Contig to test against.
-      * @return true if this contig starts after 'that' ends; false if this is completely before or overlaps 'that'.
-      */
-     public final boolean isPast( SimpleInterval that ) {
-         Utils.nonNull(that);
-         int comparison = this.compareContigs(that);
-         return ( comparison == 1 || ( comparison == 0 && this.getStart() > that.getStop() ));
-     }
-
  }
