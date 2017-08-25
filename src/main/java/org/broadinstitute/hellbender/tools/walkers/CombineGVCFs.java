@@ -15,12 +15,12 @@ import org.broadinstitute.hellbender.cmdline.programgroups.VariantProgramGroup;
 import org.broadinstitute.hellbender.engine.*;
 import org.broadinstitute.hellbender.tools.walkers.annotator.StandardAnnotation;
 import org.broadinstitute.hellbender.tools.walkers.annotator.VariantAnnotatorEngine;
-import org.broadinstitute.hellbender.utils.GenomeLoc;
-import org.broadinstitute.hellbender.utils.GenomeLocParser;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.GenotypeUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedSampleList;
 import org.broadinstitute.hellbender.utils.genotyper.SampleList;
+import org.broadinstitute.hellbender.utils.iterators.IntervalLocusIterator;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
@@ -99,6 +99,19 @@ public final class CombineGVCFs extends MultiVariantWalker {
             doc="The combined GVCF output file", optional=false)
     private File outputFile;
 
+    @Argument(fullName="convertToBasePairResolution", shortName="bpResolution", doc = "If specified, convert banded gVCFs to all-sites gVCFs", optional=true)
+    protected boolean USE_BP_RESOLUTION = false;
+
+    /**
+     * To reduce file sizes our gVCFs group similar reference positions into bands.  However, there are cases when users will want to know that no bands
+     * span across a given genomic position (e.g. when scatter-gathering jobs across a compute farm).  The option below enables users to break bands at
+     * pre-defined positions.  For example, a value of 10,000 would mean that we would ensure that no bands span across chr1:10000, chr1:20000, etc.
+     *
+     * Note that the --convertToBasePairResolution argument is just a special case of this argument with a value of 1.
+     */
+    @Argument(fullName="breakBandsAtMultiplesOf", shortName="breakBandsAtMultiplesOf", doc = "If > 0, reference bands will be broken up at genomic positions that are multiples of this number", optional=true)
+    protected int multipleAtWhichToBreakBands = 0;
+
     /**
      * The rsIDs from this file are used to populate the ID column of the output.  Also, the DB INFO flag will be set when appropriate. Note that dbSNP is not used in any way for the calculations themselves.
      */
@@ -114,13 +127,18 @@ public final class CombineGVCFs extends MultiVariantWalker {
     @ArgumentCollection
     protected DbsnpArgumentCollection dbsnp = new DbsnpArgumentCollection();
     private VariantAnnotatorEngine annotationEngine;
-    final LinkedList<VariantContext> VCs = new LinkedList<>();
-    OverallState currentOverallState;
     List<VariantContext> currentVariants = new ArrayList<>();
     PositionalState currentPositionalState;
     VariantContextWriter vcfWriter;
     ReferenceConfidenceVariantContextMerger referenceConfidenceVariantContextMerger = new ReferenceConfidenceVariantContextMerger();
-    GenomeLoc lastBrokenLoc;
+    SimpleInterval lastBrokenLoc;
+
+
+    // STATE WHICH IS ACCUMULATED BETWEEN RUNS
+    final LinkedList<VariantContext> VCs = new LinkedList<>();
+    final Set<String> samples = new HashSet<>();
+    SimpleInterval prevPos = null;
+    byte refAfterPrevPos;
 
 
     /**
@@ -146,32 +164,44 @@ public final class CombineGVCFs extends MultiVariantWalker {
             currentVariants.add(variant);
         } else if (!currentVariants.get(0).getContig().equals(variant.getContig())
                 || currentVariants.get(0).getStart()<variant.getStart()) {
-
-            currentOverallState = reduce(currentPositionalState, currentOverallState);
+            createIntermediateVariants(currentPositionalState);
+            reduce(currentPositionalState, getFirstPositionLoc(currentPositionalState));
             currentVariants.clear();
             currentVariants.add(variant);
             // TODO BE VERY CLEAR ABOUT THIS
         } else {
             currentVariants.add(variant);
         }
+        referenceContext.setWindow(0,1);
         updatePositionalState(currentVariants, referenceContext);
     }
 
+    private void createIntermediateVariants(PositionalState curState, SimpleInterval ) {
+        IntervalLocusIterator it = new IntervalLocusIterator();
+    }
+
     /**
-     * Method which ensures that the currentpositional state object is holding onto the right state
+     * Method which ensures that the currentPositionalState object to hold the longest referecne
      *
      * @param currentVariants
      */
     private void updatePositionalState(List<VariantContext> currentVariants, ReferenceContext referenceContext) {
-        currentPositionalState = new PositionalState(currentVariants, referenceContext.getBases(), genomeLocParser.createGenomeLoc(referenceContext.getInterval()));
+        if (currentVariants.size()==1 ) {
+            currentPositionalState = new PositionalState(currentVariants, referenceContext.getBases(), referenceContext.getInterval());
+        } else {
+            currentPositionalState.VCs.clear();
+            currentPositionalState.VCs.addAll(currentVariants);
+            currentPositionalState.refBases = (referenceContext.getBases().length > currentPositionalState.refBases.length?
+                    referenceContext.getBases() : currentPositionalState.refBases);
+        }
     }
 
     protected final class PositionalState {
         final List<VariantContext> VCs;
         final Set<String> samples = new HashSet<>();
-        final byte[] refBases;
-        final GenomeLoc loc;
-        public PositionalState(final List<VariantContext> VCs, final byte[] refBases, final GenomeLoc loc) {
+        byte[] refBases;
+        SimpleInterval loc;
+        public PositionalState(final List<VariantContext> VCs, final byte[] refBases, final SimpleInterval loc) {
             this.VCs = VCs;
             for(final VariantContext vc : VCs){
                 samples.addAll(vc.getSampleNames());
@@ -181,30 +211,6 @@ public final class CombineGVCFs extends MultiVariantWalker {
         }
     }
 
-    protected final class OverallState {
-        final LinkedList<VariantContext> VCs = new LinkedList<>();
-        final Set<String> samples = new HashSet<>();
-        GenomeLoc prevPos = null;
-        byte refAfterPrevPos;
-
-        public OverallState() {}
-    }
-
-
-    @Argument(fullName="convertToBasePairResolution", shortName="bpResolution", doc = "If specified, convert banded gVCFs to all-sites gVCFs", optional=true)
-    protected boolean USE_BP_RESOLUTION = false;
-
-    /**
-     * To reduce file sizes our gVCFs group similar reference positions into bands.  However, there are cases when users will want to know that no bands
-     * span across a given genomic position (e.g. when scatter-gathering jobs across a compute farm).  The option below enables users to break bands at
-     * pre-defined positions.  For example, a value of 10,000 would mean that we would ensure that no bands span across chr1:10000, chr1:20000, etc.
-     *
-     * Note that the --convertToBasePairResolution argument is just a special case of this argument with a value of 1.
-     */
-    @Argument(fullName="breakBandsAtMultiplesOf", shortName="breakBandsAtMultiplesOf", doc = "If > 0, reference bands will be broken up at genomic positions that are multiples of this number", optional=true)
-    protected int multipleAtWhichToBreakBands = 0;
-
-    private GenomeLocParser genomeLocParser;
 
     @Override
     public void onTraversalStart() {
@@ -222,11 +228,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
 //        for ( final FeatureDataSource<VariantContext> variantCollection : variantCollections )
 //            variants.addAll(variantCollection.getRodBindings());
 
-        genomeLocParser = new GenomeLocParser(vcfHeader.getSequenceDictionary());
-
         referenceConfidenceVariantContextMerger = new ReferenceConfidenceVariantContextMerger(annotationEngine);
-
-        currentOverallState = new OverallState();
 
         //now that we have all the VCF headers, initialize the annotations (this is particularly important to turn off RankSumTest dithering in integration tests)
 
@@ -240,40 +242,27 @@ public final class CombineGVCFs extends MultiVariantWalker {
      * and an OverallState object corresponding to the currently accumulated reads.
      *
      * @param startingStates
-     * @param previousState
      * @return
      */
-    public OverallState reduce(final PositionalState startingStates, final OverallState previousState) {
-        if ( startingStates == null )
-            return previousState;
-
-        // Perform any band breaking that needs to be done since the last one
-        if ( multipleAtWhichToBreakBands > 0) {
-            // TODO figure out +1 from previous code
-            for (int i = lastBrokenLoc.getStart()/multipleAtWhichToBreakBands; i < startingStates.loc.getStart()/multipleAtWhichToBreakBands; i++) {
-                //TODO end the previous state properly
-            }
-        }
-
-
-        if ( breakBand(startingStates.loc) || containsEndingContext(previousState.VCs, startingStates.loc.getStart()) ) {
-            endPreviousStates(previousState, startingStates.loc, startingStates, true);
-        }
-        //TODO figure out if containsEndingContext is necessary as a break point
+    public void reduce(final PositionalState startingStates, SimpleInterval targetLoc) {
 
         if ( !startingStates.VCs.isEmpty() ) {
-            if ( ! okayToSkipThisSite(startingStates, previousState) ) {
-                GenomeLoc loc = startingStates.loc;
-                endPreviousStates(previousState, genomeLocParser.createGenomeLoc(loc.getContig(),loc.getStart()-1,loc.getEnd()-1), startingStates, false);
+            if ( ! okayToSkipThisSite(startingStates) ) {
+                SimpleInterval loc = startingStates.loc;
+                endPreviousStates( new SimpleInterval(loc.getContig(),loc.getStart()-1,loc.getStart()-1), startingStates.refBases, startingStates, false);
+                //TODO check this one
             }
-            previousState.VCs.addAll(startingStates.VCs);
-            for(final VariantContext vc : previousState.VCs){
-                previousState.samples.addAll(vc.getSampleNames());
+            VCs.addAll(startingStates.VCs);
+            for(final VariantContext vc : VCs){
+                samples.addAll(vc.getSampleNames());
             }
 
         }
 
-        return previousState;
+        if ( breakBand(targetLoc) || containsEndingContext(VCs, startingStates.loc.getStart()) ) {
+            SimpleInterval loc = new SimpleInterval( startingStates.loc.getContig(), startingStates.loc.getStart(), startingStates.loc.getStart());
+            endPreviousStates( loc, Arrays.copyOfRange(startingStates.refBases,0,1), startingStates, true);
+        }
     }
 
 
@@ -288,9 +277,6 @@ public final class CombineGVCFs extends MultiVariantWalker {
         //headerLines.addAll(genotypingEngine.getAppropriateVCFInfoHeaders());
 
         // add headers for annotations added by this tool
-        headerLines.add(GATKVCFHeaderLines.getInfoLine(GATKVCFConstants.MLE_ALLELE_COUNT_KEY));
-        headerLines.add(GATKVCFHeaderLines.getInfoLine(GATKVCFConstants.MLE_ALLELE_FREQUENCY_KEY));
-        headerLines.add(GATKVCFHeaderLines.getFormatLine(GATKVCFConstants.REFERENCE_GENOTYPE_QUALITY));
         headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));   // needed for gVCFs without DP tags
         if ( dbsnp.dbsnp != null  ) {
             VCFStandardHeaderLines.addStandardInfoLines(headerLines, true, VCFConstants.DBSNP_KEY);
@@ -310,7 +296,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
      *
      * @return true if we should ensure that bands should be broken at the given position, false otherwise
      */
-    private boolean breakBand(final GenomeLoc loc) {
+    private boolean breakBand(final SimpleInterval loc) {
         return USE_BP_RESOLUTION ||
                 (loc != null && multipleAtWhichToBreakBands > 0 && (loc.getStart()+1) % multipleAtWhichToBreakBands == 0);  // add +1 to the loc because we want to break BEFORE this base
     }
@@ -319,14 +305,13 @@ public final class CombineGVCFs extends MultiVariantWalker {
      * Is it okay to skip the given position?
      *
      * @param startingStates  state information for this position
-     * @param previousState   state information for the last position for which we created a VariantContext
      * @return true if it is okay to skip this position, false otherwise
      */
-    private boolean okayToSkipThisSite(final PositionalState startingStates, final OverallState previousState) {
+    private boolean okayToSkipThisSite(final PositionalState startingStates) {
         final int thisPos = startingStates.loc.getStart();
-        final GenomeLoc lastPosRun = previousState.prevPos;
+        final SimpleInterval lastPosRun = prevPos;
         Set<String> intersection = new HashSet<String>(startingStates.samples);
-        intersection.retainAll(previousState.samples);
+        intersection.retainAll(samples);
 
         //if there's a starting VC with a sample that's already in a current VC, don't skip this position
         return lastPosRun != null && thisPos == lastPosRun.getStart() + 1 && intersection.isEmpty();
@@ -364,22 +349,23 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
     /**
      * Disrupt the VariantContexts so that they all stop at the given pos, write them out, and put the remainder back in the list.
-     * @param state   the previous state with list of active VariantContexts
      * @param pos   the position for the starting VCs
      * @param startingStates the state for the starting VCs
      * @param atCurrentPosition  indicates whether we output a variant at the current position, independent of VCF start/end, i.e. in BP resolution mode
      */
-    private void endPreviousStates(final OverallState state, final GenomeLoc pos, final PositionalState startingStates, boolean atCurrentPosition) {
+    private void endPreviousStates( final SimpleInterval pos, final byte[] refBases, final PositionalState startingStates, boolean atCurrentPosition) {
 
-        final byte refBase = startingStates.refBases[0];
+        lastBrokenLoc = pos;
+
+        final byte refBase = refBases[0];
         //if we're in BP resolution mode or a VC ends at the current position then the reference for the next output VC (refNextBase)
         // will be advanced one base
-        final byte refNextBase = (atCurrentPosition) ? (startingStates.refBases.length > 1 ? startingStates.refBases[1] : (byte)'N' ): refBase;
+        final byte refNextBase = (atCurrentPosition) ? (refBases.length > 1 ? refBases[1] : (byte)'N' ): refBase;
 
-        final List<VariantContext> stoppedVCs = new ArrayList<>(state.VCs.size());
+        final List<VariantContext> stoppedVCs = new ArrayList<>(VCs.size());
 
-        for ( int i = state.VCs.size() - 1; i >= 0; i-- ) {
-            final VariantContext vc = state.VCs.get(i);
+        for ( int i = VCs.size() - 1; i >= 0; i-- ) {
+            final VariantContext vc = VCs.get(i);
             //the VC for the previous state will be stopped if its position is previous to the current position or it we've moved to a new contig
             if ( vc.getStart() <= pos.getStart() || !vc.getContig().equals(pos.getContig())) {
 
@@ -387,15 +373,15 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
                 // if it was ending anyways, then remove it from the future state
                 if ( vc.getEnd() == pos.getStart()) {
-                    state.samples.removeAll(vc.getSampleNames());
-                    state.VCs.remove(i);
+                    samples.removeAll(vc.getSampleNames());
+                    VCs.remove(i);
                     continue; //don't try to remove twice
                 }
 
                 //if ending vc is the same sample as a starting VC, then remove it from the future state
                 if(startingStates.VCs.size() > 0 && !atCurrentPosition && startingStates.samples.containsAll(vc.getSampleNames())) {
-                    state.samples.removeAll(vc.getSampleNames());
-                    state.VCs.remove(i);
+                    samples.removeAll(vc.getSampleNames());
+                    VCs.remove(i);
                 }
             }
         }
@@ -403,19 +389,19 @@ public final class CombineGVCFs extends MultiVariantWalker {
         //output the stopped VCs if there is no previous output (state.prevPos == null) or our current position is past
         // the last write position (state.prevPos)
         //NOTE: BP resolution with have current position == state.prevPos because it gets output via a different control flow
-        if ( !stoppedVCs.isEmpty() &&  (state.prevPos == null || pos.isPast(state.prevPos) )) {
-            final GenomeLoc gLoc = genomeLocParser.createGenomeLoc(stoppedVCs.get(0).getContig(), pos.getStart());
+        if ( !stoppedVCs.isEmpty() &&  (prevPos == null || pos.isPast(prevPos) )) {
+            final SimpleInterval gLoc = SimpleIntervalParser.createSimpleInterval(stoppedVCs.get(0).getContig(), pos.getStart());
 
             // we need the specialized merge if the site contains anything other than ref blocks
             final VariantContext mergedVC;
             if ( containsTrueAltAllele(stoppedVCs) )
                 mergedVC = referenceConfidenceVariantContextMerger.merge(stoppedVCs, gLoc, refBase, false, false);
             else
-                mergedVC = referenceBlockMerge(stoppedVCs, state, pos.getStart());
+                mergedVC = referenceBlockMerge(stoppedVCs, pos.getStart());
 
             vcfWriter.add(mergedVC);
-            state.prevPos = gLoc;
-            state.refAfterPrevPos = refNextBase;
+            prevPos = gLoc;
+            refAfterPrevPos = refNextBase;
         }
     }
 
@@ -428,19 +414,19 @@ public final class CombineGVCFs extends MultiVariantWalker {
      * @param end   the end of this block (inclusive)
      * @return a new merged VariantContext
      */
-    private VariantContext referenceBlockMerge(final List<VariantContext> VCs, final OverallState state, final int end) {
+    private VariantContext referenceBlockMerge(final List<VariantContext> VCs, final int end) {
 
         final VariantContext first = VCs.get(0);
 
         // ref allele and start
         final Allele refAllele;
         final int start;
-        if ( state.prevPos == null || !state.prevPos.getContig().equals(first.getContig()) || first.getStart() >= state.prevPos.getStart() + 1) {
+        if ( prevPos == null || !prevPos.getContig().equals(first.getContig()) || first.getStart() >= prevPos.getStart() + 1) {
             start = first.getStart();
             refAllele = first.getReference();
         } else {
-            start = state.prevPos.getStart() + 1;
-            refAllele = Allele.create(state.refAfterPrevPos, true);
+            start = prevPos.getStart() + 1;
+            refAllele = Allele.create(refAfterPrevPos, true);
         }
 
         // attributes
@@ -476,12 +462,32 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
     @Override
     public Object onTraversalSuccess() {
-        // Clearing the store with all the final variants
-        reduce(currentPositionalState,currentOverallState);
+        // Clearing the accumulator
+        reduce(currentPositionalState);
+        // maybe: reduce(new PositionalState(Collecitons.emptyList(), <RefBases>, fals)
+        clearAccumulatedReads();
+//        SimpleInterval loc = SimpleIntervalParser.createSimpleInterval(currentPositionalState.loc.getContig(),currentPositionalState.loc.getEnd(),currentPositionalState.loc.getEnd());
+//        byte[] newRefBase = Arrays.copyOfRange(currentPositionalState.refBases, currentPositionalState.refBases.length - 1, currentPositionalState.refBases.length);
+//        currentPositionalState = new PositionalState(currentPositionalState.VCs, newRefBase, loc);
+//        endPreviousStates(currentOverallState, currentPositionalState.loc,
+//                Arrays.copyOfRange(currentPositionalState.refBases, currentPositionalState.refBases.length, currentPositionalState.refBases.length)
+//                ,currentPositionalState, true);
+
+        //TODO the reference bases are almost certainly wrong here
         // there shouldn't be any state left unless the user cut in the middle of a gVCF block
-        if ( !currentOverallState.VCs.isEmpty() )
+        if ( !VCs.isEmpty() )
             logger.warn("You have asked for an interval that cuts in the middle of one or more gVCF blocks. Please note that this will cause you to lose records that don't end within your interval.");
         vcfWriter.close();
         return null;
+    }
+
+    /**
+     * Method clears any accumulated reads and calls
+     */
+    private void clearAccumulatedReads() {
+        // Calling reduce on the last set of added variants
+        reduce(currentPositionalState);
+
+
     }
 }

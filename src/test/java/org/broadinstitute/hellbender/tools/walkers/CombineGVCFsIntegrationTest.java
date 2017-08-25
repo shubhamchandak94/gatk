@@ -44,6 +44,8 @@ public class CombineGVCFsIntegrationTest extends CommandLineProgramTest {
         Assert.assertEquals(actual.size(), expected.size(), "different number of elements in lists:\n"
                 + actual.stream().map(Object::toString).collect(Collectors.joining("\n","actual:\n","\n"))
                 +  expected.stream().map(Object::toString).collect(Collectors.joining("\n","expected:\n","\n")));
+        System.out.println(actual);
+        System.out.println(expected);
         for (int i = 0; i < actual.size(); i++) {
             assertion.accept(actual.get(i), expected.get(i));
         }
