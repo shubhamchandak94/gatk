@@ -184,6 +184,23 @@ public final class MathUtilsUnitTest extends BaseTest {
         Assert.assertEquals(MathUtils.binomialProbability(3, 2, 1.5), 0.375, 0.0001);
     }
 
+    @DataProvider(name="numbersForUniformBinomial")
+    public Object[][] getNumbersForUniformBinomial(){
+        return new Object[][] {
+                {7, 3, 0.3, 0.6},
+                {12, 11, 0.7, 0.75},
+                {100, 2, 0.0, 0.4}
+        };
+    }
+    @Test(dataProvider = "numbersForUniformBinomial")
+    public void testUniformBinomialProbability(final int n, final int k, final double pMin, final double pMax) {
+        final int numPoints = 50;
+
+        final double explicitylIntegratedValue = IntegrationUtils.integrate(p -> MathUtils.binomialProbability(n,k,p), pMin, pMax, numPoints);
+        final double calculatedValue = MathUtils.uniformBinomialProbability(n, k, pMin, pMax);
+        Assert.assertEquals(calculatedValue, explicitylIntegratedValue, 0.00001);
+    }
+
     @Test
     public void testBinomialCoefficient() {
         // results from Wolfram Alpha

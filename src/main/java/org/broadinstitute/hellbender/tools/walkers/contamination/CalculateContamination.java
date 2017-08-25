@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.walkers.contamination;
 
+import org.apache.commons.lang.mutable.MutableDouble;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.math3.distribution.BinomialDistribution;
 import org.apache.commons.math3.stat.descriptive.rank.Median;
@@ -13,6 +14,7 @@ import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.VariantProgramGroup;
 import org.broadinstitute.hellbender.tools.exome.HashedListTargetCollection;
 import org.broadinstitute.hellbender.tools.exome.TargetCollection;
+import org.broadinstitute.hellbender.utils.IndexRange;
 import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.tools.walkers.mutect.FilterMutectCalls;
@@ -54,7 +56,12 @@ import java.util.stream.IntStream;
 public class CalculateContamination extends CommandLineProgram {
 
     private static final Logger logger = LogManager.getLogger(CalculateContamination.class);
-    public static final double P_VALUE_THRESHOLD_FOR_HETS = 0.4;
+
+    // we consider allele fractions in a small range around 0.5 to be heterozygous.  Beyond that range is LoH.
+    private static final double MIN_HET_AF = 0.4;
+    private static final double MAX_HET_AF = 0.6;
+
+    private static final double INITIAL_CONTAMINATION_GUESS = 0.1;
 
     @Argument(fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME,
@@ -66,14 +73,62 @@ public class CalculateContamination extends CommandLineProgram {
             doc="The output table", optional = false)
     private final File outputTable = null;
 
-    private static final int CNV_SCALE = 10000000;
+    private static final int CNV_SCALE = 10_000_000;
 
     private static final Median MEDIAN = new Median();
+
+    private static final int HOM_REF = 0;
+    private static final int HET = 1;
+    private static final int HOM_ALT = 2;
+
+    // statistics relevant to computing contamination and blacklisting possible LoH regions
+    private static class Stats {
+        private double numberOfHomAltSites = 0;
+        private double numberOfHetSites = 0;
+
+        private double totalDepthOfHomAltSites;
+        private double refCountInHomAltSites;
+        private double otherAltCountInHomAltSites;
+
+    }
 
     @Override
     public Object doWork() {
         final List<PileupSummary> pileupSummaries = PileupSummary.readPileupSummaries(inputPileupSummariesTable);
-        final List<PileupSummary> homAltSites = findConfidentHomAltSites(pileupSummaries);
+
+        List<List<PileupSummary>> neighborhoods = splitSites(pileupSummaries);
+        double contamination = INITIAL_CONTAMINATION_GUESS;
+
+        while (true) {  // loop over contamination convergence
+            double depthInHomAltSites = 0;
+            double refInHomAltSites = 0;
+
+            for (final List<PileupSummary> neighborhood : neighborhoods) {
+                double homAltCount = 0;
+                double hetCount = 0;
+                double refErrorInHomAltCount = 0;
+                double homAltDepthWeightedByRefFrequency = 0;
+
+
+
+                for (final PileupSummary ps : neighborhood) {
+                    final double[] posteriors = genotypePosteriors(ps, contamination);
+                    homAltCount += posteriors[HOM_ALT];
+                    hetCount += posteriors[HET];
+                }
+
+            }
+
+        }
+
+
+
+
+
+
+
+
+
         final Pair<Double, Double> contaminationAndError = homAltSites.isEmpty() ? Pair.of(0.0, 0.0) : calculateContamination(homAltSites);
         ContaminationRecord.writeContaminationTable(Arrays.asList(new ContaminationRecord(ContaminationRecord.Level.WHOLE_BAM.toString(), contaminationAndError.getLeft(), contaminationAndError.getRight())), outputTable);
 
@@ -126,8 +181,8 @@ public class CalculateContamination extends CommandLineProgram {
             final List<PileupSummary> nearbySites = allSites.targets(nearbySpan);
             final int localHomAltCount = potentialHomAltSites.targets(nearbySpan).size();
             final double expectedLocalHomAltCount = expectedHomAltCount(nearbySites);
-            final long localHetCount = nearbySites.stream().filter(ps -> isConfidentHet(ps, P_VALUE_THRESHOLD_FOR_HETS)).count();
-            final double expectedLocalHetCount = (1 - P_VALUE_THRESHOLD_FOR_HETS) * nearbySites.stream().mapToDouble(PileupSummary::getAlleleFrequency).map(x -> 2 * x * (1 - x)).sum();
+            final long localHetCount =
+            final double expectedLocalHetCount = expectedHetCount(nearbySites);
             final double localCopyRatio = MEDIAN.evaluate(nearbySites.stream().mapToDouble(s -> s.getTotalCount()).toArray()) / medianCoverage;
 
             final boolean tooFewHets = localHetCount < 0.5 * expectedLocalHetCount;
@@ -149,6 +204,11 @@ public class CalculateContamination extends CommandLineProgram {
     }
 
     // the probability of a hom alt is f^2
+    private static double expectedHetCount(List<PileupSummary> sites) {
+        return sites.stream().mapToDouble(PileupSummary::getAlleleFrequency).map(x -> 2 * x * (1 - x)).sum();
+    }
+
+    // the probability of a hom alt is f^2
     private static double expectedHomAltCount(List<PileupSummary> sites) {
         return sites.stream().mapToDouble(PileupSummary::getAlleleFrequency).map(MathUtils::square).sum();
     }
@@ -158,17 +218,47 @@ public class CalculateContamination extends CommandLineProgram {
         return Math.sqrt(sites.stream().mapToDouble(PileupSummary::getAlleleFrequency).map(MathUtils::square).map(x -> x*(1-x)).sum());
     }
 
-    // Can we reject the null hypothesis that a site is het?
-    // the pValue threshold is (almost) the rejection rate of true hets -- almost because the binomial is a discrete distribution
-    private static boolean isConfidentHet(final PileupSummary ps, final double pValueThreshold) {
-        final int altCount = ps.getAltCount();
+
+
+    // contamination is a current rough estimate of contamination
+    private static double[] genotypePosteriors(final PileupSummary ps, final double contamination) {
+        final double alleleFrequency = ps.getAlleleFrequency();
+        final double homRefPrior = MathUtils.square(1 - alleleFrequency);
+        final double hetPrior = 2 * alleleFrequency * (1 - alleleFrequency);
+        final double homAltPrior = MathUtils.square(alleleFrequency);
+
         final int totalCount = ps.getTotalCount();
-        final BinomialDistribution binomialDistribution = new BinomialDistribution(null, totalCount, 0.5);
+        final int altCount = ps.getAltCount();
 
-        // this pValue is the probability under the null hypothesis of an allele fraction at least as far from 1/2 as this
-        // the factor of 2 comes from the symmetry of the binomial distribution -- the two-sided p-value is twice the one-side p-value
-        final double pValue = 2 * binomialDistribution.cumulativeProbability(Math.min(altCount, totalCount - altCount));
+        final double maxHomRefFraction = contamination;
+        final double minHomAltFraction = 1 - contamination;
+        final double minHetFraction = MIN_HET_AF - contamination / 2;
+        final double maxHetFraction = MAX_HET_AF + contamination / 2;
 
-        return pValue > pValueThreshold;
+        final double homRefLikelihood = MathUtils.uniformBinomialProbability(totalCount, altCount, 0, maxHomRefFraction);
+        final double homAltLikelihood = MathUtils.uniformBinomialProbability(totalCount, altCount, minHomAltFraction, 1);
+        final double hetLikelihood = MathUtils.uniformBinomialProbability(totalCount, altCount, minHetFraction, maxHetFraction);
+
+
+        return MathUtils.normalizeFromRealSpace(new double[] {homRefLikelihood * homRefPrior, hetLikelihood * hetPrior, homAltLikelihood * homAltPrior});
+    }
+
+    // split list of sites into CNV-scale-sized sublists in order to flag individual sublists for loss of heterozygosity
+    private static List<List<PileupSummary>> splitSites(final List<PileupSummary> sites) {
+        final List<List<PileupSummary>> result = new ArrayList<>();
+
+        final TargetCollection<PileupSummary> tc = new HashedListTargetCollection(sites);
+
+        int currentIndex = 0;
+        while (currentIndex < tc.targetCount()) {
+            final PileupSummary currentSite = tc.target(currentIndex);
+            final SimpleInterval nearbyRegion = new SimpleInterval(currentSite.getContig(), currentSite.getStart(), currentSite.getEnd() + CNV_SCALE);
+            final IndexRange nearbyIndices = tc.indexRange(nearbyRegion);
+            final List<PileupSummary> nearbySites = IntStream.range(nearbyIndices.from, nearbyIndices.to).mapToObj(tc::target).collect(Collectors.toList());
+            result.add(nearbySites);
+            currentIndex = nearbyIndices.to;
+        }
+
+        return result;
     }
 }

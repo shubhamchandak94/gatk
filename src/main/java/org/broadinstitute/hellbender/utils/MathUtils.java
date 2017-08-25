@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.utils;
 
 import org.apache.commons.math3.exception.NotStrictlyPositiveException;
 import org.apache.commons.math3.exception.NumberIsTooLargeException;
+import org.apache.commons.math3.special.Beta;
 import org.apache.commons.math3.special.Gamma;
 import org.apache.commons.math3.stat.descriptive.rank.Median;
 import org.apache.log4j.LogManager;
@@ -543,7 +544,7 @@ public final class MathUtils {
     /**
      * Computes a binomial probability.  This is computed using the formula
      * <p/>
-     * B(k; n; p) = [ n! / ( k! (n - k)! ) ] (p^k)( (1-p)^k )
+     * B(k; n; p) = [ n! / ( k! (n - k)! ) ] (p^k)( (1-p)^(n-k) )
      * <p/>
      * where n is the number of trials, k is the number of successes, and p is the probability of success
      *
@@ -563,6 +564,20 @@ public final class MathUtils {
         Utils.validateArg(log10p < 1.0e-18, "log10p: Log10-probability must be 0 or less");
         double log10OneMinusP = Math.log10(1 - Math.pow(10.0, log10p));
         return log10BinomialCoefficient(n, k) + log10p * k + log10OneMinusP * (n - k);
+    }
+
+    /**
+     * Calculate the likelihood of k successes in n Bernoulli trials where the success probability is a uniform random variable.
+     * That is, calculate int_{pmax, pmax} [ n! / ( k! (n - k)! ) ] (p^k)( (1-p)^(n-k) ), which comes out to
+     * (1/(n+1)) [ I(pMax, k + 1, n - k + 1) - I(pMin, k + 1, n - k + 1) ], where I is the regularized Beta function
+     * @param n Number of trials
+     * @param k Number of successes
+     * @param pMin Minimum success probability
+     * @param pMax Maximum success probability
+     * @return
+     */
+    public static double uniformBinomialProbability(final int n, final int k, final double pMin, final double pMax) {
+        return (Beta.regularizedBeta(pMax, k+1, n-k+1) - Beta.regularizedBeta(pMin, k+1, n-k+1))/(n+1);
     }
 
     /**
