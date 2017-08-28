@@ -258,7 +258,6 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
             logger.warn(String.format("Exception encountered during creation of panel of normals.  Attempting to delete partial output in %s...",
                     outFile.getAbsolutePath()));
             IOUtils.tryDelete(outFile);
-            logger.warn("Partial output deleted.");
             throw e;
         }
         logger.info(String.format("Read-count panel of normals written to %s.", outFile));

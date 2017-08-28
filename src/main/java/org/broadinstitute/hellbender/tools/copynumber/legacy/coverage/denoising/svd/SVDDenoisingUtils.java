@@ -358,17 +358,12 @@ public final class SVDDenoisingUtils {
 
     private static void logHeapUsage() {
         final int mb = 1024 * 1024;
-        //Getting the runtime reference from system
         final Runtime runtime = Runtime.getRuntime();
-        logger.info("##### Heap utilization statistics [MB] #####");
-        //Print used memory
-        logger.info("Used Memory:" + (runtime.totalMemory() - runtime.freeMemory()) / mb);
-        //Print free memory
-        logger.info("Free Memory:" + runtime.freeMemory() / mb);
-        //Print total available memory
-        logger.info("Total Memory:" + runtime.totalMemory() / mb);
-        //Print Maximum available memory
-        logger.info("Max Memory:" + runtime.maxMemory() / mb);
+        logger.info("Heap utilization statistics [MB]:");
+        logger.info("Used memory: " + (runtime.totalMemory() - runtime.freeMemory()) / mb);
+        logger.info("Free memory: " + runtime.freeMemory() / mb);
+        logger.info("Total memory: " + runtime.totalMemory() / mb);
+        logger.info("Maximum memory: " + runtime.maxMemory() / mb);
     }
 
     /**
