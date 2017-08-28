@@ -207,10 +207,6 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
                 readCountMatrix, sampleFilenames, intervals, intervalGCContent,
                 minimumIntervalMedianPercentile, maximumZerosInSamplePercentage, maximumZerosInIntervalPercentage,
                 extremeSampleMedianPercentile, extremeOutlierTruncationPercentile, numEigensamplesRequested, ctx);
-//
-//        //output a copy of the interval weights to file
-//        logger.info("Writing interval-weights file to " + outputIntervalWeightsFile + "...");
-//        writeIntervalWeightsFile(outputPanelOfNormalsFile, outputIntervalWeightsFile);
 
         logger.info("Panel of normals successfully created.");
     }
@@ -255,7 +251,6 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     private RealMatrix constructReadCountMatrix(final Logger logger,
                                                 final List<File> inputReadCountFiles,
                                                 final List<Locatable> intervals) {
-        //TODO CombineReadCounts does this with parallel Buffers, which may be faster
         logger.info("Validating and aggregating input read-count files...");
         final int numSamples = inputReadCountFiles.size();
         final int numIntervals = intervals.size();

@@ -25,13 +25,13 @@ import java.util.List;
  * @author Samuel Lee &lt;davidben@broadinstitute.org&gt;
  */
 @CommandLineProgramProperties(
-        summary = "Segment a denoised copy-ratio profile into regions of constant copy ratio.",
-        oneLineSummary = "Segment a denoised copy-ratio profile into regions of constant copy ratio.",
+        summary = "Model segmented copy ratio from denoised read counts.",
+        oneLineSummary = "Model segmented copy ratio from denoised read counts",
         programGroup = CopyNumberProgramGroup.class
 )
 @DocumentedFeature
 @BetaFeature
-public final class PerformCopyRatioSegmentation extends CommandLineProgram {
+public final class ModelSegments extends CommandLineProgram {
     @Argument(
             doc = "Input file containing denoised copy-ratio profile (output of DenoiseReadCounts).",
             fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
