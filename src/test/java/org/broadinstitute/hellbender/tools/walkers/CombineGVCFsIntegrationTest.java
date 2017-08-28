@@ -56,7 +56,11 @@ public class CombineGVCFsIntegrationTest extends CommandLineProgramTest {
         return new Object[][]{
                 //combine not supported yet, see https://github.com/broadinstitute/gatk/issues/2429 and https://github.com/broadinstitute/gatk/issues/2584
                 //{"combine.single.sample.pipeline.1.vcf", null, Arrays.asList("-V", getTestFile("combine.single.sample.pipeline.2.vcf").toString() , "-V", getTestFile("combine.single.sample.pipeline.3.vcf").toString()), b37_reference_20_21},
+                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21},
                 {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
+//                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
+//                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
+//                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
         };
     }
 
@@ -171,6 +175,38 @@ This method should be removed after GenotypeGVCFs has been completely validated 
         }
 
         return VCs;
+    }
+
+    @Test
+    public void testOneStartsBeforeTwoAndEndsAfterwards() throws Exception {
+        final File output = createTempFile("genotypegvcf", ".vcf");
+
+        final ArgumentsBuilder args = new ArgumentsBuilder();
+        args.addReference(new File(b37_reference_20_21))
+                .addOutput(output);
+        args.addVCF(getTestFile("gvcfExample1.vcf"));
+        args.addVCF(getTestFile("gvcfExample2.vcf"));
+        args.add(" -L 20:69485-69509");
+
+        runCommandLine(args);
+
+        final List<VariantContext> allVCs = getVariantContexts(output);
+
+        Assert.assertEquals(allVCs.size(), 2, "Observed: " + allVCs);
+
+        final VariantContext first = allVCs.get(0);
+        Assert.assertEquals(first.getStart(), 69491);
+        Assert.assertEquals(first.getEnd(), 69497);
+        Assert.assertEquals(first.getGenotypes().size(), 2);
+        Assert.assertTrue(first.getGenotype("NA1").isNoCall());
+        Assert.assertTrue(first.getGenotype("NA2").isNoCall());
+
+        final VariantContext second = allVCs.get(1);
+        Assert.assertEquals(second.getStart(), 69498);
+        Assert.assertEquals(second.getEnd(), 69506);
+        Assert.assertEquals(second.getGenotypes().size(), 2);
+        Assert.assertTrue(second.getGenotype("NA1").isNoCall());
+        Assert.assertTrue(second.getGenotype("NA2").isNoCall());
     }
 
 //    @Test
