@@ -40,8 +40,6 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
     private static final int NUM_SLICES_FOR_SPARK_MATRIX_CONVERSION = 100;
     private static final double EPSILON = 1E-9;
 
-    private final HDF5File file;
-
     /**
      * The version number is a double where the integer part is the
      * major version and the decimal part is the minor version.
@@ -66,6 +64,7 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
     private static final String PANEL_EIGENSAMPLE_VECTORS_PATH = PANEL_GROUP_NAME + "/transposed_eigensamples_samples_by_intervals";
     private static final String PANEL_NUM_EIGENSAMPLES_PATH = PANEL_EIGENSAMPLE_VECTORS_PATH + HDF5Utils.NUMBER_OF_ROWS_SUB_PATH;
 
+    private final HDF5File file;
     private final Lazy<List<Locatable>> originalIntervals;
     private final Lazy<List<Locatable>> panelIntervals;
 

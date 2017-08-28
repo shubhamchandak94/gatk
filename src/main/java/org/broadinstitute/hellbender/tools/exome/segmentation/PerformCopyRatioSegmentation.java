@@ -59,10 +59,10 @@ public final class PerformCopyRatioSegmentation extends CommandLineProgram {
 
     @Override
     public Object doWork() {
-        final String sampleName = ReadCountCollectionUtils.getSampleNameForCLIsFromReadCountsFile(new File(inputDenoisedProfileFile));
+        final String sampleName = ReadCountCollectionUtils.getSampleNameForCLIsFromReadCountsFile(new File(coverageFile));
         final ReadCountCollection rcc;
         try {
-            rcc = ReadCountCollectionUtils.parse(new File(inputDenoisedProfileFile));
+            rcc = ReadCountCollectionUtils.parse(new File(coverageFile));
         } catch (final IOException ex) {
             throw new UserException.BadInput("could not read input file");
         }
