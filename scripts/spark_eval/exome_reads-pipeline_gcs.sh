@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Run the pipeline (ReadsPipelineSpark) on exome data on a GCS Dataproc cluster. Data is in GCS.
+# Run the pipeline (ReadsPipelineSpark) on exome data in GCS.
 
 . utils.sh
 
