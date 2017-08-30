@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.copynumber.utils.segmentation;
 
-import com.netflix.servo.util.Iterables;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.random.RandomGenerator;
 import org.apache.commons.math3.random.RandomGeneratorFactory;
@@ -11,7 +10,6 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 /**
  * <p>
