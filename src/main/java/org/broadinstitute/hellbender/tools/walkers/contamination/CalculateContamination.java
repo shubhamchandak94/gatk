@@ -77,18 +77,53 @@ public class CalculateContamination extends CommandLineProgram {
 
     private static final Median MEDIAN = new Median();
 
-    private static final int HOM_REF = 0;
-    private static final int HET = 1;
-    private static final int HOM_ALT = 2;
+    private enum BiallelicGenotypes {
+        HOM_REF, HET, HOM_ALT
+    }
 
     // statistics relevant to computing contamination and blacklisting possible LoH regions
     private static class Stats {
-        private double numberOfHomAltSites = 0;
-        private double numberOfHetSites = 0;
+        private double homAltCount = 0;
+        private double hetCount = 0;
 
-        private double totalDepthOfHomAltSites;
+        private double readCountInHomAltSites;
         private double refCountInHomAltSites;
         private double otherAltCountInHomAltSites;
+
+        double homAltDepthWeightedByRefFrequency = 0; //TODO: ?????
+
+        public void increment(final EnumMap<BiallelicGenotypes, Double> posteriors, final PileupSummary ps) {
+            final double homAltResponsibility = posteriors.get(BiallelicGenotypes.HOM_ALT);
+            final double hetResponsibility = posteriors.get(BiallelicGenotypes.HET);
+
+            homAltCount += homAltResponsibility;
+            this.hetCount += hetResponsibility;
+
+            readCountInHomAltSites += homAltResponsibility * ps.getTotalCount();
+            refCountInHomAltSites += homAltResponsibility * ps.getRefCount();
+            otherAltCountInHomAltSites += homAltResponsibility * ps.getOtherAltCount();
+        }
+
+        public static Stats getStats(final Collection<PileupSummary> pileupSummaries, final double contamination) {
+            final Stats result = new Stats();
+            pileupSummaries.forEach(ps -> result.increment(genotypePosteriors(ps, contamination), ps));
+            return result;
+        }
+
+        public void increment(final Stats other) {
+            this.homAltCount += other.homAltCount;
+            this.hetCount += other.hetCount;
+
+            this.readCountInHomAltSites += other.readCountInHomAltSites;
+            this.refCountInHomAltSites += other.refCountInHomAltSites;
+            this.otherAltCountInHomAltSites += other.otherAltCountInHomAltSites;
+
+            //TODO: as Stats expands, need to increment new members
+        }
+
+        public boolean isLossOfHeterozygosity() {
+            return false;
+            //TODO: this is a stub
 
     }
 
@@ -100,31 +135,14 @@ public class CalculateContamination extends CommandLineProgram {
         double contamination = INITIAL_CONTAMINATION_GUESS;
 
         while (true) {  // loop over contamination convergence
-            double depthInHomAltSites = 0;
-            double refInHomAltSites = 0;
+            final Stats genomeStats = new Stats();
 
-            for (final List<PileupSummary> neighborhood : neighborhoods) {
-                double homAltCount = 0;
-                double hetCount = 0;
-                double refErrorInHomAltCount = 0;
-                double homAltDepthWeightedByRefFrequency = 0;
-
-
-
-                for (final PileupSummary ps : neighborhood) {
-                    final double[] posteriors = genotypePosteriors(ps, contamination);
-                    homAltCount += posteriors[HOM_ALT];
-                    hetCount += posteriors[HET];
-                }
+            neighborhoods.stream()
+                    .map( nbhd -> Stats.getStats(nbhd, contamination))
+                    .filter(stats -> !stats.isLossOfHeterozygosity())
+                    .forEach(genomeStats::increment);
 
             }
-
-        }
-
-
-
-
-
 
 
 
@@ -221,7 +239,7 @@ public class CalculateContamination extends CommandLineProgram {
 
 
     // contamination is a current rough estimate of contamination
-    private static double[] genotypePosteriors(final PileupSummary ps, final double contamination) {
+    private static EnumMap<BiallelicGenotypes, Double> genotypePosteriors(final PileupSummary ps, final double contamination) {
         final double alleleFrequency = ps.getAlleleFrequency();
         final double homRefPrior = MathUtils.square(1 - alleleFrequency);
         final double hetPrior = 2 * alleleFrequency * (1 - alleleFrequency);
@@ -239,8 +257,15 @@ public class CalculateContamination extends CommandLineProgram {
         final double homAltLikelihood = MathUtils.uniformBinomialProbability(totalCount, altCount, minHomAltFraction, 1);
         final double hetLikelihood = MathUtils.uniformBinomialProbability(totalCount, altCount, minHetFraction, maxHetFraction);
 
+        final double[] unnormalized = new double[] {homRefLikelihood * homRefPrior, hetLikelihood * hetPrior, homAltLikelihood * homAltPrior};
+        final double[] normalized = MathUtils.normalizeFromRealSpace(unnormalized, true);
 
-        return MathUtils.normalizeFromRealSpace(new double[] {homRefLikelihood * homRefPrior, hetLikelihood * hetPrior, homAltLikelihood * homAltPrior});
+        final EnumMap<BiallelicGenotypes, Double> result = new EnumMap<BiallelicGenotypes, Double>(BiallelicGenotypes.class);
+        result.put(BiallelicGenotypes.HOM_REF, normalized[0]);
+        result.put(BiallelicGenotypes.HET, normalized[1]);
+        result.put(BiallelicGenotypes.HOM_ALT, normalized[2]);
+
+        return result;
     }
 
     // split list of sites into CNV-scale-sized sublists in order to flag individual sublists for loss of heterozygosity

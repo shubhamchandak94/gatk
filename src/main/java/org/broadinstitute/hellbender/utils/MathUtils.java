@@ -725,13 +725,26 @@ public final class MathUtils {
      * @param array the array to be normalized
      * @return a newly allocated array corresponding the normalized values in array
      */
-    public static double[] normalizeFromRealSpace(final double[] array) {
+    public static double[] normalizeFromRealSpace(final double[] array, final boolean inPlace) {
         if ( array.length == 0 )
             return array;
 
         final double sum = sum(array);
         Utils.validateArg(sum >= 0.0, () -> "Values in probability array sum to a negative number " + sum);
-        return applyToArray(array, x -> x/sum);
+        return inPlace ? applyToArrayInPlace(array, x -> x/sum) : applyToArray(array, x -> x/sum);
+    }
+
+    /**
+     * normalizes the real-space probability array.
+     *
+     * Does not assume anything about the values in the array, beyond that no elements are below 0.  It's ok
+     * to have values in the array of > 1, or have the sum go above 0.
+     *
+     * @param array the array to be normalized
+     * @return a newly allocated array corresponding the normalized values in array
+     */
+    public static double[] normalizeFromRealSpace(final double[] array) {
+        return normalizeFromRealSpace(array, false)
     }
 
     public static int maxElementIndex(final double[] array) {
