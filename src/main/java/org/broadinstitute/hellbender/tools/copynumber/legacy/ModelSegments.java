@@ -91,7 +91,8 @@ public final class ModelSegments extends CommandLineProgram {
             doc = "Dimension of kernel approximation.  A subsample containing this number of data points " +
                     "will be taken from the copy-ratio profile and used to construct the approximation for each chromosome.  " +
                     "If the total number of datapoints in a chromosome is greater " +
-                    "than this number, then all datapoints in the chromosome will be used.",
+                    "than this number, then all datapoints in the chromosome will be used.  " +
+                    "Time complexity scales quadratically and space complexity scales linearly with this parameter.",
             fullName = KERNEL_APPROXIMATION_DIMENSION_LONG_NAME,
             shortName = KERNEL_APPROXIMATION_DIMENSION_SHORT_NAME,
             optional = true,
@@ -110,7 +111,7 @@ public final class ModelSegments extends CommandLineProgram {
             optional = true,
             minValue = 1
     )
-    private List<Integer> windowSizes;
+    private List<Integer> windowSizes = Arrays.asList(8, 16, 32, 64, 128, 256);
 
     @Argument(
             doc = "Linear factor A for the penalty on the number of changepoints per chromosome.  " +
@@ -136,10 +137,6 @@ public final class ModelSegments extends CommandLineProgram {
     )
     private double numChangepointsPenaltyLogLinearFactor = 1.;
 
-    public ModelSegments() {
-        windowSizes = Arrays.asList(8, 16, 32, 64, 128, 256);
-    }
-
     @Override
     public Object doWork() {
         //validate arguments
@@ -157,10 +154,11 @@ public final class ModelSegments extends CommandLineProgram {
             throw new UserException.BadInput("Could not read input file.");
         }
 
-
         //segment
+        final int maxNumChangepointsPerChromosome = maxNumSegmentsPerChromosome - 1;
         final List<SimpleInterval> segments = new CopyRatioKernelSegmenter(denoisedCopyRatioProfile)
-                .findSegments(maxNumSegmentsPerChromosome, kernelVariance, kernelApproximationDimension, ImmutableSet.copyOf(windowSizes).asList(),
+                .findSegments(maxNumChangepointsPerChromosome, kernelVariance, kernelApproximationDimension,
+                        ImmutableSet.copyOf(windowSizes).asList(),
                         numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor);
 
         //TODO add copy-ratio modeller (+ smooth segments)
