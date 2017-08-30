@@ -115,6 +115,15 @@ public final class CombineGVCFs extends MultiVariantWalker {
     protected int multipleAtWhichToBreakBands = 0;
 
     /**
+     * This option can only be activated if intervals are specified.
+     */
+    @Advanced
+    @Argument(fullName= ONLY_OUTPUT_CALLS_STARTING_IN_INTERVALS_FULL_NAME,
+            doc="Restrict variant output to sites that start within provided intervals",
+            optional=true)
+    private boolean onlyOutputCallsStartingInIntervals = false;
+
+    /**
      * The rsIDs from this file are used to populate the ID column of the output.  Also, the DB INFO flag will be set when appropriate. Note that dbSNP is not used in any way for the calculations themselves.
      */
 
