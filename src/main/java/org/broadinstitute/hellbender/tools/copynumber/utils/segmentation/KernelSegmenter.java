@@ -197,7 +197,7 @@ public final class KernelSegmenter<T> {
 
         //initialize quantities for recurrence
         double D = kernelApproximationDiagonal[start];
-        double[] W = Arrays.copyOf(reducedObservationMatrix.getRow(start), p);
+        final double[] W = Arrays.copyOf(reducedObservationMatrix.getRow(start), p);
         double V = Arrays.stream(W).map(w -> w * w).sum();
 
         //generate indices for iteration; we need to wrap around to beginning of data if start > end
@@ -237,6 +237,110 @@ public final class KernelSegmenter<T> {
     private static double[] calculateWindowCosts(final RealMatrix reducedObservationMatrix,
                                                  final double[] kernelApproximationDiagonal,
                                                  final int windowSize) {
+        final int N = reducedObservationMatrix.getRowDimension();
+        final int p = reducedObservationMatrix.getColumnDimension();
 
+        //initialize indices of the boundaries of the two flanking segments, wrapping around to beginning of data if necessary
+        int center = 0;
+        int start = (center - windowSize + 1) % N;
+        int end = (center + windowSize) % N;
+
+        //initialize costs of flanking segments and total segment
+        final Cost leftCost = calculateSegmentCost(start, center, reducedObservationMatrix, kernelApproximationDiagonal);
+        final Cost rightCost = calculateSegmentCost(center + 1, end, reducedObservationMatrix, kernelApproximationDiagonal);
+        final Cost totalCost = calculateSegmentCost(start, end, reducedObservationMatrix, kernelApproximationDiagonal);
+
+        //initialize quantities for recurrence
+        double leftD = leftCost.D;
+        final double[] leftW = Arrays.copyOf(leftCost.W, p);
+        double leftV = leftCost.V;
+        double leftC = leftCost.C;
+
+        double rightD = rightCost.D;
+        final double[] rightW = Arrays.copyOf(rightCost.W, p);
+        double rightV = rightCost.V;
+        double rightC = rightCost.C;
+
+        double totalD = totalCost.D;
+        final double[] totalW = Arrays.copyOf(totalCost.W, p);
+        double totalV = totalCost.V;
+        double totalC = totalCost.C;
+
+        final double[] windowCosts = new double[N];
+        windowCosts[center] = leftC + rightC - totalC;
+
+        double ZdotW;
+        final double windowSizeReciprocal = 1. / windowSize;
+
+        //slide segments along data and use recurrence relations to iteratively update costs
+        for (center = 0; center < N; center++) {
+            final int centerNext = (center + 1) % N;
+            final int endNext = (end + 1) % N;
+
+            //update quantities in left segment
+            leftD -= kernelApproximationDiagonal[start];
+            ZdotW = 0.;
+            for (int j = 0; j < p; j++) {
+                ZdotW += reducedObservationMatrix.getEntry(start, j) * leftW[j];
+                leftW[j] -= reducedObservationMatrix.getEntry(start, j);
+            }
+            leftV += -2. * ZdotW + kernelApproximationDiagonal[start];
+
+            leftD += kernelApproximationDiagonal[centerNext];
+            ZdotW = 0.;
+            for (int j = 0; j < p; j++) {
+                ZdotW += reducedObservationMatrix.getEntry(centerNext, j) * leftW[j];
+                leftW[j] += reducedObservationMatrix.getEntry(centerNext, j);
+            }
+            leftV += 2. * ZdotW + kernelApproximationDiagonal[start];
+
+            leftC = leftD - leftV * windowSizeReciprocal;
+
+            //update quantities in right segment
+            rightD -= kernelApproximationDiagonal[centerNext];
+            ZdotW = 0.;
+            for (int j = 0; j < p; j++) {
+                ZdotW += reducedObservationMatrix.getEntry(centerNext, j) * rightW[j];
+                rightW[j] -= reducedObservationMatrix.getEntry(centerNext, j);
+            }
+            rightV += -2. * ZdotW + kernelApproximationDiagonal[centerNext];
+
+            rightD += kernelApproximationDiagonal[endNext];
+            ZdotW = 0.;
+            for (int j = 0; j < p; j++) {
+                ZdotW += reducedObservationMatrix.getEntry(endNext, j) * rightW[j];
+                rightW[j] += reducedObservationMatrix.getEntry(endNext, j);
+            }
+            rightV += 2. * ZdotW + kernelApproximationDiagonal[endNext];
+
+            rightC = rightD - rightV * windowSizeReciprocal;
+
+            //update quantities in total segment
+            totalD -= kernelApproximationDiagonal[start];
+            ZdotW = 0.;
+            for (int j = 0; j < p; j++) {
+                ZdotW += reducedObservationMatrix.getEntry(start, j) * totalW[j];
+                totalW[j] -= reducedObservationMatrix.getEntry(start, j);
+            }
+            totalV += -2. * ZdotW + kernelApproximationDiagonal[start];
+
+            totalD += kernelApproximationDiagonal[endNext];
+            ZdotW = 0.;
+            for (int j = 0; j < p; j++) {
+                ZdotW += reducedObservationMatrix.getEntry(endNext, j) * totalW[j];
+                totalW[j] += reducedObservationMatrix.getEntry(endNext, j);
+            }
+            totalV += 2. * ZdotW + kernelApproximationDiagonal[endNext];
+
+            totalC = totalD - 0.5 * totalV * windowSizeReciprocal;
+
+            //record cost of changepoint at this position
+            windowCosts[center] = leftC + rightC - totalC;
+
+            //slide windows
+            start = (start + 1) % N;
+            end = endNext;
+        }
+        return windowCosts;
     }
 }
