@@ -191,6 +191,8 @@ This method should be removed after GenotypeGVCFs has been completely validated 
         runCommandLine(args);
 
         final List<VariantContext> allVCs = getVariantContexts(output);
+        for (VariantContext vc : allVCs)
+            System.out.println(vc);
 
         Assert.assertEquals(allVCs.size(), 2, "Observed: " + allVCs);
 

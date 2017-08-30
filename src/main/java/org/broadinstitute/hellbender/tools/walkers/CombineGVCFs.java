@@ -297,13 +297,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
             for(final VariantContext vc : VCs){
                 samples.addAll(vc.getSampleNames());
             }
-
         }
-//
-//        if ( breakBand(startingStates.loc) || containsEndingContext(VCs, startingStates.loc.getStart()) ) {
-//            SimpleInterval loc = new SimpleInterval( startingStates.loc.getContig(), startingStates.loc.getStart(), startingStates.loc.getStart());
-//            endPreviousStates( loc, Arrays.copyOfRange(startingStates.refBases,0,1), startingStates, true);
-//        }
     }
 
 
