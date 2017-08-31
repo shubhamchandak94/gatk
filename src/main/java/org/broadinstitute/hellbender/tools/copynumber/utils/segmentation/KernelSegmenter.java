@@ -1,8 +1,10 @@
 package org.broadinstitute.hellbender.tools.copynumber.utils.segmentation;
 
-import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.linear.*;
 import org.apache.commons.math3.random.RandomGenerator;
 import org.apache.commons.math3.random.RandomGeneratorFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
@@ -71,6 +73,8 @@ import java.util.stream.IntStream;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class KernelSegmenter<T> {
+    private static final Logger logger = LogManager.getLogger(KernelSegmenter.class);
+
     private static final int RANDOM_SEED = 1216;
 
     private final List<T> data;
@@ -99,10 +103,16 @@ public final class KernelSegmenter<T> {
         }
 
         final RandomGenerator rng = RandomGeneratorFactory.createRandomGenerator(new Random(RANDOM_SEED));
+
+        logger.info("Calculating low-rank approximation to kernel matrix...");
         final RealMatrix reducedObservationMatrix = calculateReducedObservationMatrix(rng, data, kernel, kernelApproximationDimension);
         final double[] kernelApproximationDiagonal = calculateKernelApproximationDiagonal(reducedObservationMatrix);
+
+        logger.info("Finding changepoint candidates for all window sizes...");
         final List<Integer> changepointCandidates = findChangepointCandidates(
                 data, reducedObservationMatrix, kernelApproximationDiagonal, maxNumChangepoints, windowSizes);
+
+        logger.info("Performing backwards model selection on changepoint candidates...");
         return selectChangepoints(
                 changepointCandidates, maxNumChangepoints, numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor,
                 reducedObservationMatrix, kernelApproximationDiagonal);
@@ -147,15 +157,58 @@ public final class KernelSegmenter<T> {
         }
     }
 
+    //calculate N x p reduced observation matrix, defined as Z in equation preceding Eq. 14 in https://hal.inria.fr/hal-01413230/document
     private static <T> RealMatrix calculateReducedObservationMatrix(final RandomGenerator rng,
                                                                     final List<T> data,
                                                                     final BiFunction<T, T, Double> kernel,
-                                                                    final double kernelApproximationDimension) {
+                                                                    final int kernelApproximationDimension) {
+        if (kernelApproximationDimension > data.size()) {
+            logger.warn("Specified dimension of the kernel approximation exceeds the number of data points to segment; " +
+                    "using all data points to calculate kernel matrix.");
+        }
 
+        //subsample data with replacement
+        final int numSubsample = Math.min(kernelApproximationDimension, data.size());
+        logger.info(String.format("Subsampling %d points from data to find kernel approximation...", numSubsample));
+        final List<T> dataSubsample = numSubsample == data.size()
+                ? data
+                : IntStream.range(0, numSubsample).boxed().map(i -> data.get(rng.nextInt(data.size()))).collect(Collectors.toList());
+
+        //calculate (symmetric) kernel matrix of subsampled data
+        logger.info(String.format("Calculating kernel matrix of subsampled data (%d x %d)...", numSubsample, numSubsample));
+        final RealMatrix subKernelMatrix = new Array2DRowRealMatrix(numSubsample, numSubsample);
+        for (int i = 0; i < numSubsample; i++) {
+            for (int j = 0; j < i; j++) {
+                final double value = kernel.apply(dataSubsample.get(i), dataSubsample.get(j));
+                subKernelMatrix.setEntry(i, j, value);
+                subKernelMatrix.setEntry(j, i, value);
+            }
+            subKernelMatrix.setEntry(i, i, kernel.apply(dataSubsample.get(i), dataSubsample.get(i)));
+        }
+
+        //perform SVD of kernel matrix of subsampled data
+        logger.info(String.format("Performing SVD of kernel matrix of subsampled data (%d x %d)...", numSubsample, numSubsample));
+        final SingularValueDecomposition svd = new SingularValueDecomposition(subKernelMatrix);
+
+        //calculate reduced observation matrix
+        final RealMatrix reducedObservationMatrix = new Array2DRowRealMatrix(numSubsample, data.size());
+        reducedObservationMatrix.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(int i, int j, double value) {
+                return IntStream.range(0, numSubsample).boxed()
+                        .mapToDouble(k -> kernel.apply(data.get(i), dataSubsample.get(k)) * svd.getU().getEntry(k, j) / Math.sqrt(svd.getSingularValues()[j]))
+                        .sum();
+            }
+        });
+        return reducedObservationMatrix;
     }
 
+    //for N x p matrix Z_ij, return N-dimensional vector sum(Z_ij * Z_ij, j = 0,..., p - 1),
+    //which are the diagonal elements K_ii of the approximate kernel matrix
     private static double[] calculateKernelApproximationDiagonal(final RealMatrix reducedObservationMatrix) {
-
+        return IntStream.range(0, reducedObservationMatrix.getRowDimension()).boxed()
+                .mapToDouble(i -> Arrays.stream(reducedObservationMatrix.getRow(i)).map(z -> z * z).sum())
+                .toArray();
     }
 
     private static <T> List<Integer> findChangepointCandidates(final List<T> data,
