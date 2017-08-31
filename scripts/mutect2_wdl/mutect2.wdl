@@ -58,6 +58,7 @@ workflow Mutect2 {
   String? sequencing_center
   String? sequence_source
   File? default_config_file
+  Boolean? is_bamOut=false
 
   call ProcessOptionalArguments {
     input:
@@ -118,6 +119,7 @@ workflow Mutect2 {
       preemptible_attempts = preemptible_attempts,
       m2_docker = m2_docker
   }
+
 
   if (is_run_orientation_bias_filter) {
       call CollectSequencingArtifactMetrics {
@@ -203,6 +205,7 @@ task M2 {
   File? gatk4_jar_override
   Int preemptible_attempts
   String? m2_extra_args
+  Boolean? is_bamOut=false
 
   command <<<
 
@@ -228,6 +231,7 @@ task M2 {
     ${"--normal_panel " + pon} \
     ${"-L " + intervals} \
     -O "${output_vcf_name}.vcf" \
+    ${true='--bamOutput bamout.bam' false='' is_bamOut} \
     ${m2_extra_args}
   >>>
 
@@ -240,6 +244,7 @@ task M2 {
 
   output {
     File output_vcf = "${output_vcf_name}.vcf"
+    File? output_bamOut = "bamout.bam"
   }
 }
 
