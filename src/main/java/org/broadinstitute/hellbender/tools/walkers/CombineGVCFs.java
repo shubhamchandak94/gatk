@@ -3,6 +3,7 @@ package org.broadinstitute.hellbender.tools.walkers;
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.util.Locatable;
+import htsjdk.samtools.util.OverlapDetector;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
 import htsjdk.variant.vcf.VCFConstants;
@@ -114,14 +115,14 @@ public final class CombineGVCFs extends MultiVariantWalker {
     @Argument(fullName="breakBandsAtMultiplesOf", shortName="breakBandsAtMultiplesOf", doc = "If > 0, reference bands will be broken up at genomic positions that are multiples of this number", optional=true)
     protected int multipleAtWhichToBreakBands = 0;
 
-    /**
-     * This option can only be activated if intervals are specified.
-     */
-    @Advanced
-    @Argument(fullName= ONLY_OUTPUT_CALLS_STARTING_IN_INTERVALS_FULL_NAME,
-            doc="Restrict variant output to sites that start within provided intervals",
-            optional=true)
-    private boolean onlyOutputCallsStartingInIntervals = false;
+//    /**
+//     * This option can only be activated if intervals are specified.
+//     */
+//    @Advanced
+//    @Argument(fullName= ONLY_OUTPUT_CALLS_STARTING_IN_INTERVALS_FULL_NAME,
+//            doc="Restrict variant output to sites that start within provided intervals",
+//            optional=true)
+//    private boolean onlyOutputCallsStartingInIntervals = false;
 
     /**
      * The rsIDs from this file are used to populate the ID column of the output.  Also, the DB INFO flag will be set when appropriate. Note that dbSNP is not used in any way for the calculations themselves.
@@ -151,6 +152,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     SimpleInterval prevPos = null;
     byte refAfterPrevPos;
     byte[] storedReference;
+    private OverlapDetector overlapDetector;
 
 
     /**
@@ -227,9 +229,12 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
         for (int i : stoppedPlaces) {
             //TODO be sure about these reference bases and how to get them
-            byte[] refBases = Arrays.copyOfRange(storedReference,i-prevPos.getStart(),i-prevPos.getStart()+1);
-            PositionalState tmp = new PositionalState(Collections.emptyList(), refBases, new SimpleInterval(prevPos.getContig(),i,i));
-            endPreviousStates(tmp.loc,refBases,tmp,true);
+            SimpleInterval loc = new SimpleInterval(prevPos.getContig(),i,i);
+            if (overlapDetector.overlapsAny(loc)) {//TODO speed of this check?
+                byte[] refBases = Arrays.copyOfRange(storedReference, i - prevPos.getStart(), i - prevPos.getStart() + 1);
+                PositionalState tmp = new PositionalState(Collections.emptyList(), refBases, new SimpleInterval(prevPos.getContig(), i, i));
+                endPreviousStates(tmp.loc, refBases, tmp, true);
+            }
         }
 
     }
@@ -281,6 +286,9 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
         //now that we have all the VCF headers, initialize the annotations (this is particularly important to turn off RankSumTest dithering in integration tests)'
         sequenceDictionary = getBestAvailableSequenceDictionary();
+
+        overlapDetector = hasIntervals() ? OverlapDetector.create(intervalArgumentCollection.getIntervals(sequenceDictionary)) :
+                null;
 
         // optimization to prevent mods when we always just want to break bands
         if ( multipleAtWhichToBreakBands == 1 )

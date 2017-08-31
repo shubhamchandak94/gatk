@@ -211,17 +211,6 @@ This method should be removed after GenotypeGVCFs has been completely validated 
         Assert.assertTrue(second.getGenotype("NA2").isNoCall());
     }
 
-//    @Test
-//    public void testSpanningDeletions() {
-//        WalkerTestSpec spec = new WalkerTestSpec(
-//                "-T CombineGVCFs --no_cmdline_in_header -o %s -R " + b37KGReference +
-//                        " -V " + privateTestDir + "spanningDel.1.g.vcf -V " + privateTestDir + "spanningDel.2.g.vcf",
-//                1,
-//                Arrays.asList("b22238e1ff584a157335429309fbfc5b"));
-//        spec.disableShadowBCF();
-//        executeTest("testSpanningDeletions", spec);
-//    }
-
 
 //    @Test
 //    public void testOneStartsBeforeTwoAndEndsAfterwards() throws Exception {
@@ -246,7 +235,7 @@ This method should be removed after GenotypeGVCFs has been completely validated 
 //        Assert.assertEquals(second.getGenotypes().size(), 2);
 //        Assert.assertTrue(second.getGenotype("NA1").isNoCall());
 //        Assert.assertTrue(second.getGenotype("NA2").isNoCall());
-//    }
+//    }isNoCall
 //
 //    @Test(enabled = true)
 //    public void testTetraploidRun() {
