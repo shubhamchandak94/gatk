@@ -24,6 +24,7 @@ import org.broadinstitute.hellbender.engine.ReadsContext;
 import org.broadinstitute.hellbender.engine.ReferenceContext;
 import org.broadinstitute.hellbender.tools.walkers.annotator.StandardAnnotation;
 import org.broadinstitute.hellbender.tools.walkers.annotator.VariantAnnotatorEngine;
+import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedSampleList;
@@ -156,6 +157,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     byte refAfterPrevPos;
     byte[] storedReference;
     private OverlapDetector overlapDetector;
+    private boolean hasReduced = false;
 
 
     /**
@@ -186,13 +188,20 @@ public final class CombineGVCFs extends MultiVariantWalker {
             currentVariants.add(variant);
         } else if (!currentVariants.get(0).getContig().equals(variant.getContig())
                 || currentVariants.get(0).getStart()<variant.getStart()) {
-            // Emptying any sites between the
-            if (prevPos!=null) {
-                createIntermediateVariants(new SimpleInterval(prevPos.getContig(), prevPos.getStart(),
+            // Emptying any sites which should emit a new VC since the last one
+            if (hasReduced == true) {
+                createIntermediateVariants(prevPos == null ? new SimpleInterval(VCs.get(0).getContig(), VCs.get(0).getStart(),
+                        (VCs.get(0).getContig().equals(currentPositionalState.loc.getContig())
+                                ? currentPositionalState.loc.getStart()
+                                : VCs.get(0).getStart() + storedReference.length))
+
+                        : new SimpleInterval(prevPos.getContig(), prevPos.getStart(),
                         (prevPos.getContig().equals(currentPositionalState.loc.getContig())
                                 ? currentPositionalState.loc.getStart()
                                 : prevPos.getStart() + storedReference.length)));
             }
+
+            //TODO ^^^ YUCK!
 
             reduce(currentPositionalState);
             storedReference = currentPositionalState.refBases;
@@ -226,7 +235,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
         for (VariantContext vc : VCs) {
             if (vc.getNAlleles() > 2) {
                 //TODO figure out which one this should be
-                sitesToStop.add(intervalToClose.getStart()+1);
+                sitesToStop.add(vc.getStart());
             } else if (vc.getEnd() < intervalToClose.getEnd()) {
                 sitesToStop.add(vc.getEnd());
             }
@@ -238,7 +247,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
         for (int i : stoppedPlaces) {
             //TODO be sure about these reference bases and how to get them
             SimpleInterval loc = new SimpleInterval(intervalToClose.getContig(),i,i);
-            if (overlapDetector.overlapsAny(loc)) {//TODO speed of this check?
+            if ((prevPos!=null && i> prevPos.getStart())&&(overlapDetector==null || overlapDetector.overlapsAny(loc))) {//TODO speed of this check?
                 byte[] refBases = Arrays.copyOfRange(storedReference, i - intervalToClose.getStart(), i - intervalToClose.getStart() + 1);
                 PositionalState tmp = new PositionalState(Collections.emptyList(), refBases, new SimpleInterval(intervalToClose.getContig(), i, i));
                 endPreviousStates(tmp.loc, refBases, tmp, true);
@@ -311,7 +320,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
      * @return
      */
     public void reduce(final PositionalState startingStates) {
-
+        hasReduced = true;
         if ( !startingStates.VCs.isEmpty() ) {
             if ( ! okayToSkipThisSite(startingStates) ) {
                 SimpleInterval loc = startingStates.loc;
@@ -446,7 +455,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
         //output the stopped VCs if there is no previous output (state.prevPos == null) or our current position is past
         // the last write position (state.prevPos)
         //NOTE: BP resolution with have current position == state.prevPos because it gets output via a different control flow
-        if ( !stoppedVCs.isEmpty() &&  (prevPos == null || isAfter(pos,prevPos,sequenceDictionary) )) {
+        if ( !stoppedVCs.isEmpty() &&  (prevPos == null || IntervalUtils.isAfter(pos,prevPos,sequenceDictionary) )) {
             final SimpleInterval gLoc = new SimpleInterval(stoppedVCs.get(0).getContig(), pos.getStart(), pos.getStart());
 
             // we need the specialized merge if the site contains anything other than ref blocks
@@ -519,12 +528,17 @@ public final class CombineGVCFs extends MultiVariantWalker {
     @Override
     public Object onTraversalSuccess() {
         // Clearing the accumulator
-        reduce(currentPositionalState);
-        storedReference = currentPositionalState.refBases;
-        SimpleInterval interval = prevPos != null ? new SimpleInterval(prevPos.getContig(), prevPos.getStart(), prevPos.getStart()+storedReference.length+1):
-                currentPositionalState.loc;
+        if(currentVariants.isEmpty()){
+            logger.warn("You have asked for an interval does not contain any data in source GVCFs");
 
-        createIntermediateVariants(interval);
+        } else{
+            reduce(currentPositionalState);
+            storedReference = currentPositionalState.refBases;
+            SimpleInterval interval = prevPos != null ? new SimpleInterval(prevPos.getContig(), prevPos.getStart(), prevPos.getStart() + storedReference.length + 1) :
+                    currentPositionalState.loc;
+
+            createIntermediateVariants(interval);
+        }
 
         //TODO the reference bases are almost certainly wrong here
         // there shouldn't be any state left unless the user cut in the middle of a gVCF block
@@ -532,35 +546,5 @@ public final class CombineGVCFs extends MultiVariantWalker {
             logger.warn("You have asked for an interval that cuts in the middle of one or more gVCF blocks. Please note that this will cause you to lose records that don't end within your interval.");
         vcfWriter.close();
         return null;
-    }
-
-
-
-    //TODO these methods should reside in IntervalUtils, but these changes are associated with the haplotype caller branch
-    /**
-     * Tests whether the first Locatable starts after the end of the second Locatable
-     *
-     * @param first first Locatable
-     * @param second second Locatable
-     * @param dictionary sequence dictionary used to determine contig ordering
-     * @return true if first starts after the end of second, otherwise false
-     */
-    public static boolean isAfter(final Locatable first, final Locatable second, final SAMSequenceDictionary dictionary) {
-        Utils.nonNull(first);
-        Utils.nonNull(second);
-        Utils.nonNull(dictionary);
-
-        final int contigComparison = compareContigs(first, second, dictionary);
-        return contigComparison == 1 || (contigComparison == 0 && first.getStart() > second.getEnd());
-    }
-    private static int compareContigs(final Locatable first, final Locatable second, final SAMSequenceDictionary dictionary) {
-        int firstIndex = dictionary.getSequenceIndex(first.getContig());
-        int secondIndex = dictionary.getSequenceIndex(second.getContig());
-
-        if (firstIndex == secondIndex)
-            return 0;
-        else if (firstIndex > secondIndex)
-            return 1;
-        return -1;
     }
 }

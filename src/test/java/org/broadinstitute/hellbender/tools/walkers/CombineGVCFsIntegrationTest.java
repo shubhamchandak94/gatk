@@ -116,7 +116,7 @@ This method should be removed after GenotypeGVCFs has been completely validated 
         assertVariantContextsMatch(Arrays.asList(inputs), gatk3Result, extraArgs, reference);
     }
 
-    private static void runProcess(ProcessController processController, String[] command) {
+    protected static void runProcess(ProcessController processController, String[] command) {
         final ProcessSettings prs = new ProcessSettings(command);
         prs.getStderrSettings().printStandard(true);
         prs.getStdoutSettings().printStandard(true);
@@ -294,50 +294,67 @@ This method should be removed after GenotypeGVCFs has been completely validated 
         Assert.assertEquals(first.getEnd(), 69511);
         Assert.assertEquals(first.getGenotypes().size(), 2);
     }
-//
-//    @Test
-//    public void testOneHasAltAndTwoHasRefBlock() throws Exception {
-//        final String cmd = baseTestString(" -L 1:69635");
-//        final WalkerTestSpec spec = new WalkerTestSpec(cmd, 1, Arrays.asList(""));
-//        spec.disableShadowBCF();
-//        final File gVCF = executeTest("testOneHasAltAndTwoHasRefBlock", spec).first.get(0);
-//        final List<VariantContext> allVCs = GATKVCFUtils.readVCF(gVCF).getSecond();
-//
-//        Assert.assertEquals(allVCs.size(), 1);
-//
-//        final VariantContext first = allVCs.get(0);
-//        Assert.assertEquals(first.getStart(), 69635);
-//        Assert.assertEquals(first.getEnd(), 69635);
-//        Assert.assertEquals(first.getNAlleles(), 3);
-//        Assert.assertEquals(first.getGenotypes().size(), 2);
-//    }
-//
-//    @Test
-//    public void testOneHasDeletionAndTwoHasRefBlock() throws Exception {
-//        final String cmd = baseTestString(" -L 1:69772-69783");
-//        final WalkerTestSpec spec = new WalkerTestSpec(cmd, 1, Arrays.asList(""));
-//        spec.disableShadowBCF();
-//        final File gVCF = executeTest("testOneHasDeletionAndTwoHasRefBlock", spec).first.get(0);
-//        final List<VariantContext> allVCs = GATKVCFUtils.readVCF(gVCF).getSecond();
-//
-//        Assert.assertEquals(allVCs.size(), 3);
-//
-//        final VariantContext first = allVCs.get(0);
-//        Assert.assertEquals(first.getStart(), 69772);
-//        Assert.assertEquals(first.getEnd(), 69776);
-//        Assert.assertEquals(first.getNAlleles(), 3);
-//        Assert.assertEquals(first.getGenotypes().size(), 2);
-//
-//        final VariantContext second = allVCs.get(1);
-//        Assert.assertEquals(second.getStart(), 69773);
-//        Assert.assertEquals(second.getEnd(), 69774);
-//        Assert.assertEquals(second.getGenotypes().size(), 2);
-//
-//        final VariantContext third = allVCs.get(2);
-//        Assert.assertEquals(third.getStart(), 69775);
-//        Assert.assertEquals(third.getEnd(), 69783);
-//        Assert.assertEquals(third.getGenotypes().size(), 2);
-//    }
+
+    @Test
+    public void testOneHasAltAndTwoHasRefBlock() throws Exception {
+        final File output = createTempFile("genotypegvcf", ".vcf");
+
+        final ArgumentsBuilder args = new ArgumentsBuilder();
+        args.addReference(new File(b37_reference_20_21))
+                .addOutput(output);
+        args.addVCF(getTestFile("gvcfExample1.vcf"));
+        args.addVCF(getTestFile("gvcfExample2.vcf"));
+        args.add(" -L 20:69635");
+
+        runCommandLine(args);
+
+        final List<VariantContext> allVCs = getVariantContexts(output);
+
+        Assert.assertEquals(allVCs.size(), 1);
+
+        final VariantContext first = allVCs.get(0);
+        Assert.assertEquals(first.getStart(), 69635);
+        Assert.assertEquals(first.getEnd(), 69635);
+        Assert.assertEquals(first.getNAlleles(), 3);
+        Assert.assertEquals(first.getGenotypes().size(), 2);
+    }
+
+    @Test
+    public void testOneHasDeletionAndTwoHasRefBlock() throws Exception {
+        final File output = createTempFile("genotypegvcf", ".vcf");
+
+        final ArgumentsBuilder args = new ArgumentsBuilder();
+        args.addReference(new File(b37_reference_20_21))
+                .addOutput(output);
+        args.addVCF(getTestFile("gvcfExample1.vcf"));
+        args.addVCF(getTestFile("gvcfExample2.vcf"));
+        args.add(" -L 20:69772-69783");
+
+        runCommandLine(args);
+
+        final List<VariantContext> allVCs = getVariantContexts(output);
+        for (VariantContext vc : allVCs) {
+            System.out.println(vc);
+        }
+
+        Assert.assertEquals(allVCs.size(), 3);
+
+        final VariantContext first = allVCs.get(0);
+        Assert.assertEquals(first.getStart(), 69772);
+        Assert.assertEquals(first.getEnd(), 69776);
+        Assert.assertEquals(first.getNAlleles(), 3);
+        Assert.assertEquals(first.getGenotypes().size(), 2);
+
+        final VariantContext second = allVCs.get(1);
+        Assert.assertEquals(second.getStart(), 69773);
+        Assert.assertEquals(second.getEnd(), 69774);
+        Assert.assertEquals(second.getGenotypes().size(), 2);
+
+        final VariantContext third = allVCs.get(2);
+        Assert.assertEquals(third.getStart(), 69775);
+        Assert.assertEquals(third.getEnd(), 69783);
+        Assert.assertEquals(third.getGenotypes().size(), 2);
+    }
 //
 //    @Test
 //    public void testMD5s() throws Exception {
