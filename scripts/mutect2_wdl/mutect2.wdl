@@ -106,7 +106,8 @@ workflow Mutect2 {
         gatk4_jar_override = gatk4_jar_override,
         preemptible_attempts = preemptible_attempts,
         m2_docker = m2_docker,
-        m2_extra_args = m2_extra_args
+        m2_extra_args = m2_extra_args,
+        is_bamOut = is_bamOut
     }
   }
 
@@ -120,6 +121,19 @@ workflow Mutect2 {
       m2_docker = m2_docker
   }
 
+  if (is_bamOut) {
+    call MergeBamOuts {
+      input:
+        bam_outs = M2.output_bamOut,
+        picard_jar = picard_jar,
+        ref_fasta = ref_fasta,
+        ref_fasta_index = ref_fasta_index,
+        ref_dict = ref_dict,
+        gatk4_jar = gatk4_jar,
+        gatk4_jar_override = gatk4_jar_override,
+        output_vcf_name = ProcessOptionalArguments.output_name
+    }
+  }
 
   if (is_run_orientation_bias_filter) {
       call CollectSequencingArtifactMetrics {
@@ -181,6 +195,7 @@ workflow Mutect2 {
         # select_first() fails if nothing resolves to non-null, so putting in "null" for now.
         File? oncotated_m2_maf = select_first([oncotate_m2.oncotated_m2_maf, "null"])
         File? preadapter_detail_metrics = select_first([CollectSequencingArtifactMetrics.pre_adapter_metrics, "null"])
+        File? merged_bam_out = select_first([MergeBamOuts.merged_bam_out, "null"])
   }
 }
 
@@ -205,7 +220,7 @@ task M2 {
   File? gatk4_jar_override
   Int preemptible_attempts
   String? m2_extra_args
-  Boolean? is_bamOut=false
+  Boolean? is_bamOut
 
   command <<<
 
@@ -322,7 +337,7 @@ task CollectSequencingArtifactMetrics {
 
   command {
         set -e
-        java -Xmx4G -jar ${picard_jar} CollectSequencingArtifactMetrics I=${tumor_bam} O="metrics" R=${ref_fasta}
+        java -Xmx4G -jar ${picard_jar} CollectSequencingArtifactMetrics I=${tumor_bam} O="metrics" R=${ref_fasta} VALIDATION_STRINGENCY=LENIENT
 
         # Convert to GATK format
         sed -r "s/picard\.analysis\.artifacts\.SequencingArtifactMetrics\\\$PreAdapterDetailMetrics/org\.broadinstitute\.hellbender\.tools\.picard\.analysis\.artifacts\.SequencingArtifactMetrics\$PreAdapterDetailMetrics/g" \
@@ -441,7 +456,40 @@ task SplitIntervals {
   }
 }
 
+task MergeBamOuts {
+  String gatk4_jar
+  Array[File] bam_outs
+  File picard_jar
+  File ref_fasta
+  File ref_fasta_index
+  File ref_dict
+  File? gatk4_jar_override
+  String output_vcf_name
 
+  # Runtime parameters
+  Int? mem
+  String m2_docker
+  Int? preemptible_attempts
+  Int? disk_space_gb
+
+  command <<<
+          # This command block relies that there is at least one file in bam_outs.
+          #  Do not call this task if len(bam_outs) == 0
+          set -e
+          java -Xmx4G -jar ${picard_jar} GatherBamFiles I=${sep=" I=" bam_outs} O=${output_vcf_name}.out.bam R=${ref_fasta}
+  >>>
+
+  runtime {
+    docker: "${m2_docker}"
+    memory: select_first([mem, 3]) + " GB"
+    disks: "local-disk " + select_first([disk_space_gb, 100]) + " HDD"
+    preemptible: select_first([preemptible_attempts, 2])
+  }
+
+  output {
+    File merged_bam_out = "${output_vcf_name}.out.bam"
+  }
+}
 
 task oncotate_m2 {
     File m2_vcf
