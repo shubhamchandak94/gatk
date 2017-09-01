@@ -115,14 +115,17 @@ public final class CombineGVCFs extends MultiVariantWalker {
     @Argument(fullName="breakBandsAtMultiplesOf", shortName="breakBandsAtMultiplesOf", doc = "If > 0, reference bands will be broken up at genomic positions that are multiples of this number", optional=true)
     protected int multipleAtWhichToBreakBands = 0;
 
-//    /**
-//     * This option can only be activated if intervals are specified.
-//     */
-//    @Advanced
-//    @Argument(fullName= ONLY_OUTPUT_CALLS_STARTING_IN_INTERVALS_FULL_NAME,
-//            doc="Restrict variant output to sites that start within provided intervals",
-//            optional=true)
-//    private boolean onlyOutputCallsStartingInIntervals = false;
+    private final String IGNORE_VARIANTS_THAT_START_OUTSIDE_INTERVAL = "ignore_variants_starting_outside_interval";
+    /**
+     * This option can only be activated if intervals are specified.
+     *
+     * This exists to mimic GATK3 interval traversal patterns
+     */
+    @Advanced
+    @Argument(fullName= IGNORE_VARIANTS_THAT_START_OUTSIDE_INTERVAL,
+            doc="Restrict variant output to sites that start within provided intervals",
+            optional=true)
+    private boolean ignoreIntervalsOutsideStart = false;
 
     /**
      * The rsIDs from this file are used to populate the ID column of the output.  Also, the DB INFO flag will be set when appropriate. Note that dbSNP is not used in any way for the calculations themselves.
@@ -173,6 +176,11 @@ public final class CombineGVCFs extends MultiVariantWalker {
      */
     @Override
     public void apply(VariantContext variant, ReadsContext readsContext, ReferenceContext referenceContext, FeatureContext featureContext) {
+        // Filtering out reads which start outside of the specified intervals
+        if (ignoreIntervalsOutsideStart && !overlapDetector.overlapsAny(new SimpleInterval(variant.getContig(),variant.getStart(),variant.getStart()))) {
+            return;
+        }
+
         // Collecting all the reads that start at a particular base into one.
         if (currentVariants.isEmpty()) {
             currentVariants.add(variant);
@@ -218,7 +226,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
         for (VariantContext vc : VCs) {
             if (vc.getNAlleles() > 2) {
                 //TODO figure out which one this should be
-                sitesToStop.add(prevPos.getStart()+1);
+                sitesToStop.add(intervalToClose.getStart()+1);
             } else if (vc.getEnd() < intervalToClose.getEnd()) {
                 sitesToStop.add(vc.getEnd());
             }
@@ -229,10 +237,10 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
         for (int i : stoppedPlaces) {
             //TODO be sure about these reference bases and how to get them
-            SimpleInterval loc = new SimpleInterval(prevPos.getContig(),i,i);
+            SimpleInterval loc = new SimpleInterval(intervalToClose.getContig(),i,i);
             if (overlapDetector.overlapsAny(loc)) {//TODO speed of this check?
-                byte[] refBases = Arrays.copyOfRange(storedReference, i - prevPos.getStart(), i - prevPos.getStart() + 1);
-                PositionalState tmp = new PositionalState(Collections.emptyList(), refBases, new SimpleInterval(prevPos.getContig(), i, i));
+                byte[] refBases = Arrays.copyOfRange(storedReference, i - intervalToClose.getStart(), i - intervalToClose.getStart() + 1);
+                PositionalState tmp = new PositionalState(Collections.emptyList(), refBases, new SimpleInterval(intervalToClose.getContig(), i, i));
                 endPreviousStates(tmp.loc, refBases, tmp, true);
             }
         }
@@ -512,7 +520,11 @@ public final class CombineGVCFs extends MultiVariantWalker {
     public Object onTraversalSuccess() {
         // Clearing the accumulator
         reduce(currentPositionalState);
-        createIntermediateVariants(new SimpleInterval(prevPos.getContig(),prevPos.getStart(),prevPos.getStart()+storedReference.length+1));
+        storedReference = currentPositionalState.refBases;
+        SimpleInterval interval = prevPos != null ? new SimpleInterval(prevPos.getContig(), prevPos.getStart(), prevPos.getStart()+storedReference.length+1):
+                currentPositionalState.loc;
+
+        createIntermediateVariants(interval);
 
         //TODO the reference bases are almost certainly wrong here
         // there shouldn't be any state left unless the user cut in the middle of a gVCF block

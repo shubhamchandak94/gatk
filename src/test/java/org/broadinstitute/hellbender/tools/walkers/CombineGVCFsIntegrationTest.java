@@ -55,9 +55,10 @@ public class CombineGVCFsIntegrationTest extends CommandLineProgramTest {
     public Object[][] gvcfsToGenotype() {
         return new Object[][]{
                 //combine not supported yet, see https://github.com/broadinstitute/gatk/issues/2429 and https://github.com/broadinstitute/gatk/issues/2584
-                //{"combine.single.sample.pipeline.1.vcf", null, Arrays.asList("-V", getTestFile("combine.single.sample.pipeline.2.vcf").toString() , "-V", getTestFile("combine.single.sample.pipeline.3.vcf").toString()), b37_reference_20_21},
+                // Simple Test
                 {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21},
-                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
+                // Tetraploid test
+                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
 //                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
 //                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
 //                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
@@ -191,8 +192,6 @@ This method should be removed after GenotypeGVCFs has been completely validated 
         runCommandLine(args);
 
         final List<VariantContext> allVCs = getVariantContexts(output);
-        for (VariantContext vc : allVCs)
-            System.out.println(vc);
 
         Assert.assertEquals(allVCs.size(), 2, "Observed: " + allVCs);
 
@@ -211,32 +210,7 @@ This method should be removed after GenotypeGVCFs has been completely validated 
         Assert.assertTrue(second.getGenotype("NA2").isNoCall());
     }
 
-
-//    @Test
-//    public void testOneStartsBeforeTwoAndEndsAfterwards() throws Exception {
-//        final String cmd = baseTestString(" -L 1:69485-69509");
-//        final WalkerTestSpec spec = new WalkerTestSpec(cmd, 1, Arrays.asList(""));
-//        spec.disableShadowBCF();
-//        final File gVCF = executeTest("testOneStartsBeforeTwoAndEndsAfterwards", spec).first.get(0);
-//        final List<VariantContext> allVCs = GATKVCFUtils.readVCF(gVCF).getSecond();
-//
-//        Assert.assertEquals(allVCs.size(), 2, "Observed: " + allVCs);
-//
-//        final VariantContext first = allVCs.get(0);
-//        Assert.assertEquals(first.getStart(), 69491);
-//        Assert.assertEquals(first.getEnd(), 69497);
-//        Assert.assertEquals(first.getGenotypes().size(), 2);
-//        Assert.assertTrue(first.getGenotype("NA1").isNoCall());
-//        Assert.assertTrue(first.getGenotype("NA2").isNoCall());
-//
-//        final VariantContext second = allVCs.get(1);
-//        Assert.assertEquals(second.getStart(), 69498);
-//        Assert.assertEquals(second.getEnd(), 69506);
-//        Assert.assertEquals(second.getGenotypes().size(), 2);
-//        Assert.assertTrue(second.getGenotype("NA1").isNoCall());
-//        Assert.assertTrue(second.getGenotype("NA2").isNoCall());
-//    }isNoCall
-//
+//==============================================================================================================================
 //    @Test(enabled = true)
 //    public void testTetraploidRun() {
 //        WalkerTestSpec spec = new WalkerTestSpec(
@@ -248,45 +222,78 @@ This method should be removed after GenotypeGVCFs has been completely validated 
 //                Arrays.asList("8472fcd43a41e7501b4709f0f1f5f432"));
 //        executeTest("combineSingleSamplePipelineGVCF", spec);
 //    }
+////
+////    @Test(enabled= true)
+////    public void testMixedPloidyRun() {
+////        WalkerTestSpec spec = new WalkerTestSpec(
+////                "-T CombineGVCFs -R " + b37KGReference + " -o %s --no_cmdline_in_header -V:sample1 " + privateTestDir + "haploid-gvcf-1.vcf" +
+////                        " -V:sample2 " + privateTestDir + "tetraploid-gvcf-2.vcf" +
+////                        " -V:sample3 " + privateTestDir + "diploid-gvcf-3.vcf" +
+////                        " -L " + privateTestDir + "tetraploid-gvcfs.intervals",
+////                1,
+////                Arrays.asList("f88b2b4d285276130cf088e7a03ca6a7"));
+////        executeTest("combineSingleSamplePipelineGVCF", spec);
+////    }
+//==============================================================================================================================
 //
-//    @Test(enabled= true)
-//    public void testMixedPloidyRun() {
-//        WalkerTestSpec spec = new WalkerTestSpec(
-//                "-T CombineGVCFs -R " + b37KGReference + " -o %s --no_cmdline_in_header -V:sample1 " + privateTestDir + "haploid-gvcf-1.vcf" +
-//                        " -V:sample2 " + privateTestDir + "tetraploid-gvcf-2.vcf" +
-//                        " -V:sample3 " + privateTestDir + "diploid-gvcf-3.vcf" +
-//                        " -L " + privateTestDir + "tetraploid-gvcfs.intervals",
-//                1,
-//                Arrays.asList("f88b2b4d285276130cf088e7a03ca6a7"));
-//        executeTest("combineSingleSamplePipelineGVCF", spec);
-//    }
-//
-//    @Test
-//    public void testTwoSpansManyBlocksInOne() throws Exception {
-//        final String cmd = baseTestString(" -L 1:69512-69634");
-//        final WalkerTestSpec spec = new WalkerTestSpec(cmd, 1, Arrays.asList(""));
-//        spec.disableShadowBCF();
-//        final File gVCF = executeTest("testTwoSpansManyBlocksInOne", spec).first.get(0);
-//        final List<VariantContext> allVCs = GATKVCFUtils.readVCF(gVCF).getSecond();
-//
-//        Assert.assertEquals(allVCs.size(), 5);
-//    }
-//
-//    @Test
-//    public void testOneHasAltAndTwoHasNothing() throws Exception {
-//        final String cmd = baseTestString(" -L 1:69511");
-//        final WalkerTestSpec spec = new WalkerTestSpec(cmd, 1, Arrays.asList(""));
-//        spec.disableShadowBCF();
-//        final File gVCF = executeTest("testOneHasAltAndTwoHasNothing", spec).first.get(0);
-//        final List<VariantContext> allVCs = GATKVCFUtils.readVCF(gVCF).getSecond();
-//
-//        Assert.assertEquals(allVCs.size(), 1);
-//
-//        final VariantContext first = allVCs.get(0);
-//        Assert.assertEquals(first.getStart(), 69511);
-//        Assert.assertEquals(first.getEnd(), 69511);
-//        Assert.assertEquals(first.getGenotypes().size(), 2);
-//    }
+    @Test
+    public void testTwoSpansManyBlocksInOne() throws Exception {
+        final File output = createTempFile("genotypegvcf", ".vcf");
+
+        final ArgumentsBuilder args = new ArgumentsBuilder();
+        args.addReference(new File(b37_reference_20_21))
+                .addOutput(output);
+        args.addVCF(getTestFile("gvcfExample1.vcf"));
+        args.addVCF(getTestFile("gvcfExample2.vcf"));
+        args.add(" -L 20:69512-69634");
+
+        runCommandLine(args);
+
+        final List<VariantContext> allVCs = getVariantContexts(output);
+
+        Assert.assertEquals(allVCs.size(), 5);
+    }
+
+    // Ensuring that no exception is thrown and that the resulting VCF is empty
+    @Test
+    public void testNoDataInInterval() throws Exception {
+        final File output = createTempFile("genotypegvcf", ".vcf");
+
+        final ArgumentsBuilder args = new ArgumentsBuilder();
+        args.addReference(new File(b37_reference_20_21))
+                .addOutput(output);
+        args.addVCF(getTestFile("gvcfExample1.vcf"));
+        args.addVCF(getTestFile("gvcfExample2.vcf"));
+        args.add(" -L 1:69512-69634");
+
+        runCommandLine(args);
+
+        final List<VariantContext> allVCs = getVariantContexts(output);
+
+        Assert.assertEquals(allVCs.size(), 0);
+    }
+
+
+    @Test
+    public void testOneHasAltAndTwoHasNothing() throws Exception {
+        final File output = createTempFile("genotypegvcf", ".vcf");
+
+        final ArgumentsBuilder args = new ArgumentsBuilder();
+        args.addReference(new File(b37_reference_20_21))
+                .addOutput(output);
+        args.addVCF(getTestFile("gvcfExample1.vcf"));
+        args.addVCF(getTestFile("gvcfExample2.vcf"));
+        args.add(" -L 20:69511");
+
+        runCommandLine(args);
+
+        final List<VariantContext> allVCs = getVariantContexts(output);
+
+        final VariantContext first = allVCs.get(0);
+        Assert.assertEquals(first.getStart(), 69511);
+        Assert.assertEquals(first.getEnd(), 69511);
+        Assert.assertEquals(first.getGenotypes().size(), 2);
+    }
 //
 //    @Test
 //    public void testOneHasAltAndTwoHasRefBlock() throws Exception {
