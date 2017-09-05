@@ -3,6 +3,7 @@ package org.broadinstitute.hellbender.utils.smithwaterman;
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
+import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
 import org.broadinstitute.hellbender.utils.read.CigarUtils;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
@@ -45,7 +46,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
     @Test(dataProvider = "OddNoAlignment", enabled = true)
     public void testOddNoAlignment(final String reference, final String read, final int match, final int mismatch, final int gap, final int gap_extend,
                                    final int expectedStart, final String expectedCigar) {
-        final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(), new SWPairwiseAlignment.Parameters(match, mismatch, gap, gap_extend));
+        final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(), new SWAlignerArguments.Weights(match, mismatch, gap, gap_extend));
         Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
@@ -126,7 +127,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String expectedCigar = "5M";
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(),
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
-                                                               SWPairwiseAlignment.OverhangStrategy.SOFTCLIP);
+                                                               SWAlignerArguments.OverhangStrategy.SOFTCLIP);
         sw.printAlignment(reference.getBytes(), read.getBytes());
         Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
@@ -141,7 +142,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String expectedCigar = "3D5M";
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(),
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
-                                                               SWPairwiseAlignment.OverhangStrategy.INDEL);
+                                                               SWAlignerArguments.OverhangStrategy.INDEL);
         sw.printAlignment(reference.getBytes(), read.getBytes());
         Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
@@ -156,7 +157,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String expectedCigar = "3D5M";
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(),
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
-                                                               SWPairwiseAlignment.OverhangStrategy.LEADING_INDEL);
+                                                               SWAlignerArguments.OverhangStrategy.LEADING_INDEL);
         sw.printAlignment(reference.getBytes(), read.getBytes());
         Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
@@ -171,7 +172,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String expectedCigar = "5M";
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(),
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
-                                                               SWPairwiseAlignment.OverhangStrategy.IGNORE);
+                                                               SWAlignerArguments.OverhangStrategy.IGNORE);
         sw.printAlignment(reference.getBytes(), read.getBytes());
         Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
@@ -185,7 +186,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String expectedCigar = "7M";
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(),
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
-                                                               SWPairwiseAlignment.OverhangStrategy.SOFTCLIP);
+                                                               SWAlignerArguments.OverhangStrategy.SOFTCLIP);
         sw.printAlignment(reference.getBytes(), read.getBytes());
         Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
@@ -199,7 +200,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String expectedCigar = "1M358D6M29D";
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(),
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
-                                                               SWPairwiseAlignment.OverhangStrategy.INDEL);
+                                                               SWAlignerArguments.OverhangStrategy.INDEL);
         sw.printAlignment(reference.getBytes(), read.getBytes());
         Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
@@ -213,7 +214,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String expectedCigar = "1M1D6M";
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(),
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
-                                                               SWPairwiseAlignment.OverhangStrategy.LEADING_INDEL);
+                                                               SWAlignerArguments.OverhangStrategy.LEADING_INDEL);
         sw.printAlignment(reference.getBytes(), read.getBytes());
         Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
@@ -227,7 +228,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String expectedCigar = "7M";
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(),
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
-                                                               SWPairwiseAlignment.OverhangStrategy.IGNORE);
+                                                               SWAlignerArguments.OverhangStrategy.IGNORE);
         sw.printAlignment(reference.getBytes(), read.getBytes());
         Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);

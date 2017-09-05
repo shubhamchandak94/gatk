@@ -7,6 +7,7 @@ import htsjdk.samtools.CigarOperator;
 import htsjdk.samtools.SAMFileHeader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.Kmer;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.graphs.BaseGraph;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.graphs.KmerSearchableGraph;
@@ -727,7 +728,7 @@ public class ReadThreadingGraph extends BaseGraph<MultiDeBruijnVertex, MultiSamp
         final byte[] altBases = getBasesForPath(altPath, false);
 
         // run Smith-Waterman to determine the best alignment (and remove trailing deletions since they aren't interesting)
-        final SWPairwiseAlignment alignment = new SWPairwiseAlignment(refBases, altBases, SWPairwiseAlignment.STANDARD_NGS, SWPairwiseAlignment.OverhangStrategy.LEADING_INDEL);
+        final SWPairwiseAlignment alignment = new SWPairwiseAlignment(refBases, altBases, SWPairwiseAlignment.STANDARD_NGS, SWAlignerArguments.OverhangStrategy.LEADING_INDEL);
         return new DanglingChainMergeHelper(altPath, refPath, altBases, refBases, AlignmentUtils.removeTrailingDeletions(alignment.getCigar()));
     }
 
@@ -757,7 +758,7 @@ public class ReadThreadingGraph extends BaseGraph<MultiDeBruijnVertex, MultiSamp
         final byte[] altBases = getBasesForPath(altPath, true);
 
         // run Smith-Waterman to determine the best alignment (and remove trailing deletions since they aren't interesting)
-        final SWPairwiseAlignment alignment = new SWPairwiseAlignment(refBases, altBases, SWPairwiseAlignment.STANDARD_NGS, SWPairwiseAlignment.OverhangStrategy.LEADING_INDEL);
+        final SWPairwiseAlignment alignment = new SWPairwiseAlignment(refBases, altBases, SWPairwiseAlignment.STANDARD_NGS, SWAlignerArguments.OverhangStrategy.LEADING_INDEL);
         return new DanglingChainMergeHelper(altPath, refPath, altBases, refBases, AlignmentUtils.removeTrailingDeletions(alignment.getCigar()));
     }
 

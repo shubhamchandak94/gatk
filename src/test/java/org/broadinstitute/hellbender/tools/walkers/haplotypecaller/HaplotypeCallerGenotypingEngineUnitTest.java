@@ -4,6 +4,7 @@ import com.google.common.base.Strings;
 import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.*;
 import org.apache.commons.lang3.tuple.Pair;
+import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
 import org.broadinstitute.hellbender.utils.QualityUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -39,7 +40,7 @@ public final class HaplotypeCallerGenotypingEngineUnitTest extends BaseTest {
         }
         
         public Map<Integer,VariantContext> calcAlignment() {
-            final SWPairwiseAlignment alignment = new SWPairwiseAlignment(ref, hap, new SWPairwiseAlignment.Parameters(3,-1,-4, -1));
+            final SWPairwiseAlignment alignment = new SWPairwiseAlignment(ref, hap, new SWAlignerArguments.Weights(3, -1, -4, -1));
             final Haplotype h = new Haplotype(hap, false, alignment.getAlignmentStart2wrt1(), alignment.getCigar());
             return new EventMap(h, ref, new SimpleInterval("4", 1, 1 + ref.length), "name");
         }
