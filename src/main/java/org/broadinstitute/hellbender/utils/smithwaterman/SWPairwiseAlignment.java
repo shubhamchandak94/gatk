@@ -28,7 +28,7 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
     public static final SWAlignerArguments.Weights ORIGINAL_DEFAULT = new SWAlignerArguments.Weights(3, -1, -4, -3);
 
     public static final SWAlignerArguments.Weights STANDARD_NGS = new SWAlignerArguments.Weights(25, -50, -110, -6);
-    private static final SWAlignerArguments.OverhangStrategy DEFAULT_OVERHANG_STRATEGY = SWAlignerArguments.OverhangStrategy.SOFTCLIP;
+    public static final SWAlignerArguments.OverhangStrategy DEFAULT_OVERHANG_STRATEGY = SWAlignerArguments.OverhangStrategy.SOFTCLIP;
 
     /**
      * The state of a trace step through the matrix
@@ -40,7 +40,7 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
         CLIP
     }
 
-    private SWPairwiseAlignmentResult alignmentResult;
+    private final SmithWatermanAlignment alignmentResult;
 
     private final SWAlignerArguments.Weights parameters;
     private final SWAlignerArguments.OverhangStrategy overhangStrategy;
@@ -67,46 +67,19 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
      * @param seq1 the first sequence we want to align
      * @param seq2 the second sequence we want to align
      * @param parameters the SW parameters to use
-     */
-    public SWPairwiseAlignment(final byte[] seq1, final byte[] seq2, final SWAlignerArguments.Weights parameters) {
-        this(parameters, DEFAULT_OVERHANG_STRATEGY);
-        alignmentResult = align(seq1,seq2);
-    }
-
-    /**
-     * Create a new SW pairwise aligner
-     *
-     * After creating the object the two sequences are aligned with an internal call to align(seq1, seq2)
-     *
-     * @param seq1 the first sequence we want to align
-     * @param seq2 the second sequence we want to align
-     * @param parameters the SW parameters to use
      * @param strategy   the overhang strategy to use
      */
     public SWPairwiseAlignment(final byte[] seq1, final byte[] seq2, final SWAlignerArguments.Weights parameters, final SWAlignerArguments.OverhangStrategy strategy) {
-        this(parameters, strategy);
+        this.parameters = parameters;
+        this.overhangStrategy = strategy;
         alignmentResult = align(seq1, seq2);
     }
 
-    /**
-     * Create a new SW pairwise aligner, without actually doing any alignment yet
-     *
-     * @param parameters the SW parameters to use
-     */
-    private SWPairwiseAlignment(final SWAlignerArguments.Weights parameters, final SWAlignerArguments.OverhangStrategy overhangStrategy) {
-        this.parameters = parameters;
-        this.overhangStrategy = overhangStrategy;
-    }
-
-    public SWPairwiseAlignment(final byte[] seq1, final byte[] seq2) {
-        this(seq1,seq2,ORIGINAL_DEFAULT, DEFAULT_OVERHANG_STRATEGY);
-    }
+    @Override
+    public Cigar getCigar() { return alignmentResult.getCigar() ; }
 
     @Override
-    public Cigar getCigar() { return alignmentResult.cigar ; }
-
-    @Override
-    public int getAlignmentOffset() { return alignmentResult.alignmentOffset; }
+    public int getAlignmentOffset() { return alignmentResult.getAlignmentOffset(); }
 
     /**
      * Aligns the alternate sequence to the reference sequence
@@ -114,7 +87,7 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
      * @param reference  ref sequence
      * @param alternate  alt sequence
      */
-    private SWPairwiseAlignmentResult align(final byte[] reference, final byte[] alternate) {
+    public SmithWatermanAlignment align(final byte[] reference, final byte[] alternate) {
         if ( reference == null || reference.length == 0 || alternate == null || alternate.length == 0 )
             throw new IllegalArgumentException("Non-null, non-empty sequences are required for the Smith-Waterman calculation");
 
@@ -283,12 +256,23 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
     /*
      * Class to store the result of calculating the CIGAR from the back track matrix
      */
-    private static final class SWPairwiseAlignmentResult {
-        public final Cigar cigar;
-        public final int alignmentOffset;
+    private static final class SWPairwiseAlignmentResult implements SmithWatermanAlignment {
+        private final Cigar cigar;
+        private final int alignmentOffset;
+
         SWPairwiseAlignmentResult(final Cigar cigar, final int alignmentOffset) {
             this.cigar = cigar;
             this.alignmentOffset = alignmentOffset;
+        }
+
+        @Override
+        public Cigar getCigar() {
+            return cigar;
+        }
+
+        @Override
+        public int getAlignmentOffset() {
+            return alignmentOffset;
         }
     }
 
@@ -439,7 +423,7 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
         printAlignment(ref,read,100);
     }
 
-    public void printAlignment(final byte[] ref, final byte[] read, final int width) {
+    private void printAlignment(final byte[] ref, final byte[] read, final int width) {
         final StringBuilder bread = new StringBuilder();
         final StringBuilder bref = new StringBuilder();
         final StringBuilder match = new StringBuilder();

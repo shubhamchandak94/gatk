@@ -275,7 +275,7 @@ public final class CigarUtils {
         Utils.nonNull(altSeq, "altSeq");
         if ( altSeq.length == 0 ) {
             // horrible edge case from the unit tests, where this path has no bases
-            return new Cigar(Arrays.asList(new CigarElement(refSeq.length, CigarOperator.D)));
+            return new Cigar(Collections.singletonList(new CigarElement(refSeq.length, CigarOperator.D)));
         }
 
         //Note: this is a performance optimization.
@@ -290,7 +290,7 @@ public final class CigarUtils {
 
         final String paddedRef = SW_PAD + new String(refSeq) + SW_PAD;
         final String paddedPath = SW_PAD + new String(altSeq) + SW_PAD;
-        final SmithWatermanAlignment alignment = new SWPairwiseAlignment(paddedRef.getBytes(), paddedPath.getBytes(), NEW_SW_PARAMETERS);
+        final SmithWatermanAlignment alignment = new SWPairwiseAlignment(paddedRef.getBytes(), paddedPath.getBytes(), NEW_SW_PARAMETERS, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY);
 
         if ( isSWFailure(alignment) ) {
             return null;
