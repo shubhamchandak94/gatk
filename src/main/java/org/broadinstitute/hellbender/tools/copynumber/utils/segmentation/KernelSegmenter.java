@@ -123,7 +123,7 @@ public final class KernelSegmenter<T> {
         final RealMatrix reducedObservationMatrix = calculateReducedObservationMatrix(rng, data, kernel, kernelApproximationDimension);
         final double[] kernelApproximationDiagonal = calculateKernelApproximationDiagonal(reducedObservationMatrix);
 
-        logger.info("Finding changepoint candidates for all window sizes...");
+        logger.info(String.format("Finding changepoint candidates for all window sizes %s...", windowSizes.toString()));
         final List<Integer> changepointCandidates = findChangepointCandidates(
                 data, reducedObservationMatrix, kernelApproximationDiagonal, maxNumChangepoints, windowSizes);
 
@@ -206,6 +206,7 @@ public final class KernelSegmenter<T> {
         final SingularValueDecomposition svd = new SingularValueDecomposition(subKernelMatrix);
 
         //calculate reduced observation matrix
+        logger.info(String.format("Calculating reduced observation matrix (%d x %d)...", data.size(), numSubsample));
         final RealMatrix reducedObservationMatrix = new Array2DRowRealMatrix(data.size(), numSubsample);
         reducedObservationMatrix.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             final double[] sqrtSingularValues = Arrays.stream(svd.getSingularValues()).map(Math::sqrt).toArray();
@@ -239,7 +240,7 @@ public final class KernelSegmenter<T> {
         //(this is overkill, but we cannot guarantee that the most significant maxNumChangepoints changepoints
         //do not all appear at only a single window size)
         for (final int windowSize : windowSizes) {
-            logger.info(String.format("Calculating local changepoints costs for window size %d...", windowSize));
+            logger.debug(String.format("Calculating local changepoints costs for window size %d...", windowSize));
             if (windowSize > data.size()) {
                 logger.warn(String.format("Number of points needed to calculate local changepoint costs (2 * window size = %d) " +
                         "exceeds number of data points %d.  Local changepoint costs will not be calculated for this window size.",
@@ -247,7 +248,7 @@ public final class KernelSegmenter<T> {
             }
             final double[] windowCosts = calculateWindowCosts(reducedObservationMatrix, kernelApproximationDiagonal, windowSize);
 
-            logger.info(String.format("Finding local minima of local changepoint costs for window size %d...", windowSize));
+            logger.debug(String.format("Finding local minima of local changepoint costs for window size %d...", windowSize));
             final List<Integer> windowCostLocalMinima = new PersistenceOptimizer(windowCosts).getMinimaIndices();
             windowCostLocalMinima.remove(Integer.valueOf(0));                //remove first data point if present
             windowCostLocalMinima.remove(Integer.valueOf(data.size() - 1));  //remove last data point if present
