@@ -64,6 +64,8 @@ public final class SWPairwiseAlignment implements SmithWatermanAligner {
      * @param strategy   the overhang strategy to use
      */
     public SWPairwiseAlignment(final SWAlignerArguments.Weights parameters, final SWAlignerArguments.OverhangStrategy strategy) {
+        Utils.nonNull(parameters);
+        Utils.nonNull(strategy);
         this.parameters = parameters;
         this.overhangStrategy = strategy;
     }
@@ -76,8 +78,9 @@ public final class SWPairwiseAlignment implements SmithWatermanAligner {
      */
     @Override
     public SmithWatermanAlignment align(final byte[] reference, final byte[] alternate) {
-        if ( reference == null || reference.length == 0 || alternate == null || alternate.length == 0 )
+        if ( reference == null || reference.length == 0 || alternate == null || alternate.length == 0 ) {
             throw new IllegalArgumentException("Non-null, non-empty sequences are required for the Smith-Waterman calculation");
+        }
 
         // avoid running full Smith-Waterman if there is an exact match of alternate in reference
         int matchIndex = -1;
@@ -118,8 +121,9 @@ public final class SWPairwiseAlignment implements SmithWatermanAligner {
      * @param parameters
      */
     private static void calculateMatrix(final byte[] reference, final byte[] alternate, final int[][] sw, final int[][] btrack, final SWAlignerArguments.OverhangStrategy overhangStrategy, SWAlignerArguments.Weights parameters) {
-        if ( reference.length == 0 || alternate.length == 0 )
+        if ( reference.length == 0 || alternate.length == 0 ) {
             throw new IllegalArgumentException("Non-null, non-empty sequences are required for the Smith-Waterman calculation");
+        }
 
         final int ncol = sw[0].length;//alternate.length+1; formerly m
         final int nrow = sw.length;// reference.length+1; formerly n
@@ -402,10 +406,6 @@ public final class SWPairwiseAlignment implements SmithWatermanAligner {
         return new CigarElement(length, op);
     }
 
-    private int wd(final byte x, final byte y) {
-        return (x == y ? parameters.getMatchValue() : parameters.getMismatchPenalty());
-    }
-
     @VisibleForTesting
     void printAlignment(final byte[] ref, final byte[] read, final SmithWatermanAlignment alignment) {
         printAlignment(overhangStrategy, ref, read, 100, alignment);
@@ -494,9 +494,9 @@ public final class SWPairwiseAlignment implements SmithWatermanAligner {
         int pos = 0 ;
         final int maxlength = Math.max(match.length(), Math.max(bread.length(), bref.length()));
         while ( pos < maxlength ) {
-            print_cautiously(match,pos,width);
-            print_cautiously(bread,pos,width);
-            print_cautiously(bref,pos,width);
+            printCautiously(match, pos, width);
+            printCautiously(bread, pos, width);
+            printCautiously(bref, pos, width);
             System.out.println();
             pos += width;
         }
@@ -506,11 +506,8 @@ public final class SWPairwiseAlignment implements SmithWatermanAligner {
      * string when one end/both ends of the interval are out of range, it crashes with an
      * exception. This utility function simply prints the substring if the interval is within the index range
      * or trims accordingly if it is not.
-     * @param s
-     * @param start
-     * @param width
      */
-    private static void print_cautiously(final StringBuilder s, final int start, final int width) {
+    private static void printCautiously(final StringBuilder s, final int start, final int width) {
         if ( start >= s.length() ) {
             System.out.println();
             return;

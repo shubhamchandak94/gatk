@@ -6,10 +6,15 @@ import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
 import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerNativeBinding;
 import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignmentResult;
 
+/**
+ * A wrapper that converts instances of {@link SWAlignerNativeBinding} into a {@link SmithWatermanAligner}
+ *
+ *
+ */
 public abstract class SWNativeAlignerWrapper implements SmithWatermanAligner {
     private final SWAlignerNativeBinding aligner;
 
-    public SWNativeAlignerWrapper(final SWAlignerNativeBinding aligner, final SWAlignerArguments.Weights weights, final SWAlignerArguments.OverhangStrategy overhangStrategy) {
+    protected SWNativeAlignerWrapper(final SWAlignerNativeBinding aligner, final SWAlignerArguments.Weights weights, final SWAlignerArguments.OverhangStrategy overhangStrategy) {
         this.aligner = aligner;
         this.aligner.initialize(new SWAlignerArguments(overhangStrategy, weights));
     }
