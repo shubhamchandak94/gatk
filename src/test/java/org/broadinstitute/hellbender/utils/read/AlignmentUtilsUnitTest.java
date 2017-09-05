@@ -6,6 +6,7 @@ import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
 import org.broadinstitute.hellbender.utils.pileup.PileupElement;
 import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
+import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAlignment;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.DataProvider;
@@ -244,8 +245,8 @@ public final class AlignmentUtilsUnitTest {
         for ( final List<Mutation> mutations : Utils.makePermutations(allMutations, 3, false) ) {
             final MutatedSequence hap = mutateSequence(referenceBases, mutations);
             final Haplotype haplotype = new Haplotype(hap.seq.getBytes());
-            final SWPairwiseAlignment align = new SWPairwiseAlignment(paddedReference.getBytes(), hap.seq.getBytes());
-            haplotype.setAlignmentStartHapwrtRef(align.getAlignmentStart2wrt1());
+            final SmithWatermanAlignment align = new SWPairwiseAlignment(paddedReference.getBytes(), hap.seq.getBytes());
+            haplotype.setAlignmentStartHapwrtRef(align.getAlignmentOffset());
             haplotype.setCigar(align.getCigar());
 
             for ( final List<Mutation> readMutations : Utils.makePermutations(allMutations, 3, false) ) {

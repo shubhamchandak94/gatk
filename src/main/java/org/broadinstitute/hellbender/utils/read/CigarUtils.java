@@ -7,6 +7,8 @@ import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
+import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAligner;
+import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAlignment;
 
 import java.util.*;
 
@@ -288,7 +290,7 @@ public final class CigarUtils {
 
         final String paddedRef = SW_PAD + new String(refSeq) + SW_PAD;
         final String paddedPath = SW_PAD + new String(altSeq) + SW_PAD;
-        final SWPairwiseAlignment alignment = new SWPairwiseAlignment( paddedRef.getBytes(), paddedPath.getBytes(), NEW_SW_PARAMETERS);
+        final SmithWatermanAlignment alignment = new SWPairwiseAlignment(paddedRef.getBytes(), paddedPath.getBytes(), NEW_SW_PARAMETERS);
 
         if ( isSWFailure(alignment) ) {
             return null;
@@ -311,9 +313,9 @@ public final class CigarUtils {
     /**
      * Make sure that the SW didn't fail in some terrible way, and throw exception if it did
      */
-    private static boolean isSWFailure(final SWPairwiseAlignment alignment) {
+    private static boolean isSWFailure(final SmithWatermanAlignment alignment) {
         // check that the alignment starts at the first base, which it should given the padding
-        if ( alignment.getAlignmentStart2wrt1() > 0 ) {
+        if ( alignment.getAlignmentOffset() > 0 ) {
             return true;
         }
 

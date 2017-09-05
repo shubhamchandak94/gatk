@@ -22,12 +22,13 @@ import java.util.List;
  * ****  This class assumes that all bytes come from UPPERCASED chars! ****
  * ************************************************************************
  */
-public final class SWPairwiseAlignment {
+public final class SWPairwiseAlignment implements SmithWatermanAlignment {
 
     // match=1, mismatch = -1/3, gap=-(1+k/3)
     public static final SWAlignerArguments.Weights ORIGINAL_DEFAULT = new SWAlignerArguments.Weights(3, -1, -4, -3);
 
     public static final SWAlignerArguments.Weights STANDARD_NGS = new SWAlignerArguments.Weights(25, -50, -110, -6);
+    private static final SWAlignerArguments.OverhangStrategy DEFAULT_OVERHANG_STRATEGY = SWAlignerArguments.OverhangStrategy.SOFTCLIP;
 
     /**
      * The state of a trace step through the matrix
@@ -42,10 +43,10 @@ public final class SWPairwiseAlignment {
     private SWPairwiseAlignmentResult alignmentResult;
 
     private final SWAlignerArguments.Weights parameters;
+    private final SWAlignerArguments.OverhangStrategy overhangStrategy;
 
     private static final boolean cutoff = false;
 
-    private SWAlignerArguments.OverhangStrategy overhangStrategy = SWAlignerArguments.OverhangStrategy.SOFTCLIP;
 
     /**
      * The SW scoring matrix, stored for debugging purposes if keepScoringMatrix is true
@@ -68,8 +69,8 @@ public final class SWPairwiseAlignment {
      * @param parameters the SW parameters to use
      */
     public SWPairwiseAlignment(final byte[] seq1, final byte[] seq2, final SWAlignerArguments.Weights parameters) {
-        this(parameters);
-        align(seq1,seq2);
+        this(parameters, DEFAULT_OVERHANG_STRATEGY);
+        alignmentResult = align(seq1,seq2);
     }
 
     /**
@@ -83,9 +84,8 @@ public final class SWPairwiseAlignment {
      * @param strategy   the overhang strategy to use
      */
     public SWPairwiseAlignment(final byte[] seq1, final byte[] seq2, final SWAlignerArguments.Weights parameters, final SWAlignerArguments.OverhangStrategy strategy) {
-        this(parameters);
-        overhangStrategy = strategy;
-        align(seq1, seq2);
+        this(parameters, strategy);
+        alignmentResult = align(seq1, seq2);
     }
 
     /**
@@ -93,17 +93,20 @@ public final class SWPairwiseAlignment {
      *
      * @param parameters the SW parameters to use
      */
-    private SWPairwiseAlignment(final SWAlignerArguments.Weights parameters) {
+    private SWPairwiseAlignment(final SWAlignerArguments.Weights parameters, final SWAlignerArguments.OverhangStrategy overhangStrategy) {
         this.parameters = parameters;
+        this.overhangStrategy = overhangStrategy;
     }
 
     public SWPairwiseAlignment(final byte[] seq1, final byte[] seq2) {
-        this(seq1,seq2,ORIGINAL_DEFAULT);
+        this(seq1,seq2,ORIGINAL_DEFAULT, DEFAULT_OVERHANG_STRATEGY);
     }
 
+    @Override
     public Cigar getCigar() { return alignmentResult.cigar ; }
 
-    public int getAlignmentStart2wrt1() { return alignmentResult.alignment_offset; }
+    @Override
+    public int getAlignmentOffset() { return alignmentResult.alignmentOffset; }
 
     /**
      * Aligns the alternate sequence to the reference sequence
@@ -111,7 +114,7 @@ public final class SWPairwiseAlignment {
      * @param reference  ref sequence
      * @param alternate  alt sequence
      */
-    private void align(final byte[] reference, final byte[] alternate) {
+    private SWPairwiseAlignmentResult align(final byte[] reference, final byte[] alternate) {
         if ( reference == null || reference.length == 0 || alternate == null || alternate.length == 0 )
             throw new IllegalArgumentException("Non-null, non-empty sequences are required for the Smith-Waterman calculation");
 
@@ -127,7 +130,7 @@ public final class SWPairwiseAlignment {
             // generate the alignment result when the substring search was successful
             final List<CigarElement> lce = new ArrayList<>(alternate.length);
             lce.add(makeElement(State.MATCH, alternate.length));
-            alignmentResult = new SWPairwiseAlignmentResult(AlignmentUtils.consolidateCigar(new Cigar(lce)), matchIndex);
+            return  new SWPairwiseAlignmentResult(AlignmentUtils.consolidateCigar(new Cigar(lce)), matchIndex);
         }
         else {
             // run full Smith-Waterman
@@ -139,34 +142,21 @@ public final class SWPairwiseAlignment {
             }
             final int[][] btrack=new int[n][m];
 
-            calculateMatrix(reference, alternate, sw, btrack);
-            alignmentResult = calculateCigar(sw, btrack, overhangStrategy); // length of the segment (continuous matches, insertions or deletions)
+            calculateMatrix(reference, alternate, sw, btrack, overhangStrategy, parameters);
+            return calculateCigar(sw, btrack, overhangStrategy); // length of the segment (continuous matches, insertions or deletions)
         }
     }
 
     /**
      * Calculates the SW matrices for the given sequences
-     *
-     * @param reference  ref sequence
-     * @param alternate  alt sequence
-     * @param sw         the Smith-Waterman matrix to populate
-     * @param btrack     the back track matrix to populate
-     */
-    private void calculateMatrix(final byte[] reference, final byte[] alternate, final int[][] sw, final int[][] btrack) {
-        calculateMatrix(reference, alternate, sw, btrack, overhangStrategy);
-    }
-
-    /**
-     * Calculates the SW matrices for the given sequences
-     *
-     * @param reference  ref sequence
+     *  @param reference  ref sequence
      * @param alternate  alt sequence
      * @param sw         the Smith-Waterman matrix to populate
      * @param btrack     the back track matrix to populate
      * @param overhangStrategy    the strategy to use for dealing with overhangs
+     * @param parameters
      */
-    private void calculateMatrix(final byte[] reference, final byte[] alternate, final int[][] sw, final int[][] btrack,
-                                 final SWAlignerArguments.OverhangStrategy overhangStrategy) {
+    private static void calculateMatrix(final byte[] reference, final byte[] alternate, final int[][] sw, final int[][] btrack, final SWAlignerArguments.OverhangStrategy overhangStrategy, SWAlignerArguments.Weights parameters) {
         if ( reference.length == 0 || alternate.length == 0 )
             throw new IllegalArgumentException("Non-null, non-empty sequences are required for the Smith-Waterman calculation");
 
@@ -192,14 +182,14 @@ public final class SWPairwiseAlignment {
         if ( overhangStrategy == SWAlignerArguments.OverhangStrategy.INDEL || overhangStrategy == SWAlignerArguments.OverhangStrategy.LEADING_INDEL ) {
             // initialize the first row
             final int[] topRow=sw[0];
-            topRow[1]=parameters.getGapOpenPenalty();
+            topRow[1]= parameters.getGapOpenPenalty();
             int currentValue = parameters.getGapOpenPenalty();
             for ( int i = 2; i < topRow.length; i++ ) {
                 currentValue += parameters.getGapExtendPenalty();
                 topRow[i]=currentValue;
             }
             // initialize the first column
-            sw[1][0]=parameters.getGapOpenPenalty();
+            sw[1][0]= parameters.getGapOpenPenalty();
             currentValue = parameters.getGapOpenPenalty();
             for ( int i = 2; i < sw.length; i++ ) {
                 currentValue += parameters.getGapExtendPenalty();
@@ -295,10 +285,10 @@ public final class SWPairwiseAlignment {
      */
     private static final class SWPairwiseAlignmentResult {
         public final Cigar cigar;
-        public final int alignment_offset;
-        SWPairwiseAlignmentResult(final Cigar cigar, final int alignment_offset) {
+        public final int alignmentOffset;
+        SWPairwiseAlignmentResult(final Cigar cigar, final int alignmentOffset) {
             this.cigar = cigar;
-            this.alignment_offset = alignment_offset;
+            this.alignmentOffset = alignmentOffset;
         }
     }
 
@@ -310,7 +300,7 @@ public final class SWPairwiseAlignment {
      * @param overhangStrategy    the strategy to use for dealing with overhangs
      * @return non-null SWPairwiseAlignmentResult object
      */
-    private SWPairwiseAlignmentResult calculateCigar(final int[][] sw, final int[][] btrack, final SWAlignerArguments.OverhangStrategy overhangStrategy) {
+    private static SWPairwiseAlignmentResult calculateCigar(final int[][] sw, final int[][] btrack, final SWAlignerArguments.OverhangStrategy overhangStrategy) {
         // p holds the position we start backtracking from; we will be assembling a cigar in the backwards order
         int p1 = 0, p2 = 0;
 
@@ -457,7 +447,7 @@ public final class SWPairwiseAlignment {
         int i = 0;
         int j = 0;
 
-        final int offset = getAlignmentStart2wrt1();
+        final int offset = getAlignmentOffset();
 
         Cigar cigar = getCigar();
 
@@ -485,7 +475,7 @@ public final class SWPairwiseAlignment {
         }
 
         if ( offset > 0 ) { // note: the way this implementation works, cigar will ever start from S *only* if read starts before the ref, i.e. offset = 0
-            for (  ; i < getAlignmentStart2wrt1() ; i++ ) {
+            for (; i < getAlignmentOffset() ; i++ ) {
                 bref.append((char)ref[i]);
                 bread.append(' ');
                 match.append(' ');
@@ -556,4 +546,5 @@ public final class SWPairwiseAlignment {
         final int end = Math.min(start + width, s.length());
         System.out.println(s.substring(start,end));
     }
+
 }

@@ -9,6 +9,7 @@ import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
 import org.broadinstitute.hellbender.utils.pileup.PileupElement;
 import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
+import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAlignment;
 
 import java.util.*;
 
@@ -64,8 +65,8 @@ public final class AlignmentUtils {
         if ( referenceStart < 1 ) { throw new IllegalArgumentException("reference start much be >= 1 but got " + referenceStart); }
 
         // compute the smith-waterman alignment of read -> haplotype
-        final SWPairwiseAlignment swPairwiseAlignment = new SWPairwiseAlignment(haplotype.getBases(), originalRead.getBases(), CigarUtils.NEW_SW_PARAMETERS);
-        if ( swPairwiseAlignment.getAlignmentStart2wrt1() == -1 ) {
+        final SmithWatermanAlignment swPairwiseAlignment = new SWPairwiseAlignment(haplotype.getBases(), originalRead.getBases(), CigarUtils.NEW_SW_PARAMETERS);
+        if ( swPairwiseAlignment.getAlignmentOffset() == -1 ) {
             // sw can fail (reasons not clear) so if it happens just don't realign the read
             return originalRead;
         }
@@ -82,17 +83,17 @@ public final class AlignmentUtils {
 
         // compute here the read starts w.r.t. the reference from the SW result and the hap -> ref cigar
         final Cigar extendedHaplotypeCigar = haplotype.getConsolidatedPaddedCigar(1000);
-        final int readStartOnHaplotype = calcFirstBaseMatchingReferenceInCigar(extendedHaplotypeCigar, swPairwiseAlignment.getAlignmentStart2wrt1());
+        final int readStartOnHaplotype = calcFirstBaseMatchingReferenceInCigar(extendedHaplotypeCigar, swPairwiseAlignment.getAlignmentOffset());
         final int readStartOnReference = referenceStart + haplotype.getAlignmentStartHapwrtRef() + readStartOnHaplotype;
         read.setPosition(read.getContig(), readStartOnReference);
 
         // compute the read -> ref alignment by mapping read -> hap -> ref from the
         // SW of read -> hap mapped through the given by hap -> ref
-        final Cigar haplotypeToRef = trimCigarByBases(extendedHaplotypeCigar, swPairwiseAlignment.getAlignmentStart2wrt1(), extendedHaplotypeCigar.getReadLength() - 1);
+        final Cigar haplotypeToRef = trimCigarByBases(extendedHaplotypeCigar, swPairwiseAlignment.getAlignmentOffset(), extendedHaplotypeCigar.getReadLength() - 1);
         final Cigar readToRefCigarRaw = applyCigarToCigar(swCigar, haplotypeToRef);
         final Cigar readToRefCigarClean = cleanUpCigar(readToRefCigarRaw);
         final Cigar readToRefCigar = leftAlignIndel(readToRefCigarClean, refHaplotype.getBases(),
-                originalRead.getBases(), swPairwiseAlignment.getAlignmentStart2wrt1(), 0, true);
+                                                    originalRead.getBases(), swPairwiseAlignment.getAlignmentOffset(), 0, true);
 
         read.setCigar(readToRefCigar);
 

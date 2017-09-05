@@ -26,8 +26,8 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
 
     @Test(dataProvider = "ComplexReadAlignedToRef", enabled = true)
     public void testReadAlignedToRefComplexAlignment(final String reference, final String read, final int expectedStart, final String expectedCigar) {
-        final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        final SmithWatermanAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes());
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -46,8 +46,8 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
     @Test(dataProvider = "OddNoAlignment", enabled = true)
     public void testOddNoAlignment(final String reference, final String read, final int match, final int mismatch, final int gap, final int gap_extend,
                                    final int expectedStart, final String expectedCigar) {
-        final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(), new SWAlignerArguments.Weights(match, mismatch, gap, gap_extend));
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        final SmithWatermanAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes(), new SWAlignerArguments.Weights(match, mismatch, gap, gap_extend));
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -60,7 +60,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String expectedCigar = "5M3S";
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(reference.getBytes(), read.getBytes());
         sw.printAlignment(reference.getBytes(), read.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -73,7 +73,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String expectedCigar = "31M20S";
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(ref.getBytes(), alt.getBytes(), SWPairwiseAlignment.STANDARD_NGS);
         sw.printAlignment(ref.getBytes(), alt.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -95,8 +95,8 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String paddedsHap = SW_PAD + new String(paddedHap) + SW_PAD;
         final String notPaddedsRef = SW_PAD + new String(notPaddedRef) + SW_PAD;
         final String notpaddedsHap = SW_PAD + new String(notPaddedHap) + SW_PAD;
-        final SWPairwiseAlignment paddedAlignment = new SWPairwiseAlignment( paddedsRef.getBytes(), paddedsHap.getBytes(), CigarUtils.NEW_SW_PARAMETERS );
-        final SWPairwiseAlignment notPaddedAlignment = new SWPairwiseAlignment( notPaddedsRef.getBytes(), notpaddedsHap.getBytes(), CigarUtils.NEW_SW_PARAMETERS );
+        final SmithWatermanAlignment paddedAlignment = new SWPairwiseAlignment(paddedsRef.getBytes(), paddedsHap.getBytes(), CigarUtils.NEW_SW_PARAMETERS );
+        final SmithWatermanAlignment notPaddedAlignment = new SWPairwiseAlignment(notPaddedsRef.getBytes(), notpaddedsHap.getBytes(), CigarUtils.NEW_SW_PARAMETERS );
         //Now verify that the two sequences have the same alignment and not match positions.
         Cigar rawPadded = paddedAlignment.getCigar();
         Cigar notPadded= notPaddedAlignment.getCigar();
@@ -129,7 +129,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
                                                                SWAlignerArguments.OverhangStrategy.SOFTCLIP);
         sw.printAlignment(reference.getBytes(), read.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -144,7 +144,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
                                                                SWAlignerArguments.OverhangStrategy.INDEL);
         sw.printAlignment(reference.getBytes(), read.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -159,7 +159,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
                                                                SWAlignerArguments.OverhangStrategy.LEADING_INDEL);
         sw.printAlignment(reference.getBytes(), read.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -174,7 +174,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
                                                                SWAlignerArguments.OverhangStrategy.IGNORE);
         sw.printAlignment(reference.getBytes(), read.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -188,7 +188,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
                                                                SWAlignerArguments.OverhangStrategy.SOFTCLIP);
         sw.printAlignment(reference.getBytes(), read.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -202,7 +202,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
                                                                SWAlignerArguments.OverhangStrategy.INDEL);
         sw.printAlignment(reference.getBytes(), read.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -216,7 +216,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
                                                                SWAlignerArguments.OverhangStrategy.LEADING_INDEL);
         sw.printAlignment(reference.getBytes(), read.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 
@@ -230,7 +230,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
                                                                SWPairwiseAlignment.ORIGINAL_DEFAULT,
                                                                SWAlignerArguments.OverhangStrategy.IGNORE);
         sw.printAlignment(reference.getBytes(), read.getBytes());
-        Assert.assertEquals(sw.getAlignmentStart2wrt1(), expectedStart);
+        Assert.assertEquals(sw.getAlignmentOffset(), expectedStart);
         Assert.assertEquals(sw.getCigar().toString(), expectedCigar);
     }
 }

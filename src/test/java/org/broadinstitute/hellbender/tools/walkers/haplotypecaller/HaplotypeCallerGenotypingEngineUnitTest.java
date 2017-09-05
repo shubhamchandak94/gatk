@@ -14,6 +14,7 @@ import org.broadinstitute.hellbender.utils.pileup.ReadPileup;
 import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
+import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAlignment;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.testng.Assert;
@@ -40,8 +41,8 @@ public final class HaplotypeCallerGenotypingEngineUnitTest extends BaseTest {
         }
         
         public Map<Integer,VariantContext> calcAlignment() {
-            final SWPairwiseAlignment alignment = new SWPairwiseAlignment(ref, hap, new SWAlignerArguments.Weights(3, -1, -4, -1));
-            final Haplotype h = new Haplotype(hap, false, alignment.getAlignmentStart2wrt1(), alignment.getCigar());
+            final SmithWatermanAlignment alignment = new SWPairwiseAlignment(ref, hap, new SWAlignerArguments.Weights(3, -1, -4, -1));
+            final Haplotype h = new Haplotype(hap, false, alignment.getAlignmentOffset(), alignment.getCigar());
             return new EventMap(h, ref, new SimpleInterval("4", 1, 1 + ref.length), "name");
         }
 
