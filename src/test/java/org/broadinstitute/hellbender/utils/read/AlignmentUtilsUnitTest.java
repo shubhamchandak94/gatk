@@ -245,7 +245,8 @@ public final class AlignmentUtilsUnitTest {
         for ( final List<Mutation> mutations : Utils.makePermutations(allMutations, 3, false) ) {
             final MutatedSequence hap = mutateSequence(referenceBases, mutations);
             final Haplotype haplotype = new Haplotype(hap.seq.getBytes());
-            final SmithWatermanAlignment align = new SWPairwiseAlignment(paddedReference.getBytes(), hap.seq.getBytes(), SWPairwiseAlignment.ORIGINAL_DEFAULT, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY);
+            final SmithWatermanAlignment align = new SWPairwiseAlignment(SWPairwiseAlignment.ORIGINAL_DEFAULT, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY)
+                    .align(paddedReference.getBytes(), hap.seq.getBytes());
             haplotype.setAlignmentStartHapwrtRef(align.getAlignmentOffset());
             haplotype.setCigar(align.getCigar());
 

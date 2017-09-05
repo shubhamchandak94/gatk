@@ -65,7 +65,8 @@ public final class AlignmentUtils {
         if ( referenceStart < 1 ) { throw new IllegalArgumentException("reference start much be >= 1 but got " + referenceStart); }
 
         // compute the smith-waterman alignment of read -> haplotype
-        final SmithWatermanAlignment swPairwiseAlignment = new SWPairwiseAlignment(haplotype.getBases(), originalRead.getBases(), CigarUtils.NEW_SW_PARAMETERS, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY);
+        final SmithWatermanAlignment swPairwiseAlignment = new SWPairwiseAlignment(CigarUtils.NEW_SW_PARAMETERS, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY)
+                .align(haplotype.getBases(), originalRead.getBases());
         if ( swPairwiseAlignment.getAlignmentOffset() == -1 ) {
             // sw can fail (reasons not clear) so if it happens just don't realign the read
             return originalRead;

@@ -729,7 +729,8 @@ public class ReadThreadingGraph extends BaseGraph<MultiDeBruijnVertex, MultiSamp
         final byte[] altBases = getBasesForPath(altPath, false);
 
         // run Smith-Waterman to determine the best alignment (and remove trailing deletions since they aren't interesting)
-        final SmithWatermanAlignment alignment = new SWPairwiseAlignment(refBases, altBases, SWPairwiseAlignment.STANDARD_NGS, SWAlignerArguments.OverhangStrategy.LEADING_INDEL);
+        final SmithWatermanAlignment alignment = new SWPairwiseAlignment(SWPairwiseAlignment.STANDARD_NGS, SWAlignerArguments.OverhangStrategy.LEADING_INDEL)
+                .align(refBases, altBases);
         return new DanglingChainMergeHelper(altPath, refPath, altBases, refBases, AlignmentUtils.removeTrailingDeletions(alignment.getCigar()));
     }
 
@@ -759,7 +760,8 @@ public class ReadThreadingGraph extends BaseGraph<MultiDeBruijnVertex, MultiSamp
         final byte[] altBases = getBasesForPath(altPath, true);
 
         // run Smith-Waterman to determine the best alignment (and remove trailing deletions since they aren't interesting)
-        final SmithWatermanAlignment alignment = new SWPairwiseAlignment(refBases, altBases, SWPairwiseAlignment.STANDARD_NGS, SWAlignerArguments.OverhangStrategy.LEADING_INDEL);
+        final SmithWatermanAlignment alignment = new SWPairwiseAlignment(SWPairwiseAlignment.STANDARD_NGS, SWAlignerArguments.OverhangStrategy.LEADING_INDEL)
+                .align(refBases, altBases);
         return new DanglingChainMergeHelper(altPath, refPath, altBases, refBases, AlignmentUtils.removeTrailingDeletions(alignment.getCigar()));
     }
 

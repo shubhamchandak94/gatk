@@ -41,7 +41,8 @@ public final class HaplotypeCallerGenotypingEngineUnitTest extends BaseTest {
         }
         
         public Map<Integer,VariantContext> calcAlignment() {
-            final SmithWatermanAlignment alignment = new SWPairwiseAlignment(ref, hap, new SWAlignerArguments.Weights(3, -1, -4, -1), SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY);
+            final SmithWatermanAlignment alignment = new SWPairwiseAlignment(new SWAlignerArguments.Weights(3, -1, -4, -1), SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY)
+                    .align(ref, hap);
             final Haplotype h = new Haplotype(hap, false, alignment.getAlignmentOffset(), alignment.getCigar());
             return new EventMap(h, ref, new SimpleInterval("4", 1, 1 + ref.length), "name");
         }

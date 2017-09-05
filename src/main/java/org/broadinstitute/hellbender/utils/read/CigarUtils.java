@@ -290,7 +290,8 @@ public final class CigarUtils {
 
         final String paddedRef = SW_PAD + new String(refSeq) + SW_PAD;
         final String paddedPath = SW_PAD + new String(altSeq) + SW_PAD;
-        final SmithWatermanAlignment alignment = new SWPairwiseAlignment(paddedRef.getBytes(), paddedPath.getBytes(), NEW_SW_PARAMETERS, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY);
+        final SmithWatermanAlignment alignment = new SWPairwiseAlignment(NEW_SW_PARAMETERS, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY)
+                .align(paddedRef.getBytes(), paddedPath.getBytes());
 
         if ( isSWFailure(alignment) ) {
             return null;

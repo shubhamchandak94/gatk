@@ -22,7 +22,7 @@ import java.util.List;
  * ****  This class assumes that all bytes come from UPPERCASED chars! ****
  * ************************************************************************
  */
-public final class SWPairwiseAlignment implements SmithWatermanAlignment {
+public final class SWPairwiseAlignment implements SmithWatermanAligner {
 
     // match=1, mismatch = -1/3, gap=-(1+k/3)
     public static final SWAlignerArguments.Weights ORIGINAL_DEFAULT = new SWAlignerArguments.Weights(3, -1, -4, -3);
@@ -39,8 +39,6 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
         DELETION,
         CLIP
     }
-
-    private final SmithWatermanAlignment alignmentResult;
 
     private final SWAlignerArguments.Weights parameters;
     private final SWAlignerArguments.OverhangStrategy overhangStrategy;
@@ -62,24 +60,13 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
     /**
      * Create a new SW pairwise aligner
      *
-     * After creating the object the two sequences are aligned with an internal call to align(seq1, seq2)
-     *
-     * @param seq1 the first sequence we want to align
-     * @param seq2 the second sequence we want to align
      * @param parameters the SW parameters to use
      * @param strategy   the overhang strategy to use
      */
-    public SWPairwiseAlignment(final byte[] seq1, final byte[] seq2, final SWAlignerArguments.Weights parameters, final SWAlignerArguments.OverhangStrategy strategy) {
+    public SWPairwiseAlignment(final SWAlignerArguments.Weights parameters, final SWAlignerArguments.OverhangStrategy strategy) {
         this.parameters = parameters;
         this.overhangStrategy = strategy;
-        alignmentResult = align(seq1, seq2);
     }
-
-    @Override
-    public Cigar getCigar() { return alignmentResult.getCigar() ; }
-
-    @Override
-    public int getAlignmentOffset() { return alignmentResult.getAlignmentOffset(); }
 
     /**
      * Aligns the alternate sequence to the reference sequence
@@ -87,6 +74,7 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
      * @param reference  ref sequence
      * @param alternate  alt sequence
      */
+    @Override
     public SmithWatermanAlignment align(final byte[] reference, final byte[] alternate) {
         if ( reference == null || reference.length == 0 || alternate == null || alternate.length == 0 )
             throw new IllegalArgumentException("Non-null, non-empty sequences are required for the Smith-Waterman calculation");
@@ -419,11 +407,11 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
     }
 
     @VisibleForTesting
-    void printAlignment(final byte[] ref, final byte[] read) {
-        printAlignment(ref,read,100);
+    void printAlignment(final byte[] ref, final byte[] read, final SmithWatermanAlignment alignment) {
+        printAlignment(overhangStrategy, ref, read, 100, alignment);
     }
 
-    private void printAlignment(final byte[] ref, final byte[] read, final int width) {
+    private static void printAlignment(final SWAlignerArguments.OverhangStrategy overhangStrategy, final byte[] ref, final byte[] read, final int width, final SmithWatermanAlignment alignment) {
         final StringBuilder bread = new StringBuilder();
         final StringBuilder bref = new StringBuilder();
         final StringBuilder match = new StringBuilder();
@@ -431,9 +419,9 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
         int i = 0;
         int j = 0;
 
-        final int offset = getAlignmentOffset();
+        final int offset = alignment.getAlignmentOffset();
 
-        Cigar cigar = getCigar();
+        Cigar cigar = alignment.getCigar();
 
         if ( overhangStrategy != SWAlignerArguments.OverhangStrategy.SOFTCLIP ) {
 
@@ -459,7 +447,7 @@ public final class SWPairwiseAlignment implements SmithWatermanAlignment {
         }
 
         if ( offset > 0 ) { // note: the way this implementation works, cigar will ever start from S *only* if read starts before the ref, i.e. offset = 0
-            for (; i < getAlignmentOffset() ; i++ ) {
+            for (; i < alignment.getAlignmentOffset() ; i++ ) {
                 bref.append((char)ref[i]);
                 bread.append(' ');
                 match.append(' ');
