@@ -304,6 +304,7 @@ This method should be removed after GenotypeGVCFs has been completely validated 
                 .addOutput(output);
         args.addVCF(getTestFile("gvcfExample1.vcf"));
         args.addVCF(getTestFile("gvcfExample2.vcf"));
+        args.add("--" + CombineGVCFs.IGNORE_VARIANTS_THAT_START_OUTSIDE_INTERVAL );
         args.add(" -L 20:69635");
 
         runCommandLine(args);
@@ -328,6 +329,7 @@ This method should be removed after GenotypeGVCFs has been completely validated 
                 .addOutput(output);
         args.addVCF(getTestFile("gvcfExample1.vcf"));
         args.addVCF(getTestFile("gvcfExample2.vcf"));
+        args.add("--" + CombineGVCFs.IGNORE_VARIANTS_THAT_START_OUTSIDE_INTERVAL );
         args.add(" -L 20:69772-69783");
 
         runCommandLine(args);

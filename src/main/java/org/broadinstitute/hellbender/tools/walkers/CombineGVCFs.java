@@ -116,7 +116,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     @Argument(fullName="breakBandsAtMultiplesOf", shortName="breakBandsAtMultiplesOf", doc = "If > 0, reference bands will be broken up at genomic positions that are multiples of this number", optional=true)
     protected int multipleAtWhichToBreakBands = 0;
 
-    private final String IGNORE_VARIANTS_THAT_START_OUTSIDE_INTERVAL = "ignore_variants_starting_outside_interval";
+    public static final String IGNORE_VARIANTS_THAT_START_OUTSIDE_INTERVAL = "ignore_variants_starting_outside_interval";
     /**
      * This option can only be activated if intervals are specified.
      *
@@ -158,6 +158,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     byte[] storedReference;
     private OverlapDetector overlapDetector;
     private boolean hasReduced = false;
+    private int storedReferenceStart;
 
 
     /**
@@ -192,19 +193,20 @@ public final class CombineGVCFs extends MultiVariantWalker {
             if (hasReduced == true) {
                 createIntermediateVariants(prevPos == null ? new SimpleInterval(VCs.get(0).getContig(), VCs.get(0).getStart(),
                         (VCs.get(0).getContig().equals(currentPositionalState.loc.getContig())
-                                ? currentPositionalState.loc.getStart()
-                                : VCs.get(0).getStart() + storedReference.length))
+                                ? currentPositionalState.loc.getStart() - 1
+                                : VCs.get(0).getStart() + storedReference.length - 1 ))
 
                         : new SimpleInterval(prevPos.getContig(), prevPos.getStart(),
                         (prevPos.getContig().equals(currentPositionalState.loc.getContig())
-                                ? currentPositionalState.loc.getStart()
-                                : prevPos.getStart() + storedReference.length)));
+                                ? currentPositionalState.loc.getStart() - 1
+                                : prevPos.getStart() + storedReference.length - 1)));
             }
 
             //TODO ^^^ YUCK!
 
             reduce(currentPositionalState);
             storedReference = currentPositionalState.refBases;
+            storedReferenceStart = currentPositionalState.loc.getStart();
             currentVariants.clear();
             currentVariants.add(variant);
             // TODO BE VERY CLEAR ABOUT THIS
@@ -236,7 +238,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
             if (vc.getNAlleles() > 2) {
                 //TODO figure out which one this should be
                 sitesToStop.add(vc.getStart());
-            } else if (vc.getEnd() < intervalToClose.getEnd()) {
+            } else if (vc.getEnd() <= intervalToClose.getEnd()) {
                 sitesToStop.add(vc.getEnd());
             }
         }
@@ -247,8 +249,8 @@ public final class CombineGVCFs extends MultiVariantWalker {
         for (int i : stoppedPlaces) {
             //TODO be sure about these reference bases and how to get them
             SimpleInterval loc = new SimpleInterval(intervalToClose.getContig(),i,i);
-            if ((prevPos!=null && i> prevPos.getStart())&&(overlapDetector==null || overlapDetector.overlapsAny(loc))) {//TODO speed of this check?
-                byte[] refBases = Arrays.copyOfRange(storedReference, i - intervalToClose.getStart(), i - intervalToClose.getStart() + 1);
+            if (( i>= intervalToClose.getStart())&&(overlapDetector==null || overlapDetector.overlapsAny(loc))) {//TODO speed of this check?
+                byte[] refBases = Arrays.copyOfRange(storedReference, i - storedReferenceStart, i - storedReferenceStart + 1);
                 PositionalState tmp = new PositionalState(Collections.emptyList(), refBases, new SimpleInterval(intervalToClose.getContig(), i, i));
                 endPreviousStates(tmp.loc, refBases, tmp, true);
             }
@@ -257,7 +259,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     }
 
     /**
-     * Method which ensures that the currentPositionalState object to hold the longest referecne
+     * Method which ensures that the currentPositionalState object to hold the longest set of reference bases
      *
      * @param currentVariants
      */
@@ -534,6 +536,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
         } else{
             reduce(currentPositionalState);
             storedReference = currentPositionalState.refBases;
+            storedReferenceStart = currentPositionalState.loc.getStart();
             SimpleInterval interval = prevPos != null ? new SimpleInterval(prevPos.getContig(), prevPos.getStart(), prevPos.getStart() + storedReference.length + 1) :
                     currentPositionalState.loc;
 
