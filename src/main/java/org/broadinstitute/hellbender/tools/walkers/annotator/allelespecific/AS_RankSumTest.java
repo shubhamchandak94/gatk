@@ -108,6 +108,10 @@ public abstract class AS_RankSumTest extends RankSumTest implements ReducibleAnn
     // Generates as CompressedDataList over integer values over each read
     @SuppressWarnings({"unchecked", "rawtypes"})//FIXME generics here blow up
     public void calculateRawData(VariantContext vc, final ReadLikelihoods<Allele> likelihoods, ReducibleAnnotationData myData) {
+        if( vc.getGenotypes().getSampleNames().size() != 1)
+            throw new IllegalStateException("Calculating raw data for allele-specific rank sums requires variant context input with exactly one sample, as in a gVCF.");
+
+
         if(likelihoods == null) {
             return;
         }

@@ -72,7 +72,7 @@ public class ArtificialAnnotationUtils {
                                                           final Allele refAllele,
                                                           final Allele altAllele) {
         final List<GATKRead> reads = ListUtils.union(ListUtils.union(refReads, altReads), uninformativeReads);
-        final ReadLikelihoods<Allele> likelihoods = initializeReadLikelihoods(sample, refAllele, altAllele, reads);
+        final ReadLikelihoods<Allele> likelihoods = initializeReadLikelihoods(sample, new IndexedAlleleList<>(Arrays.asList(refAllele, altAllele)), reads);
 
         final LikelihoodMatrix<Allele> matrix = likelihoods.sampleMatrix(0);
         int readIndex = 0;
@@ -97,10 +97,57 @@ public class ArtificialAnnotationUtils {
         return likelihoods;
     }
 
-    private static ReadLikelihoods<Allele> initializeReadLikelihoods(String sample, Allele refAllele, Allele altAllele, List<GATKRead> reads) {
+    public static ReadLikelihoods<Allele> makeTriAllelicLikelihoods(final String sample,
+                                                                    final List<GATKRead> refReads,
+                                                                    final List<GATKRead> alt1Reads,
+                                                                    final List<GATKRead> alt2Reads,
+                                                                    final List<GATKRead> uninformativeReads,
+                                                                    final double refReadAltLikelihood,
+                                                                    final double alt1ReadRefLikelihood,
+                                                                    final double alt2ReadRefLikelihood,
+                                                                    final double badReadAltLikelihood,
+                                                                    final Allele refAllele,
+                                                                    final Allele alt1Allele,
+                                                                    final Allele alt2Allele) {
+        final List<GATKRead> reads = ListUtils.union(ListUtils.union(refReads, ListUtils.union(alt1Reads,alt2Reads)), uninformativeReads);
+        final ReadLikelihoods<Allele> likelihoods = initializeReadLikelihoods(sample, new IndexedAlleleList<>(Arrays.asList(refAllele, alt1Allele, alt2Allele)), reads);
+
+        final LikelihoodMatrix<Allele> matrix = likelihoods.sampleMatrix(0);
+        int readIndex = 0;
+        for (int i = 0; i < refReads.size(); i++) {
+            matrix.set(0, readIndex, MATCH_LIKELIHOOD);
+            matrix.set(1, readIndex, refReadAltLikelihood);
+            matrix.set(2, readIndex, refReadAltLikelihood);
+            readIndex++;
+        }
+
+        for (int i = 0; i < alt1Reads.size(); i++) {
+            matrix.set(0, readIndex, alt1ReadRefLikelihood);
+            matrix.set(1, readIndex, MATCH_LIKELIHOOD);
+            matrix.set(2, readIndex, alt1ReadRefLikelihood);
+            readIndex++;
+        }
+
+        for (int i = 0; i < alt2Reads.size(); i++) {
+            matrix.set(0, readIndex, alt2ReadRefLikelihood);
+            matrix.set(1, readIndex, alt2ReadRefLikelihood);
+            matrix.set(2, readIndex, MATCH_LIKELIHOOD);
+            readIndex++;
+        }
+
+        for (int i = 0; i < uninformativeReads.size(); i++) {
+            matrix.set(0, readIndex, MATCH_LIKELIHOOD);
+            matrix.set(1, readIndex, badReadAltLikelihood);
+            matrix.set(2, readIndex, badReadAltLikelihood);
+            readIndex++;
+        }
+
+        return likelihoods;
+    }
+
+    private static ReadLikelihoods<Allele> initializeReadLikelihoods(String sample, AlleleList<Allele> alleleList, List<GATKRead> reads) {
         final Map<String, List<GATKRead>> readsBySample = ImmutableMap.of(sample, reads);
         final org.broadinstitute.hellbender.utils.genotyper.SampleList sampleList = new IndexedSampleList(Arrays.asList(sample));
-        final AlleleList<Allele> alleleList = new IndexedAlleleList<>(Arrays.asList(refAllele, altAllele));
         return new ReadLikelihoods<>(sampleList, alleleList, readsBySample);
     }
 
