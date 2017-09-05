@@ -35,7 +35,7 @@ public class KernelSegmenterUnitTest extends BaseTest {
                 .map(i -> Math.abs(i / 100 - 5) + 0.1 * rng.nextGaussian())
                 .collect(Collectors.toList());
         final List<Integer> changepointsExpectedGaussian = Arrays.asList(
-                99, 199, 299, 399, 499, 599, 699, 799, 899, 999);
+                299, 699, 99, 899, 399, 199, 599, 499, 799);            //from python implementation
 
         return new Object[][]{
                 {dataGaussian, linearKernel, changepointsExpectedGaussian}
@@ -53,7 +53,6 @@ public class KernelSegmenterUnitTest extends BaseTest {
         final double numChangepointsPenaltyLinearFactor = 2.;
         final double numChangepointsPenaltyLogLinearFactor = 2.;
 
-        System.out.println(data);
         final KernelSegmenter<Double> segmenter = new KernelSegmenter<>(data);
         Assert.assertEquals(
                 segmenter.findChangepoints(maxNumChangepoints, kernel, kernelApproximationDimension, windowSizes,

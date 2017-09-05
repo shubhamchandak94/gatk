@@ -85,19 +85,19 @@ public final class PersistenceOptimizer {
     }
 
     /**
-     * Returns a list of the indices of the local minima, sorted first by decreasing topological persistence
+     * Returns a modifiable list of the indices of the local minima, sorted first by decreasing topological persistence
      * and then by increasing index.  The first element is the index of the global minimum.
      */
     public List<Integer> getMinimaIndices() {
-        return Collections.unmodifiableList(minimaIndices);
+        return new ArrayList<>(minimaIndices);
     }
 
     /**
-     * Returns the corresponding list of the topological persistences of the local minima given by
+     * Returns the corresponding modifiable list of the topological persistences of the local minima given by
      * {@link PersistenceOptimizer#getMinimaIndices()}.
      */
     public List<Double> getPersistences() {
-        return Collections.unmodifiableList(persistences);
+        return new ArrayList<>(persistences);
     }
 
     //find extrema pairs via a watershed algorithm

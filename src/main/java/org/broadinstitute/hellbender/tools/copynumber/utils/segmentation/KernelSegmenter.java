@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.copynumber.utils.segmentation;
 
-import com.google.common.primitives.Doubles;
 import org.apache.commons.math3.linear.*;
 import org.apache.commons.math3.random.RandomGenerator;
 import org.apache.commons.math3.random.RandomGeneratorFactory;
@@ -89,7 +88,7 @@ public final class KernelSegmenter<T> {
 
     /**
      * Returns a list of the indices of the changepoints, sorted by descending change to the global segmentation cost.
-     * @param maxNumChangepoints                    maximum number of changepoints to return
+     * @param maxNumChangepoints                    maximum number of changepoints to return (first and last points do not count towards this number)
      * @param kernel                                kernel function used to calculate segment costs
      * @param kernelApproximationDimension          dimension of low-rank approximation to the kernel
      * @param windowSizes                           list of sizes to use for the flanking segments used to calculate local changepoint costs
@@ -134,7 +133,7 @@ public final class KernelSegmenter<T> {
                 reducedObservationMatrix, kernelApproximationDiagonal);
     }
 
-    private final class Segment {
+    private static final class Segment {
         private final int start;    //inclusive index of start point
         private final int end;      //inclusive index of end point
         private final double cost;
@@ -228,7 +227,7 @@ public final class KernelSegmenter<T> {
                 .toArray();
     }
 
-    //finds indices of changepoint candidates
+    //finds indices of changepoint candidates from all window sizes
     private static <T> List<Integer> findChangepointCandidates(final List<T> data,
                                                                final RealMatrix reducedObservationMatrix,
                                                                final double[] kernelApproximationDiagonal,
@@ -250,6 +249,8 @@ public final class KernelSegmenter<T> {
 
             logger.info(String.format("Finding local minima of local changepoint costs for window size %d...", windowSize));
             final List<Integer> windowCostLocalMinima = new PersistenceOptimizer(windowCosts).getMinimaIndices();
+            windowCostLocalMinima.remove(Integer.valueOf(0));                //remove first data point if present
+            windowCostLocalMinima.remove(Integer.valueOf(data.size() - 1));  //remove last data point if present
             changepointCandidates.addAll(windowCostLocalMinima.subList(0, Math.min(maxNumChangepoints, windowCostLocalMinima.size())));
         }
 
@@ -260,21 +261,87 @@ public final class KernelSegmenter<T> {
         return changepointCandidates;
     }
 
-    //performs backwards model selection to order changepoints by decreasing change to the global segmentation cost
+    //performs backwards model selection to order changepoints by increasing change to the global segmentation cost
+    //and returns the requested number
     private static List<Integer> selectChangepoints(final List<Integer> changepointCandidates,
                                                     final int maxNumChangepoints,
                                                     final double numChangepointsPenaltyLinearFactor,
                                                     final double numChangepointsPenaltyLogLinearFactor,
                                                     final RealMatrix reducedObservationMatrix,
                                                     final double[] kernelApproximationDiagonal) {
+        final List<Integer> changepoints = new ArrayList<>(changepointCandidates.size());
+
+        //calculate penalties as a function of the number of changepoints
         final int numData = reducedObservationMatrix.getRowDimension();
         final List<Double> changepointPenalties = IntStream.range(0, maxNumChangepoints + 1).boxed()
                 .map(numChangepoints -> numChangepointsPenaltyLinearFactor * numChangepoints
                         + numChangepointsPenaltyLogLinearFactor * numChangepoints * Math.log(numData / (numChangepoints + EPSILON)))
                 .collect(Collectors.toList());
 
+        //construct initial list of all segments and initialize costs
+        final List<Integer> candidateStarts = changepointCandidates.stream().sorted().distinct()
+                .map(i -> Math.min(i + 1, numData - 1)).collect(Collectors.toList());
+        candidateStarts.add(0, 0);
+        final List<Integer> candidateEnds = changepointCandidates.stream().sorted().distinct().collect(Collectors.toList());
+        candidateEnds.add(numData - 1);
+        final int numSegments = candidateStarts.size();
+        final List<Segment> segments = IntStream.range(0, numSegments).boxed()
+                .map(i -> new Segment(candidateStarts.get(i), candidateEnds.get(i), reducedObservationMatrix, kernelApproximationDiagonal))
+                .collect(Collectors.toList());
+        final List<Double> totalSegmentationCosts = new ArrayList<>(Collections.singletonList(segments.stream().mapToDouble(s -> s.cost).sum()));
+        final List<Double> costsForSegmentPairs = IntStream.range(0, numSegments - 1).boxed()
+                .map(i -> segments.get(i).cost + segments.get(i + 1).cost)
+                .collect(Collectors.toList());  //sum of the costs for the segments in each adjacent pair
+        final List<Double> costsForMergedSegmentPairs = IntStream.range(0, numSegments - 1).boxed()
+                .map(i -> new Segment(candidateStarts.get(i), candidateEnds.get(i + 1), reducedObservationMatrix, kernelApproximationDiagonal).cost)
+                .collect(Collectors.toList());  //cost of each adjacent pair when considered as a single segment
+        final List<Double> costsForMergingSegmentPairs = IntStream.range(0, numSegments - 1).boxed()
+                .map(i -> costsForSegmentPairs.get(i) - costsForMergedSegmentPairs.get(i))
+                .collect(Collectors.toList());  //cost for merging each adjacent pair into a single segment
 
-        return changepointCandidates.subList(0, maxNumChangepoints);
+        //iteratively merge the segment pair with greatest merge cost and update all costs until only a single segment remains
+        for (int i = 0; i < numSegments - 1; i++) {
+            //find segment pair to merge and calculate quantities for resulting merged segment
+            final int indexOfLeftSegmentToMerge = costsForMergingSegmentPairs.indexOf(Collections.max(costsForMergingSegmentPairs));
+            final double newCost = costsForMergedSegmentPairs.get(indexOfLeftSegmentToMerge);
+            final int newStart = segments.get(indexOfLeftSegmentToMerge).start;
+            final int mergepoint = segments.get(indexOfLeftSegmentToMerge).end;
+            final int newEnd = segments.get(indexOfLeftSegmentToMerge + 1).end;
+
+            //remove segment pair and insert merged segment into list of segments
+            segments.remove(indexOfLeftSegmentToMerge);
+            segments.remove(indexOfLeftSegmentToMerge);
+            segments.add(indexOfLeftSegmentToMerge, new Segment(newStart, newEnd, newCost));
+
+            //update segment-pair quantities
+            costsForSegmentPairs.remove(indexOfLeftSegmentToMerge);
+            costsForMergedSegmentPairs.remove(indexOfLeftSegmentToMerge);
+            costsForMergingSegmentPairs.remove(indexOfLeftSegmentToMerge);
+            if (indexOfLeftSegmentToMerge > 0) {                    //if segment pair that was merged was not the first pair, update segment-pair quantities using segment to left
+                costsForSegmentPairs.set(indexOfLeftSegmentToMerge - 1, segments.get(indexOfLeftSegmentToMerge - 1).cost + segments.get(indexOfLeftSegmentToMerge).cost);
+                costsForMergedSegmentPairs.set(indexOfLeftSegmentToMerge - 1, new Segment(segments.get(indexOfLeftSegmentToMerge - 1).start, newEnd, reducedObservationMatrix, kernelApproximationDiagonal).cost);
+                costsForMergingSegmentPairs.set(indexOfLeftSegmentToMerge - 1, costsForSegmentPairs.get(indexOfLeftSegmentToMerge - 1) - costsForMergedSegmentPairs.get(indexOfLeftSegmentToMerge - 1));
+            }
+            if (indexOfLeftSegmentToMerge < segments.size() - 1) {  //if segment pair that was merged was not the last pair, update segment-pair quantities using segment to right
+                costsForSegmentPairs.set(indexOfLeftSegmentToMerge, segments.get(indexOfLeftSegmentToMerge).cost + segments.get(indexOfLeftSegmentToMerge + 1).cost);
+                costsForMergedSegmentPairs.set(indexOfLeftSegmentToMerge, new Segment(newStart, segments.get(indexOfLeftSegmentToMerge + 1).end, reducedObservationMatrix, kernelApproximationDiagonal).cost);
+                costsForMergingSegmentPairs.set(indexOfLeftSegmentToMerge, costsForSegmentPairs.get(indexOfLeftSegmentToMerge) - costsForMergedSegmentPairs.get(indexOfLeftSegmentToMerge));
+            }
+
+            //update total segmentation costs and changepoints
+            totalSegmentationCosts.add(0, segments.stream().mapToDouble(s -> s.cost).sum());
+            changepoints.add(0, mergepoint);
+        }
+
+        //find optimal number of changepoints according to penalty function
+        final int effectiveMaxNumChangepoints = Math.min(maxNumChangepoints, changepoints.size());
+        final List<Double> totalSegmentationCostsPlusPenalties = IntStream.range(0, effectiveMaxNumChangepoints + 1).boxed()
+                .map(i -> totalSegmentationCosts.get(i) + changepointPenalties.get(i))
+                .collect(Collectors.toList());
+        final int numChangepointsOptimal = totalSegmentationCostsPlusPenalties.indexOf(Collections.min(totalSegmentationCostsPlusPenalties));
+
+        logger.info(String.format("Found %d changepoints after applying penalties.", numChangepointsOptimal));
+        return changepoints.subList(0, numChangepointsOptimal);
     }
 
     /**
