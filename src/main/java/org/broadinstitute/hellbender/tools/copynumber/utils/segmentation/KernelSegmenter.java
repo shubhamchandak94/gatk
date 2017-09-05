@@ -1,10 +1,13 @@
 package org.broadinstitute.hellbender.tools.copynumber.utils.segmentation;
 
+import com.google.common.primitives.Doubles;
 import org.apache.commons.math3.linear.*;
 import org.apache.commons.math3.random.RandomGenerator;
 import org.apache.commons.math3.random.RandomGeneratorFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.copynumber.utils.optimization.PersistenceOptimizer;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
@@ -15,7 +18,7 @@ import java.util.stream.IntStream;
 
 /**
  * <p>
- * Segment data (i.e., find multiple changepoints) using a method based on the kernel-segmentation algorithm
+ * Segments data (i.e., find multiple changepoints) using a method based on the kernel-segmentation algorithm
  * described in <a href="https://hal.inria.fr/hal-01413230/document">https://hal.inria.fr/hal-01413230/document</a>,
  * which gives a framework to quickly calculate the cost of a segment given a low-rank approximation to a specified kernel.
  * However, unlike the algorithm described there, which seeks to minimize a global segmentation cost,
@@ -76,6 +79,7 @@ public final class KernelSegmenter<T> {
     private static final Logger logger = LogManager.getLogger(KernelSegmenter.class);
 
     private static final int RANDOM_SEED = 1216;
+    private static final double EPSILON = 1E-10;
 
     private final List<T> data;
 
@@ -83,6 +87,16 @@ public final class KernelSegmenter<T> {
         this.data = Collections.unmodifiableList(new ArrayList<T>(data));
     }
 
+    /**
+     * Returns a list of the indices of the changepoints, sorted by descending change to the global segmentation cost.
+     * @param maxNumChangepoints                    maximum number of changepoints to return
+     * @param kernel                                kernel function used to calculate segment costs
+     * @param kernelApproximationDimension          dimension of low-rank approximation to the kernel
+     * @param windowSizes                           list of sizes to use for the flanking segments used to calculate local changepoint costs
+     * @param numChangepointsPenaltyLinearFactor    factor A for penalty of the form A * C, where C is the number of changepoints
+     * @param numChangepointsPenaltyLogLinearFactor factor B for penalty of the form B * C * log (N / C),
+     *                                              where C is the number of changepoints and N is the number of data points
+     */
     public List<Integer> findChangepoints(final int maxNumChangepoints,
                                           final BiFunction<T, T, Double> kernel,
                                           final int kernelApproximationDimension,
@@ -99,9 +113,11 @@ public final class KernelSegmenter<T> {
                 "Log-linear factor for the penalty on the number of changepoints per chromosome must be either zero or greater than or equal to 1.");
 
         if (maxNumChangepoints == 0) {
+            logger.warn("No changepoints were requested, returning empty list...");
             return Collections.emptyList();
         }
 
+        logger.info(String.format("Finding %d changepoints in %d data points...", maxNumChangepoints, data.size()));
         final RandomGenerator rng = RandomGeneratorFactory.createRandomGenerator(new Random(RANDOM_SEED));
 
         logger.info("Calculating low-rank approximation to kernel matrix...");
@@ -157,7 +173,7 @@ public final class KernelSegmenter<T> {
         }
     }
 
-    //calculate N x p reduced observation matrix, defined as Z in equation preceding Eq. 14 in https://hal.inria.fr/hal-01413230/document
+    //calculates the N x p reduced observation matrix, defined as Z in equation preceding Eq. 14 in https://hal.inria.fr/hal-01413230/document
     private static <T> RealMatrix calculateReducedObservationMatrix(final RandomGenerator rng,
                                                                     final List<T> data,
                                                                     final BiFunction<T, T, Double> kernel,
@@ -191,19 +207,20 @@ public final class KernelSegmenter<T> {
         final SingularValueDecomposition svd = new SingularValueDecomposition(subKernelMatrix);
 
         //calculate reduced observation matrix
-        final RealMatrix reducedObservationMatrix = new Array2DRowRealMatrix(numSubsample, data.size());
+        final RealMatrix reducedObservationMatrix = new Array2DRowRealMatrix(data.size(), numSubsample);
         reducedObservationMatrix.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            final double[] sqrtSingularValues = Arrays.stream(svd.getSingularValues()).map(Math::sqrt).toArray();
             @Override
             public double visit(int i, int j, double value) {
                 return IntStream.range(0, numSubsample).boxed()
-                        .mapToDouble(k -> kernel.apply(data.get(i), dataSubsample.get(k)) * svd.getU().getEntry(k, j) / Math.sqrt(svd.getSingularValues()[j]))
+                        .mapToDouble(k -> kernel.apply(data.get(i), dataSubsample.get(k)) * svd.getU().getEntry(k, j) / sqrtSingularValues[j])
                         .sum();
             }
         });
         return reducedObservationMatrix;
     }
 
-    //for N x p matrix Z_ij, return N-dimensional vector sum(Z_ij * Z_ij, j = 0,..., p - 1),
+    //for N x p matrix Z_ij, returns the N-dimensional vector sum(Z_ij * Z_ij, j = 0,..., p - 1),
     //which are the diagonal elements K_ii of the approximate kernel matrix
     private static double[] calculateKernelApproximationDiagonal(final RealMatrix reducedObservationMatrix) {
         return IntStream.range(0, reducedObservationMatrix.getRowDimension()).boxed()
@@ -211,24 +228,57 @@ public final class KernelSegmenter<T> {
                 .toArray();
     }
 
+    //finds indices of changepoint candidates
     private static <T> List<Integer> findChangepointCandidates(final List<T> data,
                                                                final RealMatrix reducedObservationMatrix,
                                                                final double[] kernelApproximationDiagonal,
                                                                final int maxNumChangepoints,
                                                                final List<Integer> windowSizes) {
-        //warn if window sizes too large
+        final List<Integer> changepointCandidates = new ArrayList<>(windowSizes.size() * maxNumChangepoints);
+
+        //for each window size, calculate local changepoint costs at each point and add maxNumChangepoints candidates
+        //(this is overkill, but we cannot guarantee that the most significant maxNumChangepoints changepoints
+        //do not all appear at only a single window size)
+        for (final int windowSize : windowSizes) {
+            logger.info(String.format("Calculating local changepoints costs for window size %d...", windowSize));
+            if (windowSize > data.size()) {
+                logger.warn(String.format("Number of points needed to calculate local changepoint costs (2 * window size = %d) " +
+                        "exceeds number of data points %d.  Local changepoint costs will not be calculated for this window size.",
+                        2 * windowSize, data.size()));
+            }
+            final double[] windowCosts = calculateWindowCosts(reducedObservationMatrix, kernelApproximationDiagonal, windowSize);
+
+            logger.info(String.format("Finding local minima of local changepoint costs for window size %d...", windowSize));
+            final List<Integer> windowCostLocalMinima = new PersistenceOptimizer(windowCosts).getMinimaIndices();
+            changepointCandidates.addAll(windowCostLocalMinima.subList(0, Math.min(maxNumChangepoints, windowCostLocalMinima.size())));
+        }
+
+        if (changepointCandidates.isEmpty()) {
+            throw new UserException.BadInput("No changepoint candidates found.  Window sizes may be inappropriate.");
+        }
+
+        return changepointCandidates;
     }
 
+    //performs backwards model selection to order changepoints by decreasing change to the global segmentation cost
     private static List<Integer> selectChangepoints(final List<Integer> changepointCandidates,
                                                     final int maxNumChangepoints,
                                                     final double numChangepointsPenaltyLinearFactor,
                                                     final double numChangepointsPenaltyLogLinearFactor,
                                                     final RealMatrix reducedObservationMatrix,
                                                     final double[] kernelApproximationDiagonal) {
+        final int numData = reducedObservationMatrix.getRowDimension();
+        final List<Double> changepointPenalties = IntStream.range(0, maxNumChangepoints + 1).boxed()
+                .map(numChangepoints -> numChangepointsPenaltyLinearFactor * numChangepoints
+                        + numChangepointsPenaltyLogLinearFactor * numChangepoints * Math.log(numData / (numChangepoints + EPSILON)))
+                .collect(Collectors.toList());
+
+
+        return changepointCandidates.subList(0, maxNumChangepoints);
     }
 
     /**
-     * Calculate the cost of a segment.  This is defined by Eq. 11 of
+     * Calculates the cost of a segment.  This is defined by Eq. 11 of
      * <a href="https://hal.inria.fr/hal-01413230/document">https://hal.inria.fr/hal-01413230/document</a>
      * (except we use the low-rank approximation to the kernel, as described in Sec. 3.2, ibid).
      * Various recurrence relations are used to calculate costs iteratively.
@@ -255,7 +305,7 @@ public final class KernelSegmenter<T> {
         final List<Integer> indices = start <= end 
                 ? IntStream.range(start + 1, end + 1).boxed().collect(Collectors.toList()) 
                 : IntStream.concat(IntStream.range(start + 1, N), IntStream.range(0, end + 1)).boxed().collect(Collectors.toList());
-        
+
         //use recurrence relations to iteratively calculate cost
         for (final int tauPrime : indices) {
             D += kernelApproximationDiagonal[tauPrime];
@@ -266,13 +316,13 @@ public final class KernelSegmenter<T> {
             }
             V += 2. * ZdotW + kernelApproximationDiagonal[tauPrime];
         }
-        final double C = D - V / indices.size();
+        final double C = D - V / (indices.size() + 1);
 
         return new Cost(D, W, V, C);
     }
 
     /**
-     * Calculate the local costs at each point for a given window size <i>w</i>.  Using Eq. 11 of
+     * Calculates the local costs at each point for a given window size <i>w</i>.  Using Eq. 11 of
      * <a href="https://hal.inria.fr/hal-01413230/document">https://hal.inria.fr/hal-01413230/document</a>
      * (except we use the low-rank approximation to the kernel, as described in Sec. 3.2, ibid), for each point
      * indexed by <i>i</i>, we calculate the cost of it being a changepoint with two flanking segments that
@@ -293,7 +343,7 @@ public final class KernelSegmenter<T> {
 
         //initialize indices of the boundaries of the two flanking segments, wrapping around to beginning of data if necessary
         int center = 0;
-        int start = (center - windowSize + 1) % N;
+        int start = (center - windowSize + 1 + N) % N;
         int end = (center + windowSize) % N;
 
         //initialize costs of flanking segments and total segment
@@ -343,7 +393,7 @@ public final class KernelSegmenter<T> {
                 ZdotW += reducedObservationMatrix.getEntry(centerNext, j) * leftW[j];
                 leftW[j] += reducedObservationMatrix.getEntry(centerNext, j);
             }
-            leftV += 2. * ZdotW + kernelApproximationDiagonal[start];
+            leftV += 2. * ZdotW + kernelApproximationDiagonal[centerNext];
 
             leftC = leftD - leftV * windowSizeReciprocal;
 
@@ -386,7 +436,7 @@ public final class KernelSegmenter<T> {
             totalC = totalD - 0.5 * totalV * windowSizeReciprocal;
 
             //record cost of changepoint at this position
-            windowCosts[center] = leftC + rightC - totalC;
+            windowCosts[centerNext] = leftC + rightC - totalC;
 
             //slide windows
             start = (start + 1) % N;

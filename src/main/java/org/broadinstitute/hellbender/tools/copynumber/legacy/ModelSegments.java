@@ -12,8 +12,6 @@ import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.segmentation.CopyRatioKernelSegmenter;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollectionUtils;
-import org.broadinstitute.hellbender.tools.exome.SegmentUtils;
-import org.broadinstitute.hellbender.tools.exome.Target;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 
@@ -90,8 +88,8 @@ public final class ModelSegments extends CommandLineProgram {
     @Argument(
             doc = "Dimension of kernel approximation.  A subsample containing this number of data points " +
                     "will be taken from the copy-ratio profile and used to construct the approximation for each chromosome.  " +
-                    "If the total number of datapoints in a chromosome is greater " +
-                    "than this number, then all datapoints in the chromosome will be used.  " +
+                    "If the total number of data points in a chromosome is greater " +
+                    "than this number, then all data points in the chromosome will be used.  " +
                     "Time complexity scales quadratically and space complexity scales linearly with this parameter.",
             fullName = KERNEL_APPROXIMATION_DIMENSION_LONG_NAME,
             shortName = KERNEL_APPROXIMATION_DIMENSION_SHORT_NAME,
@@ -102,7 +100,7 @@ public final class ModelSegments extends CommandLineProgram {
 
     @Argument(
             doc = "Window sizes to use for calculating local changepoint costs.  " +
-                    "For each window size, the cost for each datapoint to be a changepoint will be calculated " +
+                    "For each window size, the cost for each data point to be a changepoint will be calculated " +
                     "assuming that it demarcates two adjacent segments of that size.  " +
                     "Including small (large) window sizes will increase sensitivity to small (large) events.  " +
                     "Duplicate values will be ignored.",
@@ -128,7 +126,7 @@ public final class ModelSegments extends CommandLineProgram {
     @Argument(
             doc = "Log-linear factor B for the penalty on the number of changepoints per chromosome.  " +
                     "Adds a penalty of the form  B * C * log (N / C), where C is the number of changepoints in the chromosome and " +
-                    "N is the number of datapoints in the chromosome, to the cost function for each chromosome.  " +
+                    "N is the number of data points in the chromosome, to the cost function for each chromosome.  " +
                     "Must be either zero or greater than or equal to 1.",
             fullName = NUM_CHANGEPOINTS_PENALTY_LOG_LINEAR_FACTOR_LONG_NAME,
             shortName = NUM_CHANGEPOINTS_PENALTY_LOG_LINEAR_FACTOR_SHORT_NAME,

@@ -25,8 +25,9 @@ public final class CopyRatioKernelSegmenter {
     public CopyRatioKernelSegmenter(final ReadCountCollection denoisedCopyRatioProfile) {
         Utils.nonNull(denoisedCopyRatioProfile);
         intervals = denoisedCopyRatioProfile.targets().stream().map(Target::getInterval).collect(Collectors.toList());
-        denoisedCopyRatiosPerChromosome = IntStream.range(0, intervals.size())
-                .collect(Collectors.groupingBy()); //TODO
+//        denoisedCopyRatiosPerChromosome = IntStream.range(0, intervals.size())
+//                .collect(Collectors.groupingBy()); //TODO
+        denoisedCopyRatiosPerChromosome = new HashMap<>();
     }
 
     public List<SimpleInterval> findSegments(final int maxNumChangepointsPerChromosome,
@@ -46,8 +47,9 @@ public final class CopyRatioKernelSegmenter {
                 "Log-linear factor for the penalty on the number of changepoints per chromosome must be either zero or greater than or equal to 1.");
 
         //loop over chromosomes (optionally?)
-        final List<Integer> changepoints = new KernelSegmenter<Double>(denoisedCopyRatios)
-                .findChangepoints(maxNumChangepointsPerChromosome, kernel, kernelApproximationDimension,
-                        windowSizes, numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor);
+//        final List<Integer> changepoints = new KernelSegmenter<Double>(denoisedCopyRatios)
+//                .findChangepoints(maxNumChangepointsPerChromosome, kernel, kernelApproximationDimension,
+//                        windowSizes, numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor);
+        return new ArrayList<>();
     }
 }
