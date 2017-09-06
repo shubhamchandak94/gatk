@@ -24,7 +24,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.discovery.AlignedContig;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.AlignmentInterval;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.ChimericAlignment;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.GappedAlignmentSplitter;
-import org.broadinstitute.hellbender.tools.spark.sv.utils.FileUtils;
+import org.broadinstitute.hellbender.tools.spark.sv.utils.SVFileUtils;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVUtils;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SvCigarUtils;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -92,7 +92,7 @@ public final class FilterLongReadAlignmentsSAMSpark extends GATKSparkTool {
         final JavaRDD<GATKRead> reads = getReads();
         final SAMFileHeader header = getHeaderForReads();
 
-        FileUtils.writeLinesToSingleFile(
+        SVFileUtils.writeLinesToSingleFile(
                 filterByScore(reads, header, nonCanonicalContigNamesFile, localLogger)
                         .sortBy(tig -> tig.contigName, true, reads.getNumPartitions()/100) // num partition is purely guess
                         .mapToPair(contig -> new Tuple2<>(contig.contigName,
@@ -101,9 +101,9 @@ public final class FilterLongReadAlignmentsSAMSpark extends GATKSparkTool {
                 outputFilePrefix + "_newFiltering.ai");
 
         if (runOldFilteringToo) {
-            FileUtils.writeLinesToSingleFile(
-                    oldWayOfFiltering(reads, header, localLogger).map(FilterLongReadAlignmentsSAMSpark::formatContigInfo)
-                    .collect().iterator(),
+            SVFileUtils.writeLinesToSingleFile(
+                    oldWayOfFiltering(reads, header, localLogger)
+                            .map(FilterLongReadAlignmentsSAMSpark::formatContigInfo).collect().iterator(),
                     outputFilePrefix + "_oldFiltering.ai");
         }
     }

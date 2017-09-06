@@ -26,126 +26,18 @@ import java.util.stream.Collectors;
  */
 public final class SVUtils {
 
-    private static final String REFERENCE_GAP_INTERVAL_FILE_COMMENT_LINE_PROMPT = "#";
-
-    //Workaround for seed 14695981039346656037 that doesn't fit in a signed long
-    private static final long FNV64_DEFAULT_SEED = new BigInteger("14695981039346656037").longValue();
-
-    /**
-     * Read a file of kmers.
-     * Each line must be exactly
-     * {@link org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection.FindBreakpointEvidenceSparkArgumentCollection#KMER_SIZE}
-     * characters long, and must match [ACGT]*.
-     */
-    public static Set<SVKmer> readKmersFile(final int kSize, final String kmersFile,
-                                            final SVKmer kmer ) {
-        final Set<SVKmer> kmers;
-
-        try ( final BufferedReader rdr =
-                      new BufferedReader(new InputStreamReader(BucketUtils.openFile(kmersFile))) ) {
-            final long fileLength = BucketUtils.fileSize(kmersFile);
-            kmers = new HopscotchSet<>((int)(fileLength/(kSize+1)));
-            String line;
-            while ( (line = rdr.readLine()) != null ) {
-                if ( line.length() != kSize ) {
-                    throw new GATKException("SVKmer kill set contains a line of length " + line.length() +
-                            " but we were expecting K=" + kSize);
-                }
-
-                final SVKmerizer kmerizer = new SVKmerizer(line, kSize, 1, new SVKmerLong(kSize));
-                if ( !kmerizer.hasNext() ) {
-                    throw new GATKException("Unable to kmerize the kmer kill set string '" + line + "'.");
-                }
-
-                kmers.add(kmerizer.next());
-            }
-        }
-        catch ( final IOException ioe ) {
-            throw new GATKException("Unable to read kmers from "+kmersFile, ioe);
-        }
-
-        return kmers;
-    }
-
-    /** Write kmers to file. */
-    public static <KType extends SVKmer> void writeKmersFile(final int kSize, final String kmersFile,
-                                                             final Collection<KType> kmers ) {
-        try ( final Writer writer =
-                      new BufferedWriter(new OutputStreamWriter(BucketUtils.createFile(kmersFile))) ) {
-            for ( final KType kmer : kmers ) {
-                writer.write(kmer.toString(kSize));
-                writer.write('\n');
-            }
-        }
-        catch ( final IOException ioe ) {
-            throw new GATKException("Unable to write kmers to "+kmersFile, ioe);
-        }
-    }
-
-    /** Read intervals from file. */
-    public static List<SVInterval> readIntervalsFile(final String intervalsFile,
-                                                     final Map<String, Integer> contigNameMap ) {
-        final List<SVInterval> intervals;
-        try ( final BufferedReader rdr =
-                      new BufferedReader(new InputStreamReader(BucketUtils.openFile(intervalsFile))) ) {
-            final int INTERVAL_FILE_LINE_LENGTH_GUESS = 25;
-            final long sizeGuess = BucketUtils.fileSize(intervalsFile)/INTERVAL_FILE_LINE_LENGTH_GUESS;
-            intervals = new ArrayList<>((int)sizeGuess);
-            String line;
-            int lineNo = 0;
-            while ( (line = rdr.readLine()) != null ) {
-                ++lineNo;
-                if (line.startsWith(REFERENCE_GAP_INTERVAL_FILE_COMMENT_LINE_PROMPT)) {
-                    continue;
-                }
-                final String[] tokens = line.split("\t");
-                if ( tokens.length != 3 ) {
-                    throw new GATKException("Interval file "+intervalsFile+" line "+
-                                            lineNo+" did not contain 3 columns: "+line);
-                }
-                try {
-                    final Integer contigId = contigNameMap.get(tokens[0]);
-                    if ( contigId == null ) throw new GATKException("contig name "+tokens[0]+" not in dictionary");
-                    final int start = Integer.valueOf(tokens[1]);
-                    final int end = Integer.valueOf(tokens[2]);
-                    intervals.add(new SVInterval(contigId, start, end));
-                }
-                catch ( final Exception e ) {
-                    throw new GATKException("Unable to parse interval file "+intervalsFile+" line "+lineNo+": "+line, e);
-                }
-            }
-        }
-        catch ( final IOException ioe ) {
-            throw new GATKException("Unable to read intervals from "+intervalsFile, ioe);
-        }
-        return intervals;
-    }
-
-    /** Write intervals to a file. */
-    public static void writeIntervalsFile( final String intervalsFile,
-                                           final Collection<SVInterval> intervals, final List<String> contigNames ) {
-        try (final OutputStreamWriter writer = new OutputStreamWriter(new BufferedOutputStream(
-                BucketUtils.createFile(intervalsFile)))) {
-            for (final SVInterval interval : intervals) {
-                final String seqName = contigNames.get(interval.getContig());
-                writer.write(seqName + "\t" + interval.getStart() + "\t" + interval.getEnd() + "\n");
-            }
-        } catch (final IOException ioe) {
-            throw new GATKException("Can't write intervals file " + intervalsFile, ioe);
-        }
-    }
-
-    public static int matchLen( final Cigar cigar ) {
-        return cigar.getCigarElements().stream()
-                .filter(cigarElement -> cigarElement.getOperator().isAlignment())
-                .mapToInt(CigarElement::getLength)
-                .sum();
-    }
-
+    // =================================================================================================================
     /** return a good initialCapacity for a HashMap that will hold a given number of elements */
     public static int hashMapCapacity( final int nElements )
     {
         return (int)((nElements*4L)/3) + 1;
+    }
+
+    /**
+     * Provides a stream collector that will collect items into an array list with a given initial capacity.
+     */
+    public static <T> Collector<T, ?, ArrayList<T>> arrayListCollector(final int size) {
+        return Collectors.toCollection( () -> new ArrayList<>(size));
     }
 
     /** count the number of items available from an iterator */
@@ -200,17 +92,13 @@ public final class SVUtils {
         }
     }
 
-    /**
-     * Provides a stream collector that will collect items into an array list with a given initial capacity.
-     */
-    public static <T> Collector<T, ?, ArrayList<T>> arrayListCollector(final int size) {
-        return Collectors.toCollection( () -> new ArrayList<>(size));
-    }
+    // =================================================================================================================
+    //Workaround for seed 14695981039346656037 that doesn't fit in a signed long
+    private static final long FNV64_DEFAULT_SEED = new BigInteger("14695981039346656037").longValue();
 
     /**
      * 64-bit FNV-1a hash for long's
      */
-
     public static long fnvLong64( final long toHash ) {
         return fnvLong64(FNV64_DEFAULT_SEED, toHash);
     }
@@ -254,7 +142,7 @@ public final class SVUtils {
         return start;
     }
 
-
+    // =================================================================================================================
     /**
      * Create an RDD from the reference sequences.
      * The reference sequences are transformed into a single, large collection of byte arrays. The collection is then

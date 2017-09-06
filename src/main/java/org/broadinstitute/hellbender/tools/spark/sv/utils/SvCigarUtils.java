@@ -240,4 +240,11 @@ public final class SvCigarUtils {
         }
         return result;
     }
+
+    public static int getTotalAlignmentLength(final Cigar cigar ) {
+        return cigar.getCigarElements().stream()
+                .filter(cigarElement -> cigarElement.getOperator().isAlignment())
+                .mapToInt(CigarElement::getLength)
+                .sum();
+    }
 }

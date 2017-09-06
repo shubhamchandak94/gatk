@@ -1,6 +1,7 @@
 package org.broadinstitute.hellbender.tools.spark.sv.evidence;
 
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVUtils;
+import org.broadinstitute.hellbender.tools.spark.sv.utils.SvCigarUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 
 import java.util.Iterator;
@@ -38,7 +39,7 @@ public class SVReadFilter implements java.io.Serializable {
 
     public boolean isEvidence( final GATKRead read ) {
         return isMapped(read) && read.getMappingQuality() >= minEvidenceMapQ &&
-                SVUtils.matchLen(read.getCigar()) >= minEvidenceMatchLength;
+                SvCigarUtils.getTotalAlignmentLength(read.getCigar()) >= minEvidenceMatchLength;
     }
 
     public boolean isTemplateLenTestable( final GATKRead read ) {

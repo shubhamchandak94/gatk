@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.spark.sv.discovery;
 
 import htsjdk.samtools.*;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVFastqUtils;
+import org.broadinstitute.hellbender.tools.spark.sv.utils.Strand;
 import org.broadinstitute.hellbender.utils.RandomDNA;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignment;
@@ -250,30 +251,30 @@ public class AlignmentIntervalUnitTest extends BaseTest {
     @DataProvider(name = "alignmentIntervalStrings")
     public Object[][] alignmentIntervalStrings() {
         final List<Object[]> result = new ArrayList<>();
-        result.add(new Object[]{ "chr1", 10, SVFastqUtils.Strand.NEGATIVE, "10M1I30M100H", 10, 3, 2 });
-        result.add(new Object[]{ "chrX", 10_000_000, SVFastqUtils.Strand.POSITIVE, "31H10S10M1I30M230N4M100H", 34, 31, 0 });
-        result.add(new Object[]{ "chr20", 3456, SVFastqUtils.Strand.POSITIVE, "31M", 3, 310, 5 });
+        result.add(new Object[]{ "chr1", 10, Strand.NEGATIVE, "10M1I30M100H", 10, 3, 2 });
+        result.add(new Object[]{ "chrX", 10_000_000, Strand.POSITIVE, "31H10S10M1I30M230N4M100H", 34, 31, 0 });
+        result.add(new Object[]{ "chr20", 3456, Strand.POSITIVE, "31M", 3, 310, 5 });
         return result.toArray(new Object[result.size()][]);
     }
 
     @Test(dataProvider = "alignmentIntervalStrings", groups = "sv")
-    public void testAlignmentIntervalStrings(final String contig, final int start, final SVFastqUtils.Strand strand, final String cigarString, final int mq, final int nm, final int as) {
-        final String fullStr = String.join(",", contig, "" + start, strand == SVFastqUtils.Strand.NEGATIVE ? "-" : "+", cigarString, "" + mq, "" + nm, "" + as);
+    public void testAlignmentIntervalStrings(final String contig, final int start, final Strand strand, final String cigarString, final int mq, final int nm, final int as) {
+        final String fullStr = String.join(",", contig, "" + start, strand == Strand.NEGATIVE ? "-" : "+", cigarString, "" + mq, "" + nm, "" + as);
         final AlignmentInterval fullInterval = new AlignmentInterval(fullStr);
         Assert.assertEquals(fullInterval.referenceSpan.getContig(), contig);
         Assert.assertEquals(fullInterval.referenceSpan.getStart(), start);
-        Assert.assertEquals(fullInterval.forwardStrand, strand == SVFastqUtils.Strand.POSITIVE);
+        Assert.assertEquals(fullInterval.forwardStrand, strand == Strand.POSITIVE);
         Assert.assertEquals(fullInterval.cigarAlong5to3DirectionOfContig,
                 fullInterval.forwardStrand ? TextCigarCodec.decode(cigarString) : CigarUtils.invertCigar(TextCigarCodec.decode(cigarString)));
         Assert.assertEquals(fullInterval.mapQual, mq);
         Assert.assertEquals(fullInterval.mismatches, nm);
         Assert.assertEquals(fullInterval.alnScore, as);
 
-        final String basicStr = String.join(",", contig, "" + start, strand == SVFastqUtils.Strand.NEGATIVE ? "-" : "+", cigarString, "" + mq);
+        final String basicStr = String.join(",", contig, "" + start, strand == Strand.NEGATIVE ? "-" : "+", cigarString, "" + mq);
         final AlignmentInterval basicInterval = new AlignmentInterval(basicStr);
         Assert.assertEquals(basicInterval.referenceSpan.getContig(), contig);
         Assert.assertEquals(basicInterval.referenceSpan.getStart(), start);
-        Assert.assertEquals(basicInterval.forwardStrand, strand == SVFastqUtils.Strand.POSITIVE);
+        Assert.assertEquals(basicInterval.forwardStrand, strand == Strand.POSITIVE);
         Assert.assertEquals(basicInterval.cigarAlong5to3DirectionOfContig,
                 basicInterval.forwardStrand ? TextCigarCodec.decode(cigarString) : CigarUtils.invertCigar(TextCigarCodec.decode(cigarString)));
         Assert.assertEquals(basicInterval.mapQual, mq);

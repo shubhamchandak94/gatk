@@ -20,10 +20,7 @@ import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection;
-import org.broadinstitute.hellbender.tools.spark.sv.utils.SVDUSTFilteredKmerizer;
-import org.broadinstitute.hellbender.tools.spark.sv.utils.SVKmer;
-import org.broadinstitute.hellbender.tools.spark.sv.utils.SVKmerLong;
-import org.broadinstitute.hellbender.tools.spark.sv.utils.SVUtils;
+import org.broadinstitute.hellbender.tools.spark.sv.utils.*;
 import org.broadinstitute.hellbender.tools.spark.utils.HopscotchMap;
 import org.broadinstitute.hellbender.tools.spark.utils.HopscotchSet;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
@@ -83,7 +80,7 @@ public final class FindBadGenomicKmersSpark extends GATKSparkTool {
             killList = uniquify(killList, processFasta(kSize, maxDUSTScore, highCopyFastaFilename, options));
         }
 
-        SVUtils.writeKmersFile(kSize, outputFile, killList);
+        SVKmerUtils.writeKmersFile(kSize, outputFile, killList);
     }
 
     /** Find high copy number kmers in the reference sequence */
