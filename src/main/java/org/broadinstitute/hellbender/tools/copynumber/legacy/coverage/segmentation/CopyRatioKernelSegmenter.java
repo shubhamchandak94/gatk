@@ -33,12 +33,12 @@ public final class CopyRatioKernelSegmenter {
                 .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
     }
 
-    public List<SimpleInterval> findSegments(final int maxNumChangepointsPerChromosome,
-                                             final double kernelVariance,
-                                             final int kernelApproximationDimension,
-                                             final List<Integer> windowSizes,
-                                             final double numChangepointsPenaltyLinearFactor,
-                                             final double numChangepointsPenaltyLogLinearFactor) {
+    public CopyRatioSegmentationResult findSegmentation(final int maxNumChangepointsPerChromosome,
+                                                        final double kernelVariance,
+                                                        final int kernelApproximationDimension,
+                                                        final List<Integer> windowSizes,
+                                                        final double numChangepointsPenaltyLinearFactor,
+                                                        final double numChangepointsPenaltyLogLinearFactor) {
         ParamUtils.isPositiveOrZero(maxNumChangepointsPerChromosome, "Maximum number of changepoints must be non-negative.");
         ParamUtils.isPositiveOrZero(kernelVariance, "Variance of Gaussian kernel must be non-negative (if zero, a linear kernel will be used).");
         ParamUtils.isPositive(kernelApproximationDimension, "Dimension of kernel approximation must be positive.");
@@ -52,10 +52,12 @@ public final class CopyRatioKernelSegmenter {
         //loop over chromosomes and find changepoints
         final Map<String, List<Integer>> changepointsPerChromosome = new HashMap<>();
         for (final String chromosome : denoisedCopyRatiosPerChromosome.keySet()) {
-            final List<Integer> changepoints = new KernelSegmenter<Double>(denoisedCopyRatiosPerChromosome.get(chromosome))
+            final List<Integer> changepoints = new KernelSegmenter<>(denoisedCopyRatiosPerChromosome.get(chromosome))
                 .findChangepoints(maxNumChangepointsPerChromosome, linearKernel, kernelApproximationDimension,
                         windowSizes, numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor);
+            changepointsPerChromosome.put(chromosome, changepoints);
         }
+
         return new ArrayList<>();
     }
 }
