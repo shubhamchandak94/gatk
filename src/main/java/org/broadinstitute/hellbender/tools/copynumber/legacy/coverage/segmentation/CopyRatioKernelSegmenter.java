@@ -2,12 +2,14 @@ package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.segmentat
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
+import org.broadinstitute.hellbender.tools.copynumber.utils.segmentation.KernelSegmenter;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -17,6 +19,9 @@ import java.util.stream.IntStream;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class CopyRatioKernelSegmenter {
+    //we use a linear kernel for segmentation so that we are sensitive to changes in the mean of the copy-ratio distribution
+    private static final BiFunction<Double, Double, Double> linearKernel = (x, y) -> x * y;
+
     private final Map<String, List<Double>> denoisedCopyRatiosPerChromosome;
 
     public CopyRatioKernelSegmenter(final ReadCountCollection denoisedCopyRatioProfile) {
@@ -44,10 +49,13 @@ public final class CopyRatioKernelSegmenter {
         Utils.validateArg(numChangepointsPenaltyLogLinearFactor == 0. || numChangepointsPenaltyLogLinearFactor >= 1.,
                 "Log-linear factor for the penalty on the number of changepoints per chromosome must be either zero or greater than or equal to 1.");
 
-        //loop over chromosomes (optionally?)
-//        final List<Integer> changepoints = new KernelSegmenter<Double>(denoisedCopyRatios)
-//                .findChangepoints(maxNumChangepointsPerChromosome, kernel, kernelApproximationDimension,
-//                        windowSizes, numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor);
+        //loop over chromosomes and find changepoints
+        final Map<String, List<Integer>> changepointsPerChromosome = new HashMap<>();
+        for (final String chromosome : denoisedCopyRatiosPerChromosome.keySet()) {
+            final List<Integer> changepoints = new KernelSegmenter<Double>(denoisedCopyRatiosPerChromosome.get(chromosome))
+                .findChangepoints(maxNumChangepointsPerChromosome, linearKernel, kernelApproximationDimension,
+                        windowSizes, numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor);
+        }
         return new ArrayList<>();
     }
 }
