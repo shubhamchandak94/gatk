@@ -13,11 +13,11 @@ import htsjdk.variant.variantcontext.Allele;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
-import static org.broadinstitute.hellbender.tools.walkers.orientationbias.ContextDependentArtifactFilterEngine.ALL_ALLELES;
-import static org.broadinstitute.hellbender.tools.walkers.orientationbias.ContextDependentArtifactFilterEngine.States;
+import static org.broadinstitute.hellbender.tools.walkers.orientationbias.ContextDependentArtifactFilterEngine.*;
 
 /**
  * Created by tsato on 9/5/17.
@@ -35,7 +35,7 @@ class Hyperparameters {
         this.theta = theta;
     }
 
-    double[] getPiForAllele(final Allele allele){
+    double[] getPiForAllele(final Allele allele) {
         Utils.validateArg(allele.getBases().length == 1, "allele has to be single base");
         return pi[BaseUtils.simpleBaseToBaseIndex(allele.getBases()[0])];
     }
@@ -52,113 +52,122 @@ class Hyperparameters {
         return theta;
     }
 
-    String getReferenceContext() { return referenceContext; }
+    String getReferenceContext() {
+        return referenceContext;
+    }
 
     /** Reading and writing the learned hyperparameters of the model **/
 
-    /** Writing **/
-    public static void writeHyperparameters(final Collection<Hyperparameters> hyperparameters, final File outputTable) {
-        try ( HyperparameterTableWriter writer = new HyperparameterTableWriter(outputTable)) {
-            for (Hyperparameters hps : hyperparameters){
-                // each hyperparameter object contains four rows worth of information (one row per allele)
-                // because each call to writeRecord() prints out one row, we cannot
-                for (String allele : ALL_ALLELES) {
-                    writer.writeRecord(new Pair(hyperparameters, Allele.create(allele)));
-                }
-            }
-        } catch (IOException e){
-            throw new UserException(String.format("Encountered an IO exception while reading from %s.", outputTable), e);
-        }
-
-    }
-
-    // Perhaps I can abstract this, pretty much copied the code from PileupSummary
-    private static class HyperparameterTableWriter extends TableWriter<Pair<Hyperparameters, Allele>> {
+    /**
+     * Writing
+     **/
+    // TODO: I can abstract this, pretty much copied the code from PileupSummary
+    private static class HyperparameterTableWriter extends TableWriter<Hyperparameters> {
         private HyperparameterTableWriter(final File output) throws IOException {
             super(output, HyperparameterTableColumn.COLUMNS);
         }
 
         @Override
-        protected void composeLine(final Pair<Hyperparameters, Allele> pair, final DataLine dataLine) {
-            final Hyperparameters hps = pair.getFirst();
-            final Allele allele = pair.getSecond();
-            final double[] pi = hps.getPiForAllele(allele);
-            final double[] f = hps.getF();
-
+        protected void composeLine(final Hyperparameters hps, final DataLine dataLine) {
             // it'd be nice to set() less manually...
             // Note that allele fraction f is not allele-specific, thus the same f array will be printed
             // four times for each context
             dataLine.set(HyperparameterTableColumn.CONTEXT.toString(), hps.getReferenceContext())
-                    .set(HyperparameterTableColumn.ALLELE.toString(), allele.toString())
-                    .set(HyperparameterTableColumn.PI_F1R2.toString(), pi[States.F1R2.ordinal()])
-                    .set(HyperparameterTableColumn.PI_F2R1.toString(), pi[States.F2R1.ordinal()])
-                    .set(HyperparameterTableColumn.PI_HOMREF.toString(), pi[States.BALANCED_HOM_REF.ordinal()])
-                    .set(HyperparameterTableColumn.PI_HET.toString(), pi[States.BALANCED_HET.ordinal()])
-                    .set(HyperparameterTableColumn.PI_HOMVAR.toString(), pi[States.BALANCED_HOM_VAR.ordinal()])
-                    .set(HyperparameterTableColumn.F_F1R2.toString(), f[States.F1R2.ordinal()])
-                    .set(HyperparameterTableColumn.F_F2R1.toString(), f[States.F2R1.ordinal()])
-                    .set(HyperparameterTableColumn.F_HOMREF.toString(), f[States.BALANCED_HOM_REF.ordinal()])
-                    .set(HyperparameterTableColumn.F_HET.toString(), f[States.BALANCED_HET.ordinal()])
-                    .set(HyperparameterTableColumn.F_HOMVAR.toString(), f[States.BALANCED_HOM_VAR.ordinal()]);
-            // TODO: potentially add thetas
+                    .set(HyperparameterTableColumn.PI_A.toString(), doubleArrayToString(hps.getPi()[BaseUtils.simpleBaseToBaseIndex("A".getBytes()[0])]))
+                    .set(HyperparameterTableColumn.PI_C.toString(), doubleArrayToString(hps.getPi()[BaseUtils.simpleBaseToBaseIndex("C".getBytes()[0])]))
+                    .set(HyperparameterTableColumn.PI_G.toString(), doubleArrayToString(hps.getPi()[BaseUtils.simpleBaseToBaseIndex("G".getBytes()[0])]))
+                    .set(HyperparameterTableColumn.PI_T.toString(), doubleArrayToString(hps.getPi()[BaseUtils.simpleBaseToBaseIndex("T".getBytes()[0])]))
+                    .set(HyperparameterTableColumn.F.toString(), doubleArrayToString(hps.getF()))
+                    .set(HyperparameterTableColumn.THETA.toString(), doubleArrayToString(hps.getTheta()));
         }
     }
 
-    /** Reading **/
-    public static List<Hyperparameters> readHyperparameters(final File tableFile) {
-        try( HyperParametemrTableReader reader = new HyperParametemrTableReader(tableFile) ) {
+    /** Converts a double array to a comma-separated string without brackets.
+     *  Contrasts Arrays.toString, which includes brackets
+     */
+    private static String doubleArrayToString(final double[] xs){
+        Utils.validateArg(xs.length > 0, "xs must not be an empty (uninitialized?) array");
+        StringBuilder sb = new StringBuilder(String.valueOf(xs[0]));
+        for (int i = 1; i < xs.length ; i++){
+            sb.append("," + String.valueOf(xs[i]));
+        }
+        return sb.toString();
+    }
+
+    public static void writeHyperparameters(final List<Hyperparameters> hyperparameters, final File outputTable) {
+        try (HyperparameterTableWriter writer = new HyperparameterTableWriter(outputTable)) {
+            writer.writeAllRecords(hyperparameters);
+        } catch (IOException e) {
+            throw new UserException(String.format("Encountered an IO exception while reading from %s.", outputTable), e);
+        }
+    }
+
+    /**
+     * Reading
+     **/
+    public static List<Hyperparameters> readHyperparameters(final File table) {
+        try (HyperParameterTableReader reader = new HyperParameterTableReader(table)) {
             return reader.toList();
-        } catch (IOException e){
-            throw new UserException(String.format("Encountered an IO exception while reading from %s.", tableFile));
+        } catch (IOException e) {
+            throw new UserException(String.format("Encountered an IO exception while reading from %s.", table), e);
         }
     }
 
 
-    private static class HyperParametemrTableReader extends TableReader<Pair<Hyperparameters, Allele>> {
+    private static class HyperParameterTableReader extends TableReader<Hyperparameters> {
+        private HyperParameterTableReader(final File table) throws IOException {
+            super(table);
+        }
+
         @Override
-        protected Pair<Hyperparameters, Allele> createRecord(final DataLine dataLine) {
+        protected Hyperparameters createRecord(final DataLine dataLine) {
             final String referenceContext = dataLine.get(HyperparameterTableColumn.CONTEXT);
-            final Allele allele = Allele.create(dataLine.get(HyperparameterTableColumn.ALLELE));
-            final double[][] pi;
-            final double[] f;
+            final double[] piA = Arrays.stream(dataLine.get(HyperparameterTableColumn.PI_A).split(","))
+                    .mapToDouble(Double::parseDouble).toArray();
+            final double[] piC = Arrays.stream(dataLine.get(HyperparameterTableColumn.PI_C).split(","))
+                    .mapToDouble(Double::parseDouble).toArray();
+            final double[] piG = Arrays.stream(dataLine.get(HyperparameterTableColumn.PI_G).split(","))
+                    .mapToDouble(Double::parseDouble).toArray();
+            final double[] piT = Arrays.stream(dataLine.get(HyperparameterTableColumn.PI_T).split(","))
+                    .mapToDouble(Double::parseDouble).toArray();
 
-            new Hyperparameters(referenceContext, pi, f, theta);
+            final double[][] pi = new double[NUM_ALLELES][NUM_STATUSES];
+            pi[BaseUtils.simpleBaseToBaseIndex("A".getBytes()[0])] = piA;
+            pi[BaseUtils.simpleBaseToBaseIndex("C".getBytes()[0])] = piC;
+            pi[BaseUtils.simpleBaseToBaseIndex("G".getBytes()[0])] = piG;
+            pi[BaseUtils.simpleBaseToBaseIndex("T".getBytes()[0])] = piT;
+
+            final double[] f = Arrays.stream(dataLine.get(HyperparameterTableColumn.F).split(","))
+                    .mapToDouble(Double::parseDouble).toArray();
+            ;
+            final double[] theta = Arrays.stream(dataLine.get(HyperparameterTableColumn.THETA).split(","))
+                    .mapToDouble(Double::parseDouble).toArray();
+            ;
+
+            return new Hyperparameters(referenceContext, pi, f, theta);
         }
     }
-
-    public PileupSummaryTableReader(final File file) throws IOException { super(file); }
-
-    @Override
-    protected PileupSummary createRecord(final DataLine dataLine) {
-        final String contig = dataLine.get(PileupSummaryTableColumn.CONTIG);
-        final int position = dataLine.getInt(PileupSummaryTableColumn.POSITION);
-        final int refCount = dataLine.getInt(PileupSummaryTableColumn.REF_COUNT);
-        final int altCount = dataLine.getInt(PileupSummaryTableColumn.ALT_COUNT);
-        final int otherAltCount = dataLine.getInt(PileupSummaryTableColumn.OTHER_ALT_COUNT);
-        final double alleleFrequency = dataLine.getDouble(PileupSummaryTableColumn.ALT_ALLELE_FREQUENCY);
-
-        return new PileupSummary(contig, position, refCount, altCount, otherAltCount, alleleFrequency);
-    }
-}
 
     private enum HyperparameterTableColumn {
         CONTEXT("context"),
-        ALLELE("allele"),
-        PI_F1R2("pi_f1r2"), PI_F2R1("pi_f2r1"), PI_HOMREF("pi_homref"), PI_HET("pi_het"), PI_HOMVAR("pi_homvar"),
-        F_F1R2("f_f1r2"), F_F2R1("f_f2r1"), F_HOMREF("f_homref"), F_HET("f_het"), F_HOMVAR("f_homvar");
-        // add \theta as needed
+        PI_A("pi_A"), PI_C("pi_C"), PI_G("pi_G"), PI_T("pi_T"),
+        F("allele_fraction"),
+        THETA("f1r2_fraction");
 
         private String columnName;
 
-        HyperparameterTableColumn(final String columnName){ this.columnName = columnName; }
+        HyperparameterTableColumn(final String columnName) {
+            this.columnName = columnName;
+        }
 
         @Override
-        public String toString() { return columnName; }
+        public String toString() {
+            return columnName;
+        }
 
         public static final TableColumnCollection COLUMNS = new TableColumnCollection((Object[]) values());
 
 
     }
-
 }
 
