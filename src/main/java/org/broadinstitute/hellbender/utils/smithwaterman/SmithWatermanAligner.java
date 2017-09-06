@@ -1,6 +1,10 @@
 package org.broadinstitute.hellbender.utils.smithwaterman;
 
-public interface SmithWatermanAligner {
+import java.io.Closeable;
+
+public interface SmithWatermanAligner extends Closeable{
     SmithWatermanAlignment align(final byte[] ref, final byte[] alt);
 
+    @Override
+    default void close() {}
 }

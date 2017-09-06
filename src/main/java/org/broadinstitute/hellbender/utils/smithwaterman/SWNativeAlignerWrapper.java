@@ -8,8 +8,6 @@ import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignmentResult;
 
 /**
  * A wrapper that converts instances of {@link SWAlignerNativeBinding} into a {@link SmithWatermanAligner}
- *
- *
  */
 public abstract class SWNativeAlignerWrapper implements SmithWatermanAligner {
     private final SWAlignerNativeBinding aligner;
@@ -23,6 +21,11 @@ public abstract class SWNativeAlignerWrapper implements SmithWatermanAligner {
     public SmithWatermanAlignment align(final byte[] ref, final byte[] alt){
         final SWAlignmentResult alignment = aligner.align(ref, alt);
         return new SWNativeResultWrapper(alignment);
+    }
+
+    @Override
+    public void close() {
+        aligner.close();
     }
 
     private static final class SWNativeResultWrapper implements SmithWatermanAlignment {
