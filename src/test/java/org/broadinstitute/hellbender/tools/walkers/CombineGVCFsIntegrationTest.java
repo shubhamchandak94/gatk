@@ -55,12 +55,18 @@ public class CombineGVCFsIntegrationTest extends CommandLineProgramTest {
     public Object[][] gvcfsToGenotype() {
         return new Object[][]{
                 //combine not supported yet, see https://github.com/broadinstitute/gatk/issues/2429 and https://github.com/broadinstitute/gatk/issues/2584
-                // Simple Test
+                // Simple Test, spanning deletions
                 {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21},
+                // Simple Test, spanning deletions with one input file
+                {new File[]{getTestFile("spanningDel.1.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21},
                 // Interval Test
-                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(" -L ",  "1:69485-69791"), b37_reference_20_21},
+                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("IntervalTest.vcf"), Arrays.asList(" -L ",  "1:69485-69791"), b37_reference_20_21},
                 // convertToBasePairResolution argument test
-                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(" -L ",  "1:69485-69791", "--convertToBasePairResolution"), b37_reference_20_21}
+                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("convertToBasePairResolution.vcf"), Arrays.asList(" -L ",  "1:69485-69791", "--convertToBasePairResolution"), b37_reference_20_21},
+                // Testing the breakBands argument " -L 1:69485-69791 --breakBandsAtMultiplesOf 5"
+                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("testBreakBandsArgumet.vcf"), Arrays.asList(" -L ",  "1:69485-69791", "--breakBandsAtMultiplesOf", "5"), b37_reference_20_21},
+
+
 // {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
 //                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
 //                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
