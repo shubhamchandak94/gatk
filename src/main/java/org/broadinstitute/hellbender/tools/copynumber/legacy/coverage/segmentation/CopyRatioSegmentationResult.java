@@ -1,65 +1,68 @@
 package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.segmentation;
 
-import com.google.common.primitives.Doubles;
-import org.apache.commons.math3.linear.RealMatrix;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.SVDReadCountPanelOfNormals;
-import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
-import org.broadinstitute.hellbender.tools.exome.ReadCountCollectionUtils;
-import org.broadinstitute.hellbender.tools.exome.Target;
+import org.broadinstitute.hellbender.tools.exome.SegmentTableColumn;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.param.ParamUtils;
+import org.broadinstitute.hellbender.utils.tsv.TableColumnCollection;
+import org.broadinstitute.hellbender.utils.tsv.TableUtils;
+import org.broadinstitute.hellbender.utils.tsv.TableWriter;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 /**
- * Represents a copy-ratio profile that has been standardized and denoised by an {@link SVDReadCountPanelOfNormals}.
+ * Represents a legacy copy-ratio segmentation.
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class CopyRatioSegmentationResult {
-    private final List<SimpleInterval> segments;
-    private final List<Double> columnNames;
-    private final RealMatrix standardizedProfile;
-    private final RealMatrix denoisedProfile;
+    //TODO update column headers; we keep the old ones for now
+    private static final TableColumnCollection COPY_RATIO_SEGMENT_FILE_TABLE_COLUMNS = SegmentTableColumn.MEAN_AND_NO_CALL_COLUMNS;
 
-    class CopyRatioSegment {
+    private final List<CopyRatioSegment> segments;
+
+    static class CopyRatioSegment {
         private final SimpleInterval interval;
+        private final int numDataPoints;
         private final double meanLog2CopyRatio;
 
+        /**
+         * @param denoisedCopyRatios    in log2 space
+         */
         CopyRatioSegment(final SimpleInterval interval,
-                         final List<Double> log2DenoisedCopyRatios) {
+                         final List<Double> denoisedCopyRatios) {
             Utils.nonNull(interval);
-            Utils.nonEmpty(log2DenoisedCopyRatios);
+            Utils.nonEmpty(denoisedCopyRatios);
             this.interval = interval;
-            this.meanLog2CopyRatio = log2DenoisedCopyRatios.stream().mapToDouble(Double::doubleValue).average().getAsDouble();
+            numDataPoints = denoisedCopyRatios.size();
+            meanLog2CopyRatio = denoisedCopyRatios.stream().mapToDouble(Double::doubleValue).average().getAsDouble();
         }
     }
 
     public CopyRatioSegmentationResult(final List<CopyRatioSegment> segments) {
         Utils.nonEmpty(segments);
-        this.columnNames = sampleNames;
-        this.standardizedProfile = standardizedProfile;
-        this.denoisedProfile = denoisedProfile;
+        this.segments = Collections.unmodifiableList(segments);
     }
 
-    public void write(final File standardizedProfileFile,
-                      final File denoisedProfileFile) {
-        Utils.nonNull(standardizedProfileFile);
-        Utils.nonNull(denoisedProfileFile);
-        writeProfile(standardizedProfileFile, standardizedProfile, "Standardized copy-ratio profile");
-        writeProfile(denoisedProfileFile, denoisedProfile, "Denoised copy-ratio profile");
-    }
-
-    private void writeProfile(final File file, final RealMatrix profile, final String title) {
-        try {
-            final ReadCountCollection rcc = new ReadCountCollection(intervals, columnNames, profile.transpose());
-            ReadCountCollectionUtils.write(file, rcc,"title = " + title);
+    public void write(final File file,
+                      final String sampleName) {
+        Utils.nonNull(file);
+        Utils.nonNull(sampleName);
+        try (final TableWriter<CopyRatioSegment> writer =
+                     TableUtils.writer(file, COPY_RATIO_SEGMENT_FILE_TABLE_COLUMNS,
+                             (segment, dataLine) ->
+                                     dataLine.append(sampleName)
+                                             .append(segment.interval.getContig())
+                                             .append(segment.interval.getStart())
+                                             .append(segment.interval.getEnd())
+                                             .append(segment.numDataPoints)
+                                             .append(Math.pow(2., segment.meanLog2CopyRatio)))) {
+            writer.writeAllRecords(segments);
         } catch (final IOException e) {
-            throw new UserException.CouldNotCreateOutputFile(file, e.getMessage());
+            throw new UserException.CouldNotCreateOutputFile(file, e);
         }
     }
 }
