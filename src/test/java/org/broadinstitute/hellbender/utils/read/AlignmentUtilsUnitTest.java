@@ -153,10 +153,14 @@ public final class AlignmentUtilsUnitTest {
         final GATKRead originalReadCopy = read.copy();
 
         if ( expectedReadCigar == null ) {
-            Assert.assertNull(AlignmentUtils.createReadAlignedToRef(read, haplotype, haplotype, refStart, true));
+            Assert.assertNull(AlignmentUtils.createReadAlignedToRef(read, haplotype, haplotype, refStart, true,
+                                                                    new SWPairwiseAlignment(CigarUtils.NEW_SW_PARAMETERS,
+                                                                                                                                                        SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY)));
         } else {
             final Cigar expectedCigar = TextCigarCodec.decode(expectedReadCigar);
-            final GATKRead alignedRead = AlignmentUtils.createReadAlignedToRef(read, haplotype, haplotype, refStart, true);
+            final GATKRead alignedRead = AlignmentUtils.createReadAlignedToRef(read, haplotype, haplotype, refStart, true,
+                                                                               new SWPairwiseAlignment(CigarUtils.NEW_SW_PARAMETERS,
+                                                                                                                                                                              SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY));
 
             Assert.assertEquals(alignedRead.getName(), originalReadCopy.getName());
             Assert.assertEquals(alignedRead.getStart(), expectedReadStart);
@@ -265,7 +269,9 @@ public final class AlignmentUtilsUnitTest {
 
     @Test(dataProvider = "ComplexReadAlignedToRef")
     public void testReadAlignedToRefComplexAlignment(final int testIndex, final GATKRead read, final String reference, final Haplotype haplotype, final int expectedMaxMismatches) throws Exception {
-        final GATKRead alignedRead = AlignmentUtils.createReadAlignedToRef(read, haplotype, new Haplotype(reference.getBytes(),true), 1, true);
+        final GATKRead alignedRead = AlignmentUtils.createReadAlignedToRef(read, haplotype, new Haplotype(reference.getBytes(),true), 1, true,
+                                                                           new SWPairwiseAlignment(CigarUtils.NEW_SW_PARAMETERS,
+                                                                                                                                                                      SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY));
         if ( alignedRead != null ) {
             final int mismatches = AlignmentUtils.getMismatchCount(alignedRead, reference.getBytes(), alignedRead.getStart() - 1).numMismatches;
             Assert.assertTrue(mismatches <= expectedMaxMismatches,

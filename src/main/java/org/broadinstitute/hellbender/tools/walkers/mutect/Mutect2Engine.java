@@ -29,8 +29,10 @@ import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
 import org.broadinstitute.hellbender.utils.haplotype.HaplotypeBAMWriter;
 import org.broadinstitute.hellbender.utils.pileup.PileupElement;
 import org.broadinstitute.hellbender.utils.pileup.ReadPileup;
+import org.broadinstitute.hellbender.utils.read.CigarUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
+import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 
@@ -227,7 +229,10 @@ public final class Mutect2Engine implements AssemblyRegionEvaluator {
         final Map<String,List<GATKRead>> reads = splitReadsBySample( regionForGenotyping.getReads() );
 
         final ReadLikelihoods<Haplotype> readLikelihoods = likelihoodCalculationEngine.computeReadLikelihoods(assemblyResult,samplesList,reads);
-        final Map<GATKRead,GATKRead> readRealignments = AssemblyBasedCallerUtils.realignReadsToTheirBestHaplotype(readLikelihoods, assemblyResult.getReferenceHaplotype(), assemblyResult.getPaddedReferenceLoc());
+        final Map<GATKRead,GATKRead> readRealignments = AssemblyBasedCallerUtils.realignReadsToTheirBestHaplotype(readLikelihoods, assemblyResult.getReferenceHaplotype(), assemblyResult.getPaddedReferenceLoc(),
+                                                                                                                  new SWPairwiseAlignment(
+                                                                                                                          CigarUtils.NEW_SW_PARAMETERS,
+                                                                                                                          SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY));
         readLikelihoods.changeReads(readRealignments);
 
         final HaplotypeCallerGenotypingEngine.CalledHaplotypes calledHaplotypes = genotypingEngine.callMutations(

@@ -34,8 +34,10 @@ import org.broadinstitute.hellbender.utils.genotyper.ReadLikelihoods;
 import org.broadinstitute.hellbender.utils.genotyper.SampleList;
 import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
 import org.broadinstitute.hellbender.utils.haplotype.HaplotypeBAMWriter;
+import org.broadinstitute.hellbender.utils.read.CigarUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
+import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
@@ -540,7 +542,10 @@ public final class HaplotypeCallerEngine implements AssemblyRegionEvaluator {
                 likelihoodCalculationEngine.computeReadLikelihoods(assemblyResult, samplesList, reads);
 
         // Realign reads to their best haplotype.
-        final Map<GATKRead, GATKRead> readRealignments = AssemblyBasedCallerUtils.realignReadsToTheirBestHaplotype(readLikelihoods, assemblyResult.getReferenceHaplotype(), assemblyResult.getPaddedReferenceLoc());
+        final Map<GATKRead, GATKRead> readRealignments = AssemblyBasedCallerUtils.realignReadsToTheirBestHaplotype(readLikelihoods, assemblyResult.getReferenceHaplotype(), assemblyResult.getPaddedReferenceLoc(),
+                                                                                                                   new SWPairwiseAlignment(
+                                                                                                                           CigarUtils.NEW_SW_PARAMETERS,
+                                                                                                                           SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY));
         readLikelihoods.changeReads(readRealignments);
 
         // Note: we used to subset down at this point to only the "best" haplotypes in all samples for genotyping, but there

@@ -48,25 +48,27 @@ public final class AlignmentUtils {
      * @param referenceStart the start of the reference that haplotype is aligned to.  Provides global coordinate frame.
      * @param isInformative true if the read is differentially informative for one of the haplotypes
      *
+     * @param aligner
      * @throws IllegalArgumentException if {@code originalRead} is {@code null} or {@code haplotype} is {@code null} or it
      *   does not have a Cigar or the {@code referenceStart} is invalid (less than 1).
      *
      * @return a GATKRead aligned to reference. Never {@code null}.
      */
     public static GATKRead createReadAlignedToRef(final GATKRead originalRead,
-                                                       final Haplotype haplotype,
-                                                       final Haplotype refHaplotype,
-                                                       final int referenceStart,
-                                                       final boolean isInformative) {
+                                                  final Haplotype haplotype,
+                                                  final Haplotype refHaplotype,
+                                                  final int referenceStart,
+                                                  final boolean isInformative,
+                                                  final SWPairwiseAlignment aligner) {
         Utils.nonNull(originalRead);
         Utils.nonNull(haplotype);
         Utils.nonNull(refHaplotype);
         Utils.nonNull(haplotype.getCigar());
+        Utils.nonNull(aligner);
         if ( referenceStart < 1 ) { throw new IllegalArgumentException("reference start much be >= 1 but got " + referenceStart); }
 
         // compute the smith-waterman alignment of read -> haplotype
-        final SmithWatermanAlignment swPairwiseAlignment = new SWPairwiseAlignment(CigarUtils.NEW_SW_PARAMETERS, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY)
-                .align(haplotype.getBases(), originalRead.getBases());
+        final SmithWatermanAlignment swPairwiseAlignment = aligner.align(haplotype.getBases(), originalRead.getBases());
         if ( swPairwiseAlignment.getAlignmentOffset() == -1 ) {
             // sw can fail (reasons not clear) so if it happens just don't realign the read
             return originalRead;
