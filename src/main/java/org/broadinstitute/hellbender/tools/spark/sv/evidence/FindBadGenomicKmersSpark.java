@@ -4,7 +4,6 @@ import com.esotericsoftware.kryo.DefaultSerializer;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMSequenceDictionary;
@@ -76,11 +75,10 @@ public final class FindBadGenomicKmersSpark extends GATKSparkTool {
         final SAMFileHeader hdr = getHeaderForReads();
         SAMSequenceDictionary dict = null;
         if ( hdr != null ) dict = hdr.getSequenceDictionary();
-        final PipelineOptions options = getAuthenticatedGCSOptions();
         final ReferenceMultiSource referenceMultiSource = getReference();
-        Collection<SVKmer> killList = findBadGenomicKmers(ctx, kSize, maxDUSTScore, referenceMultiSource, options, dict);
+        Collection<SVKmer> killList = findBadGenomicKmers(ctx, kSize, maxDUSTScore, referenceMultiSource, dict);
         if ( highCopyFastaFilename != null ) {
-            killList = uniquify(killList, processFasta(kSize, maxDUSTScore, highCopyFastaFilename, options));
+            killList = uniquify(killList, processFasta(kSize, maxDUSTScore, highCopyFastaFilename));
         }
 
         SVUtils.writeKmersFile(kSize, outputFile, killList);
@@ -92,10 +90,9 @@ public final class FindBadGenomicKmersSpark extends GATKSparkTool {
                                                     final int kSize,
                                                     final int maxDUSTScore,
                                                     final ReferenceMultiSource ref,
-                                                    final PipelineOptions options,
                                                     final SAMSequenceDictionary readsDict ) {
         // Generate reference sequence RDD.
-        final JavaRDD<byte[]> refRDD = SVUtils.getRefRDD(ctx, kSize, ref, options, readsDict,
+        final JavaRDD<byte[]> refRDD = SVUtils.getRefRDD(ctx, kSize, ref, readsDict,
                                                                 REF_RECORD_LEN, REF_RECORDS_PER_PARTITION);
 
         // Find the high copy number kmers
@@ -206,8 +203,7 @@ public final class FindBadGenomicKmersSpark extends GATKSparkTool {
 
     @VisibleForTesting static List<SVKmer> processFasta( final int kSize,
                                                          final int maxDUSTScore,
-                                                         final String fastaFilename,
-                                                         final PipelineOptions options ) {
+                                                         final String fastaFilename) {
         try ( BufferedReader rdr = new BufferedReader(new InputStreamReader(BucketUtils.openFile(fastaFilename))) ) {
             final List<SVKmer> kmers = new ArrayList<>((int) BucketUtils.fileSize(fastaFilename));
             String line;

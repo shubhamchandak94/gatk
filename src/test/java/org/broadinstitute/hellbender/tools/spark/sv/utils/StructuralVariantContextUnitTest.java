@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.spark.sv.utils;
 
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
@@ -246,7 +245,7 @@ public class StructuralVariantContextUnitTest {
     }
 
     private static ReferenceMultiSource referenceMultiSource(final String fastaFileName) {
-        return new ReferenceMultiSource((PipelineOptions) null, fastaFileName,
+        return new ReferenceMultiSource((com.google.cloud.dataflow.sdk.options.PipelineOptions) null, fastaFileName,
                 (r) -> new SimpleInterval(r.getContig(), r.getAssignedStart(), r.getEnd()));
     }
 }

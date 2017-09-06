@@ -45,6 +45,7 @@ import java.util.stream.Collectors;
                 "-I /path/to/my/dir/localAssemblies.sam \\" +
                 "-O /path/to/my/dir/outputDir \\" +
                 "-R /path/to/my/reference/reference.2bit --fastaReference /path/to/my/reference/reference.fasta",
+        omitFromCommandLine = true,
         programGroup = StructuralVariationSparkProgramGroup.class)
 @BetaFeature
 public final class InternalSvDiscoverFromLocalAssemblyContigAlignmentsSpark extends GATKSparkTool {

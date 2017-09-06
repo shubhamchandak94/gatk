@@ -17,6 +17,7 @@ public class GATKSVVCFConstants {
     public static final String SYMB_ALT_ALLELE_DEL_IN_HEADER = "DEL";
     public static final String SYMB_ALT_ALLELE_INS_IN_HEADER = "INS";
     public static final String SYMB_ALT_ALLELE_DUP_IN_HEADER = "DUP";
+    public static final String SYMB_ALT_ALLELE_INVDUP_IN_HEADER = "DUP:INV";
 
     // GATK-SV specific header lines
     // applicable to all precise records all the time
@@ -31,6 +32,8 @@ public class GATKSVVCFConstants {
     public static final String INSERTED_SEQUENCE_MAPPINGS = "INSERTED_SEQUENCE_MAPPINGS";
     public static final String HOMOLOGY = "HOMOLOGY";
     public static final String HOMOLOGY_LENGTH = "HOMOLOGY_LENGTH";
+    public static final String ALT_HAPLOTYPE_SEQ = "ALT_HT_SEQ";
+
     // type specific: tandem duplication
     public static final String DUP_REPEAT_UNIT_REF_SPAN = "DUP_REPEAT_UNIT_REF_SPAN";
     public static final String DUP_SEQ_CIGARS = "DUP_SEQ_CIGARS";
@@ -40,8 +43,13 @@ public class GATKSVVCFConstants {
     public static final String TANDUP_CONTRACTION_STRING = "CONTRACTION";
     public static final String TANDUP_EXPANSION_STRING = "EXPANSION";
 
+    // type specific: inverted duplication
+    public static final String INVDUP_STRANDS = "DUP_INV_STRANDS";
+    public static final String INV_TRANS_INS_REF_SPAN = "INV_TRANS_INS_REF_SPAN";
+
     // not defined in output vcf header but used in internal id that is currently output in the ID column
     public static final String INTERVAL_VARIANT_ID_FIELD_SEPARATOR = "_";
     public static final String TANDUP_CONTRACTION_INTERNAL_ID_START_STRING = "DEL-DUPLICATION-TANDEM-CONTRACTION";
     public static final String TANDUP_EXPANSION_INTERNAL_ID_START_STRING = "INS-DUPLICATION-TANDEM-EXPANSION";
+    public static final String INVDUP_INTERNAL_ID_START_STRING = "DUPLICATION-INVERTED-EXPANSION";
 }

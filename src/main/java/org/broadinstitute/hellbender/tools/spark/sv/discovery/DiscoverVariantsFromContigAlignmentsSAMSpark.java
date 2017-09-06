@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery;
 
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.CigarOperator;
 import htsjdk.samtools.SAMFileHeader;
@@ -89,7 +88,7 @@ public final class DiscoverVariantsFromContigAlignmentsSAMSpark extends GATKSpar
                 .getAlignedContigs();
 
         discoverVariantsAndWriteVCF(parsedContigAlignments, discoverStageArgs.fastaReference,
-                ctx.broadcast(getReference()), getAuthenticatedGCSOptions(), vcfOutputFileName, localLogger);
+                ctx.broadcast(getReference()), vcfOutputFileName, localLogger);
     }
 
     public static final class SAMFormattedContigAlignmentParser extends AlignedContigGenerator implements Serializable {
@@ -168,8 +167,7 @@ public final class DiscoverVariantsFromContigAlignmentsSAMSpark extends GATKSpar
      */
     public static void discoverVariantsAndWriteVCF(final JavaRDD<AlignedContig> alignedContigs,
                                                    final String fastaReference, final Broadcast<ReferenceMultiSource> broadcastReference,
-                                                   final PipelineOptions pipelineOptions, final String vcfFileName,
-                                                   final Logger toolLogger) {
+                                                   final String vcfFileName, final Logger toolLogger) {
 
         final JavaRDD<VariantContext> annotatedVariants =
                 alignedContigs.filter(alignedContig -> alignedContig.alignmentIntervals.size()>1)                                     // filter out any contigs that has less than two alignment records
@@ -179,9 +177,9 @@ public final class DiscoverVariantsFromContigAlignmentsSAMSpark extends GATKSpar
                         .groupByKey()                                                                                                 // group the same novel adjacency produced by different contigs together
                         .mapToPair(noveltyAndEvidence -> inferType(noveltyAndEvidence._1, noveltyAndEvidence._2))                     // type inference based on novel adjacency and evidence alignments
                         .map(noveltyTypeAndEvidence -> annotateVariant(noveltyTypeAndEvidence._1,                                     // annotate the novel adjacency and inferred type
-                                noveltyTypeAndEvidence._2._1, noveltyTypeAndEvidence._2._2, broadcastReference));
+                                noveltyTypeAndEvidence._2._1, null, noveltyTypeAndEvidence._2._2, broadcastReference));
 
-        SVVCFWriter.writeVCF(pipelineOptions, vcfFileName, fastaReference, annotatedVariants, toolLogger);
+        SVVCFWriter.writeVCF(vcfFileName, fastaReference, annotatedVariants, toolLogger);
     }
 
     // TODO: 7/6/17 interface to be changed in the new implementation, where one contig produces a set of NARL's.
@@ -212,13 +210,13 @@ public final class DiscoverVariantsFromContigAlignmentsSAMSpark extends GATKSpar
      */
     public static VariantContext annotateVariant(final NovelAdjacencyReferenceLocations novelAdjacency,
                                                  final SvType inferredType,
+                                                 final byte[] altHaplotypeSeq,
                                                  final Iterable<ChimericAlignment> chimericAlignments,
                                                  final Broadcast<ReferenceMultiSource> broadcastReference)
             throws IOException {
         return AnnotatedVariantProducer
                 .produceAnnotatedVcFromInferredTypeAndRefLocations(novelAdjacency.leftJustifiedLeftRefLoc,
                         novelAdjacency.leftJustifiedRightRefLoc.getStart(), novelAdjacency.complication,
-                        inferredType, chimericAlignments,
-                        broadcastReference);
+                        inferredType, altHaplotypeSeq, chimericAlignments, broadcastReference);
     }
 }

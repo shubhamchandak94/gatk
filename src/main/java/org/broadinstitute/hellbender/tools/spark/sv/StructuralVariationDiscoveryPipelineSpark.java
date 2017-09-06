@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMFlag;
@@ -28,8 +27,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection.FindBreakpointEvidenceSparkArgumentCollection;
 import static org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection.DiscoverVariantsFromContigsAlignmentsSparkArgumentCollection;
+import static org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection.FindBreakpointEvidenceSparkArgumentCollection;
 
 /**
  * Tool to run the sv pipeline up to and including variant discovery
@@ -71,7 +70,6 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
     protected void runTool( final JavaSparkContext ctx ) {
 
         final SAMFileHeader header = getHeaderForReads();
-        final PipelineOptions pipelineOptions = getAuthenticatedGCSOptions();
 
         // gather evidence, run assembly, and align
         final List<AlignedAssemblyOrExcuse> alignedAssemblyOrExcuseList =
@@ -88,7 +86,7 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
         // discover variants and write to vcf
         DiscoverVariantsFromContigAlignmentsSAMSpark
                 .discoverVariantsAndWriteVCF(parsedAlignments, discoverStageArgs.fastaReference,
-                        ctx.broadcast(getReference()), pipelineOptions, vcfOutputFileName, localLogger);
+                        ctx.broadcast(getReference()), vcfOutputFileName, localLogger);
     }
 
     public static final class InMemoryAlignmentParser extends AlignedContigGenerator implements Serializable {

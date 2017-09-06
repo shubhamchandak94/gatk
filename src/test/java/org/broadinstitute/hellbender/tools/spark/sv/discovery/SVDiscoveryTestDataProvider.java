@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery;
 
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.TextCigarCodec;
 import htsjdk.samtools.util.SequenceUtil;
@@ -25,7 +24,8 @@ import java.util.List;
  */
 public final class SVDiscoveryTestDataProvider {
 
-    public static final ReferenceMultiSource reference = new ReferenceMultiSource((PipelineOptions)null, BaseTest.b37_reference_20_21, ReferenceWindowFunctions.IDENTITY_FUNCTION);
+    public static final ReferenceMultiSource reference = new ReferenceMultiSource((com.google.cloud.dataflow.sdk.options.PipelineOptions)null,
+            BaseTest.b37_reference_20_21, ReferenceWindowFunctions.IDENTITY_FUNCTION);
     public static final SAMSequenceDictionary seqDict = reference.getReferenceSequenceDictionary(null);
 
     public static byte[] getReverseComplimentCopy(final byte[] sequence) {

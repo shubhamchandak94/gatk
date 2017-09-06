@@ -16,7 +16,7 @@ public abstract class SimpleSVType extends SvType {
     }
 
     public enum TYPES {
-        INV, DEL, INS, DUP;
+        INV, DEL, INS, DUP, DUP_INV;
     }
 
     public static final class Inversion extends SvType {
@@ -116,4 +116,28 @@ public abstract class SimpleSVType extends SvType {
                     + novelAdjacencyReferenceLocations.leftJustifiedRightRefLoc.getStart();
         }
     }
+
+    public static final class DuplicationInverted extends SvType {
+
+        @Override
+        public String toString() {
+            return "DUP:INV";
+        }
+
+        @SuppressWarnings("unchecked")
+        public DuplicationInverted(final NovelAdjacencyReferenceLocations novelAdjacencyReferenceLocations) {
+            super(getIDString(novelAdjacencyReferenceLocations),
+                    Allele.create(createBracketedSymbAlleleString(GATKSVVCFConstants.SYMB_ALT_ALLELE_INVDUP_IN_HEADER)),
+                    novelAdjacencyReferenceLocations.complication.getDupSeqRepeatUnitRefSpan().size(),
+                    Collections.EMPTY_MAP);
+        }
+
+        private static String getIDString(final NovelAdjacencyReferenceLocations novelAdjacencyReferenceLocations) {
+            return GATKSVVCFConstants.INVDUP_INTERNAL_ID_START_STRING + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                    + novelAdjacencyReferenceLocations.leftJustifiedLeftRefLoc.getContig() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                    + novelAdjacencyReferenceLocations.leftJustifiedLeftRefLoc.getEnd() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                    + novelAdjacencyReferenceLocations.leftJustifiedRightRefLoc.getStart();
+        }
+    }
+
 }
