@@ -191,21 +191,22 @@ public final class CombineGVCFs extends MultiVariantWalker {
                 || currentVariants.get(0).getStart()<variant.getStart()) {
             // Emptying any sites which should emit a new VC since the last one
             if (hasReduced == true) {
+                // TODO eliminate the amount of string comparison
                 createIntermediateVariants(prevPos == null ? new SimpleInterval(VCs.get(0).getContig(), VCs.get(0).getStart(),
                         (VCs.get(0).getContig().equals(currentPositionalState.loc.getContig())
                                 ? currentPositionalState.loc.getStart() - 1
                                 : VCs.get(0).getStart() + storedReference.length - 1 ))
 
-                        : new SimpleInterval(prevPos.getContig(), prevPos.getStart(),
-                        (prevPos.getContig().equals(currentPositionalState.loc.getContig())
+                        : new SimpleInterval(prevPos.getContig(), prevPos.getEnd(),
+                        prevPos.getContig().equals(currentPositionalState.loc.getContig())
                                 ? currentPositionalState.loc.getStart() - 1
-                                : prevPos.getStart() + storedReference.length - 1)));
+                                : prevPos.getStart() + storedReference.length - 1));// TODO this value is bad,
             }
 
             //TODO ^^^ YUCK!
-
+//==============================================//TODO, these values are bad becaus of problems
             reduce(currentPositionalState);
-            storedReference = currentPositionalState.refBases;
+            storedReference = currentPositionalState.refBases; // TODO these get out of step with the loc
             storedReferenceStart = currentPositionalState.loc.getStart();
             currentVariants.clear();
             currentVariants.add(variant);
@@ -229,15 +230,17 @@ public final class CombineGVCFs extends MultiVariantWalker {
         // Perform any band breaking that needs to be done since the last one
         if ( multipleAtWhichToBreakBands > 0) {
             // TODO figure out +1 from previous code
-            for (int i = prevPos.getStart()/multipleAtWhichToBreakBands; i < (intervalToClose.getEnd()-1)/multipleAtWhichToBreakBands; i++) {
+            for (int i = intervalToClose.getStart()/multipleAtWhichToBreakBands; i < (intervalToClose.getEnd()-1)/multipleAtWhichToBreakBands; i++) {
                 sitesToStop.add(multipleAtWhichToBreakBands*(i+1));
             }
         }
 
         for (VariantContext vc : VCs) {
             if (vc.getNAlleles() > 2) {
-                //TODO figure out which one this should be
-                sitesToStop.add(vc.getStart());
+                //TODO BE VERY SURE ABOUT ENDING AFTER WHEN WE WANT!!!!!!!!!!!!!!!
+                for (int i = vc.getStart(); i < vc.getEnd(); i++ ) {
+                    sitesToStop.add(i);
+                }
             } else if (vc.getEnd() <= intervalToClose.getEnd()) {
                 sitesToStop.add(vc.getEnd());
             }

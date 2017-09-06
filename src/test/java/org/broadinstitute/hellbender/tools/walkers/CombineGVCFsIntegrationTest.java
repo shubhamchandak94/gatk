@@ -57,14 +57,22 @@ public class CombineGVCFsIntegrationTest extends CommandLineProgramTest {
                 //combine not supported yet, see https://github.com/broadinstitute/gatk/issues/2429 and https://github.com/broadinstitute/gatk/issues/2584
                 // Simple Test, spanning deletions
                 {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21},
-                // Simple Test, spanning deletions with one input file
-                {new File[]{getTestFile("spanningDel.1.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21},
+                // Simple Test, multiple spanning deletions for one file
+                {new File[]{getTestFile("spanningDel.many.g.vcf")}, getTestFile("testMultipleSpanningDeletionsForOneSample.vcf"), Arrays.asList(), b37_reference_20_21},
+                // Simple Test, spanning deletions for haploid data
+                {new File[]{getTestFile("spanningDel.many.haploid.g.vcf")}, getTestFile("testMultipleSpanningDeletionsForOneSampleHaploid.vcf"), Arrays.asList(), b37_reference_20_21},
+                // Simple Test, spanning deletions for tetraploid data
+                {new File[]{getTestFile("spanningDel.many.tetraploid.g.vcf")}, getTestFile("testMultipleSpanningDeletionsForOneSampleTetraploid.vcf"), Arrays.asList(), b37_reference_20_21},
+                // Testing BasePairResolutionInputs
+                {new File[]{getTestFile("gvcf.basepairResolution.vcf")}, getTestFile("testBasepairResolutionInput.vcf"), Arrays.asList(), b37_reference_20_21},
                 // Interval Test
-                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("IntervalTest.vcf"), Arrays.asList(" -L ",  "1:69485-69791"), b37_reference_20_21},
+                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("IntervalTest.vcf"), Arrays.asList(" -L ",  "20:69485-69791"), b37_reference_20_21},
                 // convertToBasePairResolution argument test
-                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("convertToBasePairResolution.vcf"), Arrays.asList(" -L ",  "1:69485-69791", "--convertToBasePairResolution"), b37_reference_20_21},
+                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("convertToBasePairResolution.vcf"), Arrays.asList(" -L ",  "20:69485-69791", "--convertToBasePairResolution"), b37_reference_20_21},
                 // Testing the breakBands argument " -L 1:69485-69791 --breakBandsAtMultiplesOf 5"
-                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("testBreakBandsArgumet.vcf"), Arrays.asList(" -L ",  "1:69485-69791", "--breakBandsAtMultiplesOf", "5"), b37_reference_20_21},
+                {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("testBreakBandsArgumet.vcf"), Arrays.asList(" -L ",  "20:69485-69791", "--breakBandsAtMultiplesOf", "5"), b37_reference_20_21},
+                // Testing mismatched reference bases
+                {new File[]{getTestFile("combine-gvcf-wrong-ref-input1.vcf"),getTestFile("combine-gvcf-wrong-ref-input2.vcf"),}, getTestFile("testWrongReferenceBaseBugFix.vcf"), Arrays.asList(), b37_reference_20_21},
 
 
 // {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
@@ -97,7 +105,7 @@ This method should be removed after GenotypeGVCFs has been completely validated 
             Assert.assertTrue(gatk3ResultsDir.mkdir());
         }
         final File gatk3Result = new File(gatk3ResultsDir, md5 + ".vcf");
-        if (!gatk3Result.exists()) {
+        if (true) {
             List<String> gatk3Command = new ArrayList<>(
                     Arrays.asList("java", "-jar", GATK3_PATH, "-T", "CombineGVCFs"));
             for (File f: inputs) {
@@ -365,93 +373,10 @@ This method should be removed after GenotypeGVCFs has been completely validated 
         Assert.assertEquals(third.getEnd(), 69783);
         Assert.assertEquals(third.getGenotypes().size(), 2);
     }
-//
-//    @Test
-//    public void testMD5s() throws Exception {
-//        final String cmd = baseTestString(" -L 1:69485-69791");
-//        final WalkerTestSpec spec = new WalkerTestSpec(cmd, 1, Arrays.asList("e1a888e8116cf59d53ad919634a18e6c"));
-//        spec.disableShadowBCF();
-//        executeTest("testMD5s", spec);
-//    }
-//
-//    @Test
-//    public void testBasepairResolutionOutput() throws Exception {
-//        final String cmd = baseTestString(" -L 1:69485-69791 --convertToBasePairResolution");
-//        final WalkerTestSpec spec = new WalkerTestSpec(cmd, 1, Arrays.asList("e7e86722a49ad9730743c4952cdbedc7"));
-//        spec.disableShadowBCF();
-//        executeTest("testBasepairResolutionOutput", spec);
-//    }
-//
-//    @Test
-//    public void testBreakBlocks() throws Exception {
-//        final String cmd = baseTestString(" -L 1:69485-69791 --breakBandsAtMultiplesOf 5");
-//        final WalkerTestSpec spec = new WalkerTestSpec(cmd, 1, Arrays.asList("bd279625ccfb3adcd39d97f07f3a236e"));
-//        spec.disableShadowBCF();
-//        executeTest("testBreakBlocks", spec);
-//    }
-//
-//    @Test
-//    public void testSpanningDeletions() {
-//        WalkerTestSpec spec = new WalkerTestSpec(
-//                "-T CombineGVCFs --no_cmdline_in_header -o %s -R " + b37KGReference +
-//                        " -V " + privateTestDir + "spanningDel.1.g.vcf -V " + privateTestDir + "spanningDel.2.g.vcf",
-//                1,
-//                Arrays.asList("b22238e1ff584a157335429309fbfc5b"));
-//        spec.disableShadowBCF();
-//        executeTest("testSpanningDeletions", spec);
-//    }
-//
-//    @Test
-//    public void testMultipleSpanningDeletionsForOneSample() {
-//        WalkerTestSpec spec = new WalkerTestSpec(
-//                "-T CombineGVCFs --no_cmdline_in_header -o %s -R " + b37KGReference +
-//                        " -V " + privateTestDir + "spanningDel.many.g.vcf",
-//                1,
-//                Arrays.asList("b828ba5b69422ce32e234ea24d2df4c7"));
-//        spec.disableShadowBCF();
-//        executeTest("testMultipleSpanningDeletionsForOneSample", spec);
-//    }
-//
-//    @Test
-//    public void testMultipleSpanningDeletionsForOneSampleHaploid() {
-//        WalkerTestSpec spec = new WalkerTestSpec(
-//                "-T CombineGVCFs --no_cmdline_in_header -o %s -R " + b37KGReference +
-//                        " -V " + privateTestDir + "spanningDel.many.haploid.g.vcf",
-//                1,
-//                Arrays.asList("e707335ebd61bbe20775f76ad9b8c20d"));
-//        spec.disableShadowBCF();
-//        executeTest("testMultipleSpanningDeletionsForOneSampleHaploid", spec);
-//    }
-//
-//    @Test
-//    public void testMultipleSpanningDeletionsForOneSampleTetraploid() {
-//        WalkerTestSpec spec = new WalkerTestSpec(
-//                "-T CombineGVCFs --no_cmdline_in_header -o %s -R " + b37KGReference +
-//                        " -V " + privateTestDir + "spanningDel.many.tetraploid.g.vcf",
-//                1,
-//                Arrays.asList("d4c22bd32d136414bfd7a6ebc5152026"));
-//        spec.disableShadowBCF();
-//        executeTest("testMultipleSpanningDeletionsForOneSampleTetraploid", spec);
-//    }
-//
-//    @Test
-//    public void testWrongReferenceBaseBugFix() throws Exception {
-//        final String cmd = "-T CombineGVCFs -R " + b37KGReference + " -V " + (privateTestDir + "combine-gvcf-wrong-ref-input1.vcf"
-//                + " -V " + (privateTestDir + "combine-gvcf-wrong-ref-input2.vcf") + " -o %s --no_cmdline_in_header");
-//        final WalkerTestSpec spec = new WalkerTestSpec(cmd, 1, Arrays.asList("5fec22c9c8a0063f43c86ac86bb12e27"));
-//        spec.disableShadowBCF();
-//        executeTest("testWrongReferenceBaseBugFix",spec);
-//
-//    }
-//
-//    @Test
-//    public void testBasepairResolutionInput() throws Exception {
-//        final String cmd = "-T CombineGVCFs -R " + b37KGReference + " -o %s --no_cmdline_in_header -V " + privateTestDir + "gvcf.basepairResolution.vcf";
-//        final WalkerTestSpec spec = new WalkerTestSpec(cmd, 1, Arrays.asList("a839f81014758d1bdc900d59d35dd5bc"));
-//        spec.disableShadowBCF();
-//        executeTest("testBasepairResolutionInput", spec);
-//    }
-//
+
+        // TODO add a test that spans multiple chromosomes
+
+
 //    @Test
 //    public void testAlleleSpecificAnnotations() throws Exception {
 //        final String cmd = "-T CombineGVCFs -R " + b37KGReference + " -o %s --no_cmdline_in_header -G Standard -G AS_Standard -V "
