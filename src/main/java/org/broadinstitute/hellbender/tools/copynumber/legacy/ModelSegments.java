@@ -34,7 +34,7 @@ import java.util.List;
 @BetaFeature
 public final class ModelSegments extends CommandLineProgram {
     private static final String MAXIMUM_NUMBER_OF_SEGMENTS_PER_CHROMOSOME_LONG_NAME = "maxNumSegmentsPerChromosome";
-    private static final String MAXIMUM_NUMBER_OF_SEGMENTS_PER_CHROMOSOME_SHORT_NAME = "maxNumSegPerChr";
+    private static final String MAXIMUM_NUMBER_OF_SEGMENTS_PER_CHROMOSOME_SHORT_NAME = "maxNumSegsPerChr";
 
     private static final String KERNEL_VARIANCE_LONG_NAME = "kernelVariance";
     private static final String KERNEL_VARIANCE_SHORT_NAME = "kernVar";
@@ -46,10 +46,10 @@ public final class ModelSegments extends CommandLineProgram {
     private static final String WINDOW_SIZES_SHORT_NAME = "winSizes";
 
     private static final String NUM_CHANGEPOINTS_PENALTY_LINEAR_FACTOR_LONG_NAME = "numChangepointsPenaltyLinearFactor";
-    private static final String NUM_CHANGEPOINTS_PENALTY_LINEAR_FACTOR_SHORT_NAME = "numChangepointsPenLin";
+    private static final String NUM_CHANGEPOINTS_PENALTY_LINEAR_FACTOR_SHORT_NAME = "numChangeptsPenLin";
 
     private static final String NUM_CHANGEPOINTS_PENALTY_LOG_LINEAR_FACTOR_LONG_NAME = "numChangepointsPenaltyLogLinearFactor";
-    private static final String NUM_CHANGEPOINTS_PENALTY_LOG_LINEAR_FACTOR_SHORT_NAME = "numChangepointsPenLogLin";
+    private static final String NUM_CHANGEPOINTS_PENALTY_LOG_LINEAR_FACTOR_SHORT_NAME = "numChangeptsPenLogLin";
 
     @Argument(
             doc = "Input file containing denoised copy-ratio profile (output of DenoiseReadCounts).",
@@ -113,7 +113,7 @@ public final class ModelSegments extends CommandLineProgram {
             doc = "Linear factor A for the penalty on the number of changepoints per chromosome.  " +
                     "Adds a penalty of the form A * C, where C is the number of changepoints in the chromosome, " +
                     "to the cost function for each chromosome.  " +
-                    "Must be either zero or greater than or equal to 1.",
+                    "Must be non-negative.",
             fullName = NUM_CHANGEPOINTS_PENALTY_LINEAR_FACTOR_LONG_NAME,
             shortName = NUM_CHANGEPOINTS_PENALTY_LINEAR_FACTOR_SHORT_NAME,
             optional = true,
@@ -125,7 +125,7 @@ public final class ModelSegments extends CommandLineProgram {
             doc = "Log-linear factor B for the penalty on the number of changepoints per chromosome.  " +
                     "Adds a penalty of the form  B * C * log (N / C), where C is the number of changepoints in the chromosome and " +
                     "N is the number of data points in the chromosome, to the cost function for each chromosome.  " +
-                    "Must be either zero or greater than or equal to 1.",
+                    "Must be non-negative.",
             fullName = NUM_CHANGEPOINTS_PENALTY_LOG_LINEAR_FACTOR_LONG_NAME,
             shortName = NUM_CHANGEPOINTS_PENALTY_LOG_LINEAR_FACTOR_SHORT_NAME,
             optional = true,
@@ -135,12 +135,6 @@ public final class ModelSegments extends CommandLineProgram {
 
     @Override
     public Object doWork() {
-        //validate arguments
-        Utils.validateArg(numChangepointsPenaltyLinearFactor == 0. || numChangepointsPenaltyLinearFactor >= 1.,
-                "Linear factor for the penalty on the number of changepoints per chromosome must be either zero or greater than or equal to 1.");
-        Utils.validateArg(numChangepointsPenaltyLogLinearFactor == 0. || numChangepointsPenaltyLogLinearFactor >= 1.,
-                "Log-linear factor for the penalty on the number of changepoints per chromosome must be either zero or greater than or equal to 1.");
-
         //TODO clean this up once updated ReadCountCollection is available
         logger.info(String.format("Reading denoised copy-ratio profile file (%s)...", inputDenoisedCopyRatioProfileFile));
         final String sampleName = ReadCountCollectionUtils.getSampleNameForCLIsFromReadCountsFile(new File(inputDenoisedCopyRatioProfileFile));

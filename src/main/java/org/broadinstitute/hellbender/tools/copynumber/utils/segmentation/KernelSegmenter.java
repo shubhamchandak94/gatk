@@ -112,10 +112,10 @@ public final class KernelSegmenter<T> {
         ParamUtils.isPositive(kernelApproximationDimension, "Dimension of kernel approximation must be positive.");
         Utils.validateArg(windowSizes.stream().allMatch(ws -> ws > 0), "Window sizes must all be positive.");
         Utils.validateArg(new HashSet<>(windowSizes).size() == windowSizes.size(), "Window sizes must all be unique.");
-        Utils.validateArg(numChangepointsPenaltyLinearFactor == 0. || numChangepointsPenaltyLinearFactor >= 1.,
-                "Linear factor for the penalty on the number of changepoints per chromosome must be either zero or greater than or equal to 1.");
-        Utils.validateArg(numChangepointsPenaltyLogLinearFactor == 0. || numChangepointsPenaltyLogLinearFactor >= 1.,
-                "Log-linear factor for the penalty on the number of changepoints per chromosome must be either zero or greater than or equal to 1.");
+        ParamUtils.isPositiveOrZero(numChangepointsPenaltyLinearFactor,
+                "Linear factor for the penalty on the number of changepoints per chromosome must be non-negative.");
+        ParamUtils.isPositiveOrZero(numChangepointsPenaltyLogLinearFactor,
+                "Log-linear factor for the penalty on the number of changepoints per chromosome must be non-negative.");
 
         if (maxNumChangepoints == 0) {
             logger.warn("No changepoints were requested, returning empty list...");
