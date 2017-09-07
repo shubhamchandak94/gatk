@@ -55,6 +55,7 @@ final class SimpleStrandSwitchVariantDetector implements VariantDetectorFromLoca
                 dealWithSimpleStrandSwitchBkpts(split._2, broadcastReference, toolLogger);
         SVVCFWriter.writeVCF(vcfOutputFileName.replace(".vcf", "_simpleSS.vcf"),
                 fastaReference, simpleStrandSwitchBkpts, toolLogger);
+        simpleStrandSwitchBkpts.unpersist();
 
         final JavaRDD<VariantContext> invDups =
                 dealWithSuspectedInvDup(split._1, broadcastReference, toolLogger);
