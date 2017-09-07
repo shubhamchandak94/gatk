@@ -11,10 +11,7 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -42,13 +39,20 @@ public final class CopyRatioKernelSegmenter {
      */
     public CopyRatioKernelSegmenter(final ReadCountCollection denoisedCopyRatioProfile) {
         Utils.nonNull(denoisedCopyRatioProfile);
-        intervalsPerChromosome = denoisedCopyRatioProfile.targets().stream().map(Target::getInterval).collect(Collectors.groupingBy(SimpleInterval::getContig));
+        intervalsPerChromosome = denoisedCopyRatioProfile.targets().stream().map(Target::getInterval)
+                .collect(Collectors.groupingBy(
+                        SimpleInterval::getContig,
+                        LinkedHashMap::new,
+                        Collectors.mapping(Function.identity(), Collectors.toList())));
         final double[] denoisedCopyRatios = denoisedCopyRatioProfile.getColumn(0);
         denoisedCopyRatiosPerChromosome = IntStream.range(0, denoisedCopyRatioProfile.targets().size()).boxed()
                 .map(i -> new ImmutablePair<>(
                         denoisedCopyRatioProfile.targets().get(i).getContig(),
                         denoisedCopyRatios[i]))
-                .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
+                .collect(Collectors.groupingBy(
+                        Pair::getKey,
+                        LinkedHashMap::new,
+                        Collectors.mapping(Pair::getValue, Collectors.toList())));
     }
 
     public CopyRatioSegmentationResult findSegmentation(final int maxNumChangepointsPerChromosome,
