@@ -11,10 +11,20 @@ import static org.testng.Assert.*;
  */
 public class ModelSegmentsIntegrationTest extends CommandLineProgramTest {
     @Test
-    public void testTCGA() {
+    public void testWES() {
         final String[] arguments = {
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/gatk/TCGA-05-4389-01A-01D-1265-08-gc-corrected.tn.tsv",
                 "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, "/home/slee/working/gatk/TCGA-05-4389-01A-01D-1265-08-gc-corrected.seg",
+                "-" + StandardArgumentDefinitions.VERBOSITY_NAME, "DEBUG"
+        };
+        runCommandLine(arguments);
+    }
+
+    @Test
+    public void testWGS() {
+        final String[] arguments = {
+                "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, "/home/slee/working/gatk/TCGA-05-4389-10A-01D-1931-08.coverage.tsv.raw_cov.hdf5.tn.tsv",
+                "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, "/home/slee/working/gatk/TCGA-05-4389-10A-01D-1931-08.coverage.tsv.raw_cov.hdf5.seg",
                 "-" + StandardArgumentDefinitions.VERBOSITY_NAME, "DEBUG"
         };
         runCommandLine(arguments);

@@ -217,12 +217,14 @@ public final class KernelSegmenter<T> {
         logger.info(String.format("Calculating reduced observation matrix (%d x %d)...", data.size(), numSubsample));
         final RealMatrix reducedObservationMatrix = new Array2DRowRealMatrix(data.size(), numSubsample);
         reducedObservationMatrix.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            final double[] sqrtSingularValues = Arrays.stream(svd.getSingularValues()).map(Math::sqrt).toArray();
+            final double[] invSqrtSingularValues = Arrays.stream(svd.getSingularValues()).map(Math::sqrt).map(x -> 1. / (x + EPSILON)).toArray();
             @Override
             public double visit(int i, int j, double value) {
-                return IntStream.range(0, numSubsample).boxed()
-                        .mapToDouble(k -> kernel.apply(data.get(i), dataSubsample.get(k)) * svd.getU().getEntry(k, j) / (sqrtSingularValues[j] + EPSILON))
-                        .sum();
+                double sum = 0.;
+                for (int k = 0; k < numSubsample; k++) {
+                    sum += kernel.apply(data.get(i), dataSubsample.get(k)) * svd.getU().getEntry(k, j) * invSqrtSingularValues[j];
+                }
+                return sum;
             }
         });
         return reducedObservationMatrix;
