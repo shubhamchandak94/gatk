@@ -1,7 +1,5 @@
 package org.broadinstitute.hellbender.tools.copynumber.utils.segmentation;
 
-import htsjdk.samtools.util.Log;
-import org.broadinstitute.hellbender.utils.LoggingUtils;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
@@ -13,8 +11,6 @@ import java.util.Random;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import static org.testng.Assert.*;
 
 /**
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
@@ -46,17 +42,19 @@ public class KernelSegmenterUnitTest extends BaseTest {
     public void testKernelSegmenter(final List<Double> data,
                                     final BiFunction<Double, Double, Double> kernel,
                                     final List<Integer> changepointsExpected) {
-        LoggingUtils.setLoggingLevel(Log.LogLevel.INFO);
         final int maxNumChangepoints = 25;
         final int kernelApproximationDimension = 20;
         final List<Integer> windowSizes = Arrays.asList(8, 16, 32, 64);
         final double numChangepointsPenaltyLinearFactor = 2.;
         final double numChangepointsPenaltyLogLinearFactor = 2.;
 
-        final KernelSegmenter<Double> segmenter = new KernelSegmenter<>(data);
-        Assert.assertEquals(
-                segmenter.findChangepoints(maxNumChangepoints, kernel, kernelApproximationDimension, windowSizes,
-                        numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor),
-                changepointsExpected);
+        final List<Integer> changepoints = new KernelSegmenter<>(data)
+                .findChangepoints(maxNumChangepoints, kernel, kernelApproximationDimension, windowSizes,
+                        numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor, false);
+        final List<Integer> changepointsIndexSorted = new KernelSegmenter<>(data)
+                .findChangepoints(maxNumChangepoints, kernel, kernelApproximationDimension, windowSizes,
+                        numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor, true);
+        Assert.assertEquals(changepoints, changepointsExpected);
+        Assert.assertEquals(changepointsIndexSorted, changepointsExpected.stream().sorted().collect(Collectors.toList()));
     }
 }

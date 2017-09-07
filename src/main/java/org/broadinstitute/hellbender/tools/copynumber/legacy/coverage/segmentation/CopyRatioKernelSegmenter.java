@@ -2,6 +2,8 @@ package org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.segmentat
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hellbender.tools.copynumber.utils.segmentation.KernelSegmenter;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.Target;
@@ -9,7 +11,10 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -21,13 +26,15 @@ import java.util.stream.IntStream;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class CopyRatioKernelSegmenter {
+    private static final Logger logger = LogManager.getLogger(CopyRatioKernelSegmenter.class);
+
     //Gaussian kernel for a specified variance; if variance is zero, use a linear kernel
     private static final Function<Double, BiFunction<Double, Double, Double>> kernel =
             variance -> variance == 0.
                     ? (x, y) -> x * y
                     : (x, y) -> Math.exp(-(x - y) * (x - y) / variance);
 
-    private final List<SimpleInterval> intervals;
+    private final Map<String, List<SimpleInterval>> intervalsPerChromosome;
     private final Map<String, List<Double>> denoisedCopyRatiosPerChromosome;    //in log2 space
 
     /**
@@ -35,11 +42,11 @@ public final class CopyRatioKernelSegmenter {
      */
     public CopyRatioKernelSegmenter(final ReadCountCollection denoisedCopyRatioProfile) {
         Utils.nonNull(denoisedCopyRatioProfile);
-        intervals = denoisedCopyRatioProfile.targets().stream().map(Target::getInterval).collect(Collectors.toList());
+        intervalsPerChromosome = denoisedCopyRatioProfile.targets().stream().map(Target::getInterval).collect(Collectors.groupingBy(SimpleInterval::getContig));
         denoisedCopyRatiosPerChromosome = IntStream.range(0, denoisedCopyRatioProfile.targets().size()).boxed()
                 .map(i -> new ImmutablePair<>(
-                        intervals.get(i).getContig(),
-                        denoisedCopyRatioProfile.getRow(0)[i]))
+                        denoisedCopyRatioProfile.targets().get(i).getContig(),
+                        denoisedCopyRatioProfile.getColumn(0)[i]))
                 .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
     }
 
@@ -61,28 +68,30 @@ public final class CopyRatioKernelSegmenter {
 
         //loop over chromosomes, find changepoints, and create copy-ratio segments
         final List<CopyRatioSegmentationResult.CopyRatioSegment> segments = new ArrayList<>();
-        int numDataPointsProcessed = 0;
         for (final String chromosome : denoisedCopyRatiosPerChromosome.keySet()) {
+            logger.info(String.format("Finding changepoints in chromosome %s...", chromosome));
             final List<Double> denoisedCopyRatiosInChromosome = denoisedCopyRatiosPerChromosome.get(chromosome);
 
             final List<Integer> changepoints = new KernelSegmenter<>(denoisedCopyRatiosInChromosome)
                 .findChangepoints(maxNumChangepointsPerChromosome, kernel.apply(kernelVariance), kernelApproximationDimension,
-                        windowSizes, numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor);
+                        windowSizes, numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor, true);
 
             if (!changepoints.contains(denoisedCopyRatiosInChromosome.size())) {
-                changepoints.add(denoisedCopyRatiosInChromosome.size());
+                changepoints.add(denoisedCopyRatiosInChromosome.size() - 1);
             }
+            int previousChangepoint = -1;
             for (final int changepoint : changepoints) {
-                final int start = intervals.get(numDataPointsProcessed).getStart();
-                final int end = intervals.get(numDataPointsProcessed + changepoint).getEnd();
+                final int start = intervalsPerChromosome.get(chromosome).get(previousChangepoint + 1).getStart();
+                final int end = intervalsPerChromosome.get(chromosome).get(changepoint).getEnd();
                 final List<Double> denoisedCopyRatiosInSegment = denoisedCopyRatiosInChromosome.subList(
-                        numDataPointsProcessed, numDataPointsProcessed + changepoint + 1);
+                        previousChangepoint + 1, changepoint + 1);
                 segments.add(new CopyRatioSegmentationResult.CopyRatioSegment(
                         new SimpleInterval(chromosome, start, end),
                         denoisedCopyRatiosInSegment));
-                numDataPointsProcessed += denoisedCopyRatiosInSegment.size();
+                previousChangepoint = changepoint;
             }
         }
+        logger.info(String.format("Found %d segments in %d chromosomes.", segments.size(), denoisedCopyRatiosPerChromosome.keySet().size()));
         return new CopyRatioSegmentationResult(segments);
     }
 }

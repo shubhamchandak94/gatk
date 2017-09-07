@@ -142,6 +142,7 @@ public final class ModelSegments extends CommandLineProgram {
                 "Log-linear factor for the penalty on the number of changepoints per chromosome must be either zero or greater than or equal to 1.");
 
         //TODO clean this up once updated ReadCountCollection is available
+        logger.info(String.format("Reading denoised copy-ratio profile file (%s)...", inputDenoisedCopyRatioProfileFile));
         final String sampleName = ReadCountCollectionUtils.getSampleNameForCLIsFromReadCountsFile(new File(inputDenoisedCopyRatioProfileFile));
         final ReadCountCollection denoisedCopyRatioProfile;
         try {
@@ -150,16 +151,18 @@ public final class ModelSegments extends CommandLineProgram {
             throw new UserException.BadInput("Could not read input file.");
         }
 
-        //segment
+        logger.info("Starting copy-ratio segmentation...");
         final int maxNumChangepointsPerChromosome = maxNumSegmentsPerChromosome - 1;
         final CopyRatioSegmentationResult segments = new CopyRatioKernelSegmenter(denoisedCopyRatioProfile)
                 .findSegmentation(maxNumChangepointsPerChromosome, kernelVariance, kernelApproximationDimension,
                         ImmutableSet.copyOf(windowSizes).asList(),
                         numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor);
 
-        //TODO add copy-ratio modeller (+ smooth segments)
+        //TODO add copy-ratio modeller
 
-        //TODO output
+        segments.write(outputSegmentsFile, sampleName);
+
+        logger.info("Copy-ratio segmentation complete.");
 
         return "SUCCESS";
     }

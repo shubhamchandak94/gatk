@@ -40,6 +40,35 @@ public final class CopyRatioSegmentationResult {
             numDataPoints = denoisedCopyRatios.size();
             meanLog2CopyRatio = denoisedCopyRatios.stream().mapToDouble(Double::doubleValue).average().getAsDouble();
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final CopyRatioSegment that = (CopyRatioSegment) o;
+            if (numDataPoints != that.numDataPoints) {
+                return false;
+            }
+            if (Double.compare(that.meanLog2CopyRatio, meanLog2CopyRatio) != 0) {
+                return false;
+            }
+            return interval.equals(that.interval);
+        }
+
+        @Override
+        public int hashCode() {
+            int result;
+            long temp;
+            result = interval.hashCode();
+            result = 31 * result + numDataPoints;
+            temp = Double.doubleToLongBits(meanLog2CopyRatio);
+            result = 31 * result + (int) (temp ^ (temp >>> 32));
+            return result;
+        }
     }
 
     public CopyRatioSegmentationResult(final List<CopyRatioSegment> segments) {
@@ -64,5 +93,22 @@ public final class CopyRatioSegmentationResult {
         } catch (final IOException e) {
             throw new UserException.CouldNotCreateOutputFile(file, e);
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        final CopyRatioSegmentationResult that = (CopyRatioSegmentationResult) o;
+        return segments.equals(that.segments);
+    }
+
+    @Override
+    public int hashCode() {
+        return segments.hashCode();
     }
 }

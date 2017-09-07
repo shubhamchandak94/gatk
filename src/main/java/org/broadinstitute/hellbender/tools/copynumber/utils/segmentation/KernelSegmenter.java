@@ -1,6 +1,9 @@
 package org.broadinstitute.hellbender.tools.copynumber.utils.segmentation;
 
-import org.apache.commons.math3.linear.*;
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.DefaultRealMatrixChangingVisitor;
+import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.linear.SingularValueDecomposition;
 import org.apache.commons.math3.random.RandomGenerator;
 import org.apache.commons.math3.random.RandomGeneratorFactory;
 import org.apache.logging.log4j.LogManager;
@@ -87,7 +90,8 @@ public final class KernelSegmenter<T> {
     }
 
     /**
-     * Returns a list of the indices of the changepoints, sorted by descending change to the global segmentation cost.
+     * Returns a list of the indices of the changepoints, either sorted by decreasing change to the global segmentation cost
+     * or by increasing index order.
      * @param maxNumChangepoints                    maximum number of changepoints to return (first and last points do not count towards this number)
      * @param kernel                                kernel function used to calculate segment costs
      * @param kernelApproximationDimension          dimension of low-rank approximation to the kernel
@@ -95,13 +99,15 @@ public final class KernelSegmenter<T> {
      * @param numChangepointsPenaltyLinearFactor    factor A for penalty of the form A * C, where C is the number of changepoints
      * @param numChangepointsPenaltyLogLinearFactor factor B for penalty of the form B * C * log (N / C),
      *                                              where C is the number of changepoints and N is the number of data points
+     * @param sortByIndex                           if true, sort by increasing index order
      */
     public List<Integer> findChangepoints(final int maxNumChangepoints,
                                           final BiFunction<T, T, Double> kernel,
                                           final int kernelApproximationDimension,
                                           final List<Integer> windowSizes,
                                           final double numChangepointsPenaltyLinearFactor,
-                                          final double numChangepointsPenaltyLogLinearFactor) {
+                                          final double numChangepointsPenaltyLogLinearFactor,
+                                          final boolean sortByIndex) {
         ParamUtils.isPositiveOrZero(maxNumChangepoints, "Maximum number of changepoints must be non-negative.");
         ParamUtils.isPositive(kernelApproximationDimension, "Dimension of kernel approximation must be positive.");
         Utils.validateArg(windowSizes.stream().allMatch(ws -> ws > 0), "Window sizes must all be positive.");
@@ -116,7 +122,7 @@ public final class KernelSegmenter<T> {
             return Collections.emptyList();
         }
 
-        logger.info(String.format("Finding %d changepoints in %d data points...", maxNumChangepoints, data.size()));
+        logger.info(String.format("Finding up to %d changepoints in %d data points...", maxNumChangepoints, data.size()));
         final RandomGenerator rng = RandomGeneratorFactory.createRandomGenerator(new Random(RANDOM_SEED));
 
         logger.info("Calculating low-rank approximation to kernel matrix...");
@@ -130,7 +136,9 @@ public final class KernelSegmenter<T> {
         logger.info("Performing backwards model selection on changepoint candidates...");
         return selectChangepoints(
                 changepointCandidates, maxNumChangepoints, numChangepointsPenaltyLinearFactor, numChangepointsPenaltyLogLinearFactor,
-                reducedObservationMatrix, kernelApproximationDiagonal);
+                reducedObservationMatrix, kernelApproximationDiagonal).stream()
+                .sorted((a, b) -> sortByIndex ? Integer.compare(a, b) : 0)    //if sortByIndex = false, retain order from backwards model selection
+                .collect(Collectors.toList());
     }
 
     private static final class Segment {
@@ -213,7 +221,7 @@ public final class KernelSegmenter<T> {
             @Override
             public double visit(int i, int j, double value) {
                 return IntStream.range(0, numSubsample).boxed()
-                        .mapToDouble(k -> kernel.apply(data.get(i), dataSubsample.get(k)) * svd.getU().getEntry(k, j) / sqrtSingularValues[j])
+                        .mapToDouble(k -> kernel.apply(data.get(i), dataSubsample.get(k)) * svd.getU().getEntry(k, j) / (sqrtSingularValues[j] + EPSILON))
                         .sum();
             }
         });
