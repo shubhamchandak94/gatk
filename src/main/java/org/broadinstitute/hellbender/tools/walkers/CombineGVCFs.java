@@ -2,7 +2,6 @@ package org.broadinstitute.hellbender.tools.walkers;
 
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.SAMSequenceDictionary;
-import htsjdk.samtools.util.Locatable;
 import htsjdk.samtools.util.OverlapDetector;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
@@ -26,7 +25,6 @@ import org.broadinstitute.hellbender.tools.walkers.annotator.StandardAnnotation;
 import org.broadinstitute.hellbender.tools.walkers.annotator.VariantAnnotatorEngine;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
-import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedSampleList;
 import org.broadinstitute.hellbender.utils.genotyper.SampleList;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
@@ -158,7 +156,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     byte[] storedReference;
     private OverlapDetector overlapDetector;
     private boolean hasReduced = false;
-    private int storedReferenceStart;
+    private SimpleInterval storedReferenceLoc;
 
 
     /**
@@ -190,32 +188,42 @@ public final class CombineGVCFs extends MultiVariantWalker {
         } else if (!currentVariants.get(0).getContig().equals(variant.getContig())
                 || currentVariants.get(0).getStart()<variant.getStart()) {
             // Emptying any sites which should emit a new VC since the last one
-            if (hasReduced == true) {
-                // TODO eliminate the amount of string comparison
-                createIntermediateVariants(prevPos == null ? new SimpleInterval(VCs.get(0).getContig(), VCs.get(0).getStart(),
-                        (VCs.get(0).getContig().equals(currentPositionalState.loc.getContig())
-                                ? currentPositionalState.loc.getStart() - 1
-                                : VCs.get(0).getStart() + storedReference.length - 1 ))
-
-                        : new SimpleInterval(prevPos.getContig(), prevPos.getEnd(),
-                        prevPos.getContig().equals(currentPositionalState.loc.getContig())
-                                ? currentPositionalState.loc.getStart() - 1
-                                : prevPos.getStart() + storedReference.length - 1));// TODO this value is bad,
-            }
-
-            //TODO ^^^ YUCK!
-//==============================================//TODO, these values are bad becaus of problems
-            reduce(currentPositionalState);
-            storedReference = currentPositionalState.refBases; // TODO these get out of step with the loc
-            storedReferenceStart = currentPositionalState.loc.getStart();
+            reduceQueuedState();
             currentVariants.clear();
             currentVariants.add(variant);
             // TODO BE VERY CLEAR ABOUT THIS
         } else {
             currentVariants.add(variant);
         }
-        referenceContext.setWindow(0,1);
+        referenceContext.setWindow(1,1);
         updatePositionalState(currentVariants, referenceContext);
+    }
+
+    private void reduceQueuedState() {
+        if (hasReduced == true) {
+            // TODO eliminate the amount of string comparison
+            createIntermediateVariants(prevPos == null ? new SimpleInterval(VCs.get(0).getContig(), VCs.get(0).getStart(),
+                    (VCs.get(0).getContig().equals(currentPositionalState.loc.getContig())
+                            ? currentPositionalState.loc.getStart() - 1
+                            : VCs.get(0).getStart() + storedReference.length - 1 ))
+
+                    : new SimpleInterval(prevPos.getContig(), prevPos.getEnd(),
+                    prevPos.getContig().equals(currentPositionalState.loc.getContig())
+                            ? currentPositionalState.loc.getStart() - 1
+                            : prevPos.getStart() + storedReference.length - 1));// TODO this value is bad,
+        }
+
+        //TODO ^^^ YUCK!
+//==============================================//TODO, these values are bad becaus of problems
+        reduce(currentPositionalState);
+
+        // Update the stored reference if it has a later stop position than the current stored reference
+        if ( (storedReferenceLoc == null) ||
+                (!currentPositionalState.loc.getContig().equals(storedReferenceLoc.getContig()) ) ||
+                (storedReferenceLoc.getStart() + storedReference.length < currentPositionalState.loc.getStart() + currentPositionalState.refBases.length)) {
+            storedReference = currentPositionalState.refBases;
+            storedReferenceLoc = currentPositionalState.refBasesStart;
+        }
     }
 
 
@@ -238,7 +246,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
         for (VariantContext vc : VCs) {
             if (vc.getNAlleles() > 2) {
                 //TODO BE VERY SURE ABOUT ENDING AFTER WHEN WE WANT!!!!!!!!!!!!!!!
-                for (int i = vc.getStart(); i < vc.getEnd(); i++ ) {
+                for (int i = vc.getStart(); i <= vc.getEnd(); i++ ) {
                     sitesToStop.add(i);
                 }
             } else if (vc.getEnd() <= intervalToClose.getEnd()) {
@@ -252,8 +260,8 @@ public final class CombineGVCFs extends MultiVariantWalker {
         for (int i : stoppedPlaces) {
             //TODO be sure about these reference bases and how to get them
             SimpleInterval loc = new SimpleInterval(intervalToClose.getContig(),i,i);
-            if (( i>= intervalToClose.getStart())&&(overlapDetector==null || overlapDetector.overlapsAny(loc))) {//TODO speed of this check?
-                byte[] refBases = Arrays.copyOfRange(storedReference, i - storedReferenceStart, i - storedReferenceStart + 1);
+            if (( i <= intervalToClose.getEnd() && i>= intervalToClose.getStart()) && (overlapDetector==null || overlapDetector.overlapsAny(loc))) {
+                byte[] refBases = Arrays.copyOfRange(storedReference, i - storedReferenceLoc.getStart(), i - storedReferenceLoc.getStart() + 1);
                 PositionalState tmp = new PositionalState(Collections.emptyList(), refBases, new SimpleInterval(intervalToClose.getContig(), i, i));
                 endPreviousStates(tmp.loc, refBases, tmp, true);
             }
@@ -274,6 +282,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
             currentPositionalState.VCs.addAll(currentVariants);
             currentPositionalState.refBases = (referenceContext.getBases().length > currentPositionalState.refBases.length?
                     referenceContext.getBases() : currentPositionalState.refBases);
+            currentPositionalState.refBasesStart = referenceContext.getWindow();
         }
     }
 
@@ -282,6 +291,8 @@ public final class CombineGVCFs extends MultiVariantWalker {
         final Set<String> samples = new HashSet<>();
         byte[] refBases;
         SimpleInterval loc;
+        public SimpleInterval refBasesStart;
+
         public PositionalState(final List<VariantContext> VCs, final byte[] refBases, final SimpleInterval loc) {
             this.VCs = VCs;
             for(final VariantContext vc : VCs){
@@ -329,8 +340,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
         if ( !startingStates.VCs.isEmpty() ) {
             if ( ! okayToSkipThisSite(startingStates) ) {
                 SimpleInterval loc = startingStates.loc;
-                endPreviousStates( new SimpleInterval(loc.getContig(),loc.getStart()-1,loc.getStart()-1), startingStates.refBases, startingStates, false);
-                //TODO check this one
+                endPreviousStates( new SimpleInterval(loc.getContig(),loc.getStart()-1,loc.getStart()-1), Arrays.copyOfRange(startingStates.refBases, 1,startingStates.refBases.length), startingStates, false);
             }
             VCs.addAll(startingStates.VCs);
             for(final VariantContext vc : VCs){
@@ -537,12 +547,11 @@ public final class CombineGVCFs extends MultiVariantWalker {
             logger.warn("You have asked for an interval does not contain any data in source GVCFs");
 
         } else{
-            reduce(currentPositionalState);
-            storedReference = currentPositionalState.refBases;
-            storedReferenceStart = currentPositionalState.loc.getStart();
+            reduceQueuedState();
+
+            // Create variants with whatever remains
             SimpleInterval interval = prevPos != null ? new SimpleInterval(prevPos.getContig(), prevPos.getStart(), prevPos.getStart() + storedReference.length + 1) :
                     currentPositionalState.loc;
-
             createIntermediateVariants(interval);
         }
 
