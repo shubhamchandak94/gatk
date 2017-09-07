@@ -43,10 +43,11 @@ public final class CopyRatioKernelSegmenter {
     public CopyRatioKernelSegmenter(final ReadCountCollection denoisedCopyRatioProfile) {
         Utils.nonNull(denoisedCopyRatioProfile);
         intervalsPerChromosome = denoisedCopyRatioProfile.targets().stream().map(Target::getInterval).collect(Collectors.groupingBy(SimpleInterval::getContig));
+        final double[] denoisedCopyRatios = denoisedCopyRatioProfile.getColumn(0);
         denoisedCopyRatiosPerChromosome = IntStream.range(0, denoisedCopyRatioProfile.targets().size()).boxed()
                 .map(i -> new ImmutablePair<>(
                         denoisedCopyRatioProfile.targets().get(i).getContig(),
-                        denoisedCopyRatioProfile.getColumn(0)[i]))
+                        denoisedCopyRatios[i]))
                 .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
     }
 

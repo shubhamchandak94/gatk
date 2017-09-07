@@ -72,7 +72,7 @@ public final class ModelSegments extends CommandLineProgram {
             optional = true,
             minValue = 1
     )
-    private int maxNumSegmentsPerChromosome = 100;
+    private int maxNumSegmentsPerChromosome = 50;
 
     @Argument(
             doc = "Variance of Gaussian kernel.  If zero, a linear kernel will be used.",
