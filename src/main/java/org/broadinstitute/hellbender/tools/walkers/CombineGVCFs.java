@@ -277,6 +277,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     private void updatePositionalState(List<VariantContext> currentVariants, ReferenceContext referenceContext) {
         if (currentVariants.size()==1 ) {
             currentPositionalState = new PositionalState(new ArrayList<>(currentVariants), referenceContext.getBases(), referenceContext.getInterval());
+            currentPositionalState.refBasesStart = referenceContext.getWindow();
         } else {
             currentPositionalState.VCs.clear();
             currentPositionalState.VCs.addAll(currentVariants);
