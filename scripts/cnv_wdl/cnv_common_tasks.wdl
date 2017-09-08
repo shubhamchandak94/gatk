@@ -38,8 +38,8 @@ task PadTargets {
     }
 }
 
-# Collect proportional coverage
-task CollectCoverage {
+# Collect read counts
+task CollectReadCounts {
     File? padded_targets
     File bam
     File bam_idx
@@ -80,7 +80,7 @@ task CollectCoverage {
                     --disableSequenceDictionaryValidation ${default="true" disable_sequence_dictionary_validation} \
                     $(if [ ${default="true" keep_duplicate_reads} = true ]; then echo " --disableReadFilter NotDuplicateReadFilter "; else echo ""; fi) \
                     --outputFile ${base_filename}.coverage.tsv \
-                    --writeRawHdf5
+                    --writeHdf5
             else
                 java -Xmx${default=4 mem}g -jar ${gatk_jar} CalculateTargetCoverage \
                     --input ${bam} \
@@ -103,7 +103,7 @@ task CollectCoverage {
     runtime {
         docker: "${gatk_docker}"
         memory: select_first([mem, 5]) + " GB"
-        disks: "local-disk " + select_first([disk_space_gb, ceil(size(bam, "GB"))+50]) + " HDD"
+        disks: "local-disk " + select_first([disk_space_gb, ceil(size(bam, "GB")) + 50]) + " HDD"
         preemptible: select_first([preemptible_attempts, 2])
     }
 
@@ -138,7 +138,7 @@ task AnnotateTargets {
     runtime {
         docker: "${gatk_docker}"
         memory: select_first([mem, 5]) + " GB"
-        disks: "local-disk " + select_first([disk_space_gb, ceil(size(ref_fasta, "GB"))+50]) + " HDD"
+        disks: "local-disk " + select_first([disk_space_gb, ceil(size(ref_fasta, "GB")) + 50]) + " HDD"
         preemptible: select_first([preemptible_attempts, 2])
     }
 

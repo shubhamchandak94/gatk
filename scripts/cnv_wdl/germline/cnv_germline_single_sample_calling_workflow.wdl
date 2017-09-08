@@ -77,8 +77,7 @@ workflow gCNVSingleSampleWorkflow {
       ref_fasta_fai = ref_fasta_fai,
       ref_fasta_dict = ref_fasta_dict,
       gatk_jar = gatk_jar,
-      gatk_docker = gatk_docker,
-      transform = "RAW"
+      gatk_docker = gatk_docker
   }
 
   call CNVTasks.AnnotateTargets {

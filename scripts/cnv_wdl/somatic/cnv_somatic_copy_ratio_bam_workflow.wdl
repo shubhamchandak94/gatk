@@ -21,13 +21,14 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     File ref_fasta_dict
     File ref_fasta_fai
     File cnv_panel_of_normals
+    Boolean do_gc_correction
     String gatk_jar
     String gatk_docker
 
     # If no padded target file is input, then do WGS workflow
-    Boolean is_wgs = select_first([padded_targets, ""]) == ""
+    Boolean is_wgs = !defined(padded_targets)
 
-    call CNVTasks.CollectCoverage {
+    call CNVTasks.CollectReadCounts {
         input:
             padded_targets = padded_targets,
             bam = bam,
@@ -39,22 +40,10 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
             gatk_docker = gatk_docker
     }
 
-    call CNVTasks.AnnotateTargets {
-        input:
-            entity_id = CollectCoverage.entity_id,
-            targets = CollectCoverage.coverage,
-            ref_fasta = ref_fasta,
-            ref_fasta_fai = ref_fasta_fai,
-            ref_fasta_dict = ref_fasta_dict,
-            gatk_jar = gatk_jar,
-            gatk_docker = gatk_docker
-    }
-
     call DenoiseReadCounts {
         input:
             entity_id = CollectCoverage.entity_id,
-            coverage = CorrectGCBias.corrected_coverage,
-            padded_targets = AnnotateTargets.annotated_targets,
+            read_counts = CollectCoverage.read_counts,
             cnv_panel_of_normals = cnv_panel_of_normals,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
@@ -63,7 +52,7 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     call ModelSegments {
         input:
             entity_id = CollectCoverage.entity_id,
-            tn_coverage = DenoiseReadCounts.denoised_coverage,
+            denoised_copy_ratios = DenoiseReadCounts.denoised_copy_ratios,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
     }
@@ -71,8 +60,8 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     call CallSegments {
         input:
             entity_id = CollectCoverage.entity_id,
-            tn_coverage = NormalizeSomaticReadCounts.tn_coverage,
-            segments = PerformSegmentation.segments,
+            denoised_copy_ratios = DenoiseReadCounts.denoised_copy_ratios,
+            segments = ModelSegments.copy_ratio_segments,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
     }
@@ -80,9 +69,9 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     call PlotSegmentedCopyRatio  {
         input:
             entity_id = CollectCoverage.entity_id,
-            tn_coverage = NormalizeSomaticReadCounts.tn_coverage,
-            pre_tn_coverage = NormalizeSomaticReadCounts.pre_tn_coverage,
-            called_segments = CallSegments.called_segments,
+            standardized_copy_ratios = DenoiseReadCounts.standardized_copy_ratios,
+            denoised_copy_ratios = DenoiseReadCounts.denoised_copy_ratios,
+            called_copy_ratio_segments = CallSegments.called_copy_ratio_segments,
             ref_fasta_dict = ref_fasta_dict,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
@@ -91,17 +80,20 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     output {
         String entity_id = CollectCoverage.entity_id
         File coverage = CollectCoverage.coverage
-        File tn_coverage = DenoiseReadCounts.tn_coverage
+        File denoised_coverage = DenoiseReadCounts
         File called_segments = CallSegments.called_segments
+        File segments_plot = "${output_dir_}/${entity_id}_FullGenome.png"
+        File before_after_normalization_plot = "${output_dir_}/${entity_id}_Before_After.png"
+        File before_after_cr_lim_4 = "${output_dir_}/${entity_id}_Before_After_CR_Lim_4.png"
     }
 }
 
 # Denoise the coverage
-task NormalizeSomaticReadCounts {
+task DenoiseReadCounts {
     String entity_id
-    File coverage
-    File padded_targets
+    File read_counts
     File read_count_panel_of_normals
+    Int? number_of_eigensamples
     String gatk_jar
 
     # Runtime parameters
@@ -112,11 +104,11 @@ task NormalizeSomaticReadCounts {
 
     command {
         java -Xmx${default=4 mem}g -jar ${gatk_jar} NormalizeSomaticReadCounts \
-            --input ${coverage} \
-            --targets ${padded_targets} \
+            --input ${read_counts} \
             --panelOfNormals ${read_count_panel_of_normals} \
-            --denoisedCR ${entity_id}.denoisedCR.tsv \
-            --standardizedCR ${entity_id}.standardizedCR.tsv
+            --numberOfEigensamples ${default="null" number_of_eigensamples} \
+            --standardizedCR ${entity_id}.standardizedCR.tsv \
+            --denoisedCR ${entity_id}.denoisedCR.tsv
     }
 
     runtime {
@@ -127,27 +119,21 @@ task NormalizeSomaticReadCounts {
     }
 
     output {
-        File standardized_coverage = "${entity_id}.standardizedCR.tsv"
-        File denoised_coverage = "${entity_id}.denoisedCR.tsv"
+        File standardized_copy_ratios = "${entity_id}.standardizedCR.tsv"
+        File denoised_copy_ratios = "${entity_id}.denoisedCR.tsv"
     }
 }
 
 # Segment the denoised copy-ratio profile
-task PerformSegmentation {
+task ModelSegments {
     String entity_id
-    File tn_coverage
-    Boolean is_wgs
-    Float? seg_param_alpha
-    Float? seg_param_eta
-    Int? seg_param_kmax
-    Int? seg_param_minWidth
-    Int? seg_param_nmin
-    Int? seg_param_nperm
-    String? seg_param_pmethod
-    Float? seg_param_trim
-    Float? seg_param_undoPrune
-    Int? seg_param_undoSD
-    String? seg_param_undoSplits
+    File denoised_copy_ratios
+    Int? max_num_segments_per_chromosome
+    Float? kernel_variance
+    Int? kernel_approximation_dimension
+    Array[Int]? window_sizes
+    Float? num_changepoints_penalty_linear_factor
+    Float? num_changepoints_penalty_log_linear_factor
     String gatk_jar
 
     # Runtime parameters
@@ -156,42 +142,17 @@ task PerformSegmentation {
     Int? preemptible_attempts
     Int? disk_space_gb
 
-    command <<<
-        if [ ${is_wgs} = true ]
-            then
-                java -Xmx${default=4 mem}g -jar ${gatk_jar} PerformSegmentation \
-                    --tangentNormalized ${tn_coverage} \
-                    --log2Input true \
-                    --alpha ${default="0.01" seg_param_alpha} \
-                    --eta ${default="0.05" seg_param_eta} \
-                    --kmax ${default=25 seg_param_kmax} \
-                    --minWidth ${default=2 seg_param_minWidth} \
-                    --nmin ${default=200 seg_param_nmin} \
-                    --nperm ${default=10000 seg_param_nperm} \
-                    --pmethod ${default="HYBRID" seg_param_pmethod} \
-                    --trim ${default="0.025" seg_param_trim} \
-                    --undoPrune ${default="0.05" seg_param_undoPrune} \
-                    --undoSD ${default=3 seg_param_undoSD} \
-                    --undoSplits ${default="SDUNDO" seg_param_undoSplits} \
-                    --output ${entity_id}.seg
-            else
-                java -Xmx${default=4 mem}g -jar ${gatk_jar} PerformSegmentation \
-                    --tangentNormalized ${tn_coverage} \
-                    --log2Input true \
-                    --alpha ${default="0.01" seg_param_alpha} \
-                    --eta ${default="0.05" seg_param_eta} \
-                    --kmax ${default=25 seg_param_kmax} \
-                    --minWidth ${default=2 seg_param_minWidth} \
-                    --nmin ${default=200 seg_param_nmin} \
-                    --nperm ${default=10000 seg_param_nperm} \
-                    --pmethod ${default="HYBRID" seg_param_pmethod} \
-                    --trim ${default="0.025" seg_param_trim} \
-                    --undoPrune ${default="0.05" seg_param_undoPrune} \
-                    --undoSD ${default=2 seg_param_undoSD} \
-                    --undoSplits ${default="NONE" seg_param_undoSplits} \
-                    --output ${entity_id}.seg
-        fi
-    >>>
+    command {
+        java -Xmx${default=4 mem}g -jar ${gatk_jar} ModelSegments \
+            --input ${denoised_copy_ratios} \
+            --maxNumSegmentsPerChromosome ${default="50" max_num_segments_per_chromosome} \
+            --kernelVariance ${default="0." kernel_variance} \
+            --kernelApproximationDimension ${default="100" kernel_approximation_dimension} \
+            --windowSizes ${default="[8, 16, 32, 64, 128, 256]" window_sizes} \
+            --numChangepointsPenaltyLinearFactor ${default="1." num_changepoints_penalty_linear_factor} \
+            --numChangepointsPenaltyLogLinearFactor ${default="1." num_changepoints_penalty_log_linear_factor} \
+            --output ${entity_id}.seg
+    }
 
     runtime {
         docker: "${gatk_docker}"
@@ -201,15 +162,15 @@ task PerformSegmentation {
     }
 
     output {
-        File segments = "${entity_id}.seg"
+        File copy_ratio_segments = "${entity_id}.seg"
     }
 }
 
 # Make calls (amplified, neutral, or deleted) on each segment
 task CallSegments {
     String entity_id
-    File tn_coverage
-    File segments
+    File denoised_copy_ratios
+    File copy_ratio_segments
     String gatk_jar
 
     # Runtime parameters
@@ -220,8 +181,8 @@ task CallSegments {
 
     command {
         java -Xmx${default=4 mem}g -jar ${gatk_jar} CallSegments \
-            --tangentNormalized ${tn_coverage} \
-            --segments ${segments} \
+            --tangentNormalized ${denoised_copy_ratios} \
+            --segments ${copy_ratio_segments} \
             --legacy false \
             --output ${entity_id}.called
     }
@@ -234,16 +195,16 @@ task CallSegments {
     }
 
     output {
-        File called_segments = "${entity_id}.called"
+        File called_copy_ratio_segments = "${entity_id}.called"
     }
 }
 
 # Create plots of coverage data and copy-ratio estimates
 task PlotSegmentedCopyRatio {
     String entity_id
-    File tn_coverage
-    File pre_tn_coverage
-    File called_segments
+    File standardized_copy_ratios
+    File denoised_copy_ratios
+    File called_copy_ratio_segments
     File ref_fasta_dict
     String? output_dir
     String gatk_jar
@@ -259,9 +220,9 @@ task PlotSegmentedCopyRatio {
     command {
         mkdir -p ${output_dir_}; \
         java -Xmx${default=4 mem}g -jar ${gatk_jar} PlotSegmentedCopyRatio \
-            --tangentNormalized ${tn_coverage} \
-            --preTangentNormalized ${pre_tn_coverage} \
-            --segments ${called_segments} \
+            --preTangentNormalized ${standardized_copy_ratios} \
+            --tangentNormalized ${denoised_copy_ratios} \
+            --segments ${called_copy_ratio_segments} \
             -SD ${ref_fasta_dict} \
             --output ${output_dir_} \
             --outputPrefix ${entity_id}
