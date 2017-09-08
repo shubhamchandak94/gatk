@@ -12,7 +12,7 @@ import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignmentResult;
 public abstract class SWNativeAlignerWrapper implements SmithWatermanAligner {
     private final SWAlignerNativeBinding aligner;
 
-    protected SWNativeAlignerWrapper(final SWAlignerNativeBinding aligner, final SWAlignerArguments.Weights weights, final SWAlignerArguments.OverhangStrategy overhangStrategy) {
+    protected SWNativeAlignerWrapper(final SWAlignerNativeBinding aligner, final SWAlignerArguments.Parameters weights, final SWAlignerArguments.OverhangStrategy overhangStrategy) {
         this.aligner = aligner;
         this.aligner.initialize(new SWAlignerArguments(overhangStrategy, weights));
     }

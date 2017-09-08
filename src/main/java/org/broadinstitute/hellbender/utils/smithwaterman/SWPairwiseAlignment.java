@@ -34,7 +34,7 @@ public final class SWPairwiseAlignment implements SmithWatermanAligner {
         CLIP
     }
 
-    private final SWAlignerArguments.Weights parameters;
+    private final SWAlignerArguments.Parameters parameters;
     private final SWAlignerArguments.OverhangStrategy overhangStrategy;
 
     private static final boolean cutoff = false;
@@ -57,7 +57,7 @@ public final class SWPairwiseAlignment implements SmithWatermanAligner {
      * @param parameters the SW parameters to use
      * @param strategy   the overhang strategy to use
      */
-    public SWPairwiseAlignment(final SWAlignerArguments.Weights parameters, final SWAlignerArguments.OverhangStrategy strategy) {
+    public SWPairwiseAlignment(final SWAlignerArguments.Parameters parameters, final SWAlignerArguments.OverhangStrategy strategy) {
         Utils.nonNull(parameters);
         Utils.nonNull(strategy);
         this.parameters = parameters;
@@ -114,7 +114,7 @@ public final class SWPairwiseAlignment implements SmithWatermanAligner {
      * @param overhangStrategy    the strategy to use for dealing with overhangs
      * @param parameters
      */
-    private static void calculateMatrix(final byte[] reference, final byte[] alternate, final int[][] sw, final int[][] btrack, final SWAlignerArguments.OverhangStrategy overhangStrategy, SWAlignerArguments.Weights parameters) {
+    private static void calculateMatrix(final byte[] reference, final byte[] alternate, final int[][] sw, final int[][] btrack, final SWAlignerArguments.OverhangStrategy overhangStrategy, SWAlignerArguments.Parameters parameters) {
         if ( reference.length == 0 || alternate.length == 0 ) {
             throw new IllegalArgumentException("Non-null, non-empty sequences are required for the Smith-Waterman calculation");
         }

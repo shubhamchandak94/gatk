@@ -32,13 +32,13 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String ref1     = "AAAGACTACTG";
         final String read1    = "AACGGACACTG";
         return new Object[][] {
-                {ref1, read1, new SWAlignerArguments.Weights( 50, -100, -220, -12), 1,  "2M2I3M1D4M"},
-                {ref1, read1, new SWAlignerArguments.Weights(200, -50, -300, -22), 0, "11M"}
+                {ref1, read1, new SWAlignerArguments.Parameters( 50, -100, -220, -12), 1,  "2M2I3M1D4M"},
+                {ref1, read1, new SWAlignerArguments.Parameters(200, -50, -300, -22), 0, "11M"}
         };
     }
 
     @Test(dataProvider = "OddNoAlignment")
-    public void testOddNoAlignment(final String reference, final String read, final SWAlignerArguments.Weights weights,
+    public void testOddNoAlignment(final String reference, final String read, final SWAlignerArguments.Parameters weights,
                                    final int expectedStart, final String expectedCigar) {
         assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, weights,
                                        SWAlignerArguments.OverhangStrategy.SOFTCLIP);
@@ -128,7 +128,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
                                        strategy);
     }
 
-    private static void assertAlignmentMatchesExpected(String reference, String read, int expectedStart, String expectedCigar, SWAlignerArguments.Weights weights, SWAlignerArguments.OverhangStrategy strategy) {
+    private static void assertAlignmentMatchesExpected(String reference, String read, int expectedStart, String expectedCigar, SWAlignerArguments.Parameters weights, SWAlignerArguments.OverhangStrategy strategy) {
         final SWPairwiseAlignment sw = new SWPairwiseAlignment(weights, strategy);
         final SmithWatermanAlignment alignment = sw.align(reference.getBytes(), read.getBytes());
         sw.printAlignment(reference.getBytes(), read.getBytes(), alignment);

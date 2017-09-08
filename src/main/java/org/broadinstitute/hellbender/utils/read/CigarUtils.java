@@ -15,7 +15,7 @@ public final class CigarUtils {
 
     // used in the bubble state machine to apply Smith-Waterman to the bubble sequence
     // these values were chosen via optimization against the NA12878 knowledge base
-    public static final SWAlignerArguments.Weights NEW_SW_PARAMETERS = new SWAlignerArguments.Weights(200, -150, -260, -11);
+    public static final SWAlignerArguments.Parameters NEW_SW_PARAMETERS = new SWAlignerArguments.Parameters(200, -150, -260, -11);
 
     private static final String SW_PAD = "NNNNNNNNNN";
 
