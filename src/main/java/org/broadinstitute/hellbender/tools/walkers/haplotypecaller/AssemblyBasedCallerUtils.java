@@ -6,6 +6,7 @@ import htsjdk.samtools.reference.ReferenceSequenceFile;
 import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.VariantContext;
 import org.apache.logging.log4j.Logger;
+import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
 import org.broadinstitute.hellbender.engine.AssemblyRegion;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.readthreading.ReadThreadingAssembler;
@@ -20,7 +21,7 @@ import org.broadinstitute.hellbender.utils.genotyper.SampleList;
 import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
 import org.broadinstitute.hellbender.utils.haplotype.HaplotypeBAMWriter;
 import org.broadinstitute.hellbender.utils.read.*;
-import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
+import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAligner;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 
 import java.io.File;
@@ -42,7 +43,7 @@ public final class AssemblyBasedCallerUtils {
      * </p>
      * @return never {@code null}
      */
-    public static Map<GATKRead, GATKRead> realignReadsToTheirBestHaplotype(final ReadLikelihoods<Haplotype> originalReadLikelihoods, final Haplotype refHaplotype, final Locatable paddedReferenceLoc, final SWPairwiseAlignment aligner) {
+    public static Map<GATKRead, GATKRead> realignReadsToTheirBestHaplotype(final ReadLikelihoods<Haplotype> originalReadLikelihoods, final Haplotype refHaplotype, final Locatable paddedReferenceLoc, final SmithWatermanAligner aligner) {
         final Collection<ReadLikelihoods<Haplotype>.BestAllele> bestAlleles = originalReadLikelihoods.bestAlleles();
         final Map<GATKRead, GATKRead> result = new HashMap<>(bestAlleles.size());
 
@@ -255,9 +256,17 @@ public final class AssemblyBasedCallerUtils {
                         fullReferenceWithPadding) :
                 null;
 
-        try {
+        try(final SmithWatermanAligner softClippingAligner = SmithWatermanAligner.getAligner(CigarUtils.NEW_SW_PARAMETERS,
+                                                                                             SWAlignerArguments.OverhangStrategy.SOFTCLIP,
+                                                                                             argumentCollection.smithWatermanImplementation);
+            final SmithWatermanAligner leadingIndelAligner = SmithWatermanAligner.getAligner(SmithWatermanAligner.STANDARD_NGS_PARAMETERS,
+                                                                                             SWAlignerArguments.OverhangStrategy.LEADING_INDEL,
+                                                                                             argumentCollection.smithWatermanImplementation))
+        {
+
             final AssemblyResultSet assemblyResultSet = assemblyEngine.runLocalAssembly(region, referenceHaplotype, fullReferenceWithPadding,
-                    paddedReferenceLoc, givenAlleles, readErrorCorrector, header);
+                                                                                        paddedReferenceLoc, givenAlleles, readErrorCorrector, header, softClippingAligner,
+                                                                                        leadingIndelAligner);
             assemblyResultSet.debugDump(logger);
             return assemblyResultSet;
         } catch (final Exception e){

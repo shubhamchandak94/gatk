@@ -6,7 +6,6 @@ import htsjdk.samtools.CigarOperator;
 import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
 import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAligner;
 import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAlignment;
 
@@ -268,11 +267,13 @@ public final class CigarUtils {
      * Calculate the cigar elements for this path against the reference sequence
      *
      * @param refSeq the reference sequence that all of the bases in this path should align to
+     * @param aligner a SmithWatermanAligner instance to use to do the alignment
      * @return a Cigar mapping this path to refSeq, or null if no reasonable alignment could be found
      */
-    public static Cigar calculateCigar(final byte[] refSeq, final byte[] altSeq) {
+    public static Cigar calculateCigar(final byte[] refSeq, final byte[] altSeq, final SmithWatermanAligner aligner) {
         Utils.nonNull(refSeq, "refSeq");
         Utils.nonNull(altSeq, "altSeq");
+        Utils.nonNull(aligner, "aligner");
         if ( altSeq.length == 0 ) {
             // horrible edge case from the unit tests, where this path has no bases
             return new Cigar(Collections.singletonList(new CigarElement(refSeq.length, CigarOperator.D)));
@@ -290,8 +291,7 @@ public final class CigarUtils {
 
         final String paddedRef = SW_PAD + new String(refSeq) + SW_PAD;
         final String paddedPath = SW_PAD + new String(altSeq) + SW_PAD;
-        final SmithWatermanAlignment alignment = new SWPairwiseAlignment(NEW_SW_PARAMETERS, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY)
-                .align(paddedRef.getBytes(), paddedPath.getBytes());
+        final SmithWatermanAlignment alignment = aligner.align(paddedRef.getBytes(), paddedPath.getBytes());
 
         if ( isSWFailure(alignment) ) {
             return null;

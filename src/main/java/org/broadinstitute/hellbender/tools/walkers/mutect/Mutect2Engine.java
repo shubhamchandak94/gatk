@@ -8,6 +8,7 @@ import htsjdk.variant.vcf.*;
 import org.apache.commons.math3.util.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
 import org.broadinstitute.hellbender.engine.*;
 import org.broadinstitute.hellbender.engine.filters.MappingQualityReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
@@ -32,7 +33,7 @@ import org.broadinstitute.hellbender.utils.pileup.ReadPileup;
 import org.broadinstitute.hellbender.utils.read.CigarUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
-import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
+import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAligner;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 
@@ -229,10 +230,15 @@ public final class Mutect2Engine implements AssemblyRegionEvaluator {
         final Map<String,List<GATKRead>> reads = splitReadsBySample( regionForGenotyping.getReads() );
 
         final ReadLikelihoods<Haplotype> readLikelihoods = likelihoodCalculationEngine.computeReadLikelihoods(assemblyResult,samplesList,reads);
-        final Map<GATKRead,GATKRead> readRealignments = AssemblyBasedCallerUtils.realignReadsToTheirBestHaplotype(readLikelihoods, assemblyResult.getReferenceHaplotype(), assemblyResult.getPaddedReferenceLoc(),
-                                                                                                                  new SWPairwiseAlignment(
-                                                                                                                          CigarUtils.NEW_SW_PARAMETERS,
-                                                                                                                          SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY));
+
+        final Map<GATKRead, GATKRead> readRealignments;
+        try(final SmithWatermanAligner aligner = SmithWatermanAligner.getAligner(CigarUtils.NEW_SW_PARAMETERS,
+                                                                                 SWAlignerArguments.OverhangStrategy.SOFTCLIP,
+                                                                                 MTAC.smithWatermanImplementation))
+        {
+            readRealignments = AssemblyBasedCallerUtils.realignReadsToTheirBestHaplotype(
+                    readLikelihoods, assemblyResult.getReferenceHaplotype(), assemblyResult.getPaddedReferenceLoc(), aligner);
+        }
         readLikelihoods.changeReads(readRealignments);
 
         final HaplotypeCallerGenotypingEngine.CalledHaplotypes calledHaplotypes = genotypingEngine.callMutations(

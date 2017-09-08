@@ -9,6 +9,7 @@ import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
 import org.broadinstitute.hellbender.utils.pileup.PileupElement;
 import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
+import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAligner;
 import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAlignment;
 
 import java.util.*;
@@ -59,7 +60,7 @@ public final class AlignmentUtils {
                                                   final Haplotype refHaplotype,
                                                   final int referenceStart,
                                                   final boolean isInformative,
-                                                  final SWPairwiseAlignment aligner) {
+                                                  final SmithWatermanAligner aligner) {
         Utils.nonNull(originalRead);
         Utils.nonNull(haplotype);
         Utils.nonNull(refHaplotype);

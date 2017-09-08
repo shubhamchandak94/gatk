@@ -23,8 +23,8 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
 
     @Test(dataProvider = "ComplexReadAlignedToRef")
     public void testReadAlignedToRefComplexAlignment(final String reference, final String read, final int expectedStart, final String expectedCigar) {
-        assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, SWPairwiseAlignment.ORIGINAL_DEFAULT,
-                                       SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY);
+        assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, SmithWatermanAligner.ORIGINAL_DEFAULT_PARAMETERS,
+                                       SWAlignerArguments.OverhangStrategy.SOFTCLIP);
     }
 
     @DataProvider(name = "OddNoAlignment")
@@ -40,7 +40,8 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
     @Test(dataProvider = "OddNoAlignment")
     public void testOddNoAlignment(final String reference, final String read, final SWAlignerArguments.Weights weights,
                                    final int expectedStart, final String expectedCigar) {
-        assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, weights, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY);
+        assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, weights,
+                                       SWAlignerArguments.OverhangStrategy.SOFTCLIP);
     }
 
     @Test
@@ -50,7 +51,8 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String read      = match + "GGG";
         final int expectedStart = 3;
         final String expectedCigar = "5M3S";
-        assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, SWPairwiseAlignment.ORIGINAL_DEFAULT, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY);
+        assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, SmithWatermanAligner.ORIGINAL_DEFAULT_PARAMETERS,
+                                       SWAlignerArguments.OverhangStrategy.SOFTCLIP);
     }
 
     @Test
@@ -60,8 +62,8 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String alt =               "ACAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGA";
         final int expectedStart = 14;
         final String expectedCigar = "31M20S";
-        assertAlignmentMatchesExpected(ref, alt, expectedStart, expectedCigar, SWPairwiseAlignment.STANDARD_NGS,
-                                       SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY);
+        assertAlignmentMatchesExpected(ref, alt, expectedStart, expectedCigar, SmithWatermanAligner.STANDARD_NGS_PARAMETERS,
+                                       SWAlignerArguments.OverhangStrategy.SOFTCLIP);
     }
 
     @Test
@@ -82,7 +84,8 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String paddedsHap = SW_PAD + new String(paddedHap) + SW_PAD;
         final String notPaddedsRef = SW_PAD + new String(notPaddedRef) + SW_PAD;
         final String notpaddedsHap = SW_PAD + new String(notPaddedHap) + SW_PAD;
-        final SmithWatermanAligner aligner = new SWPairwiseAlignment(CigarUtils.NEW_SW_PARAMETERS, SWPairwiseAlignment.DEFAULT_OVERHANG_STRATEGY);
+        final SmithWatermanAligner aligner = new SWPairwiseAlignment(CigarUtils.NEW_SW_PARAMETERS,
+                                                                     SWAlignerArguments.OverhangStrategy.SOFTCLIP);
         final SmithWatermanAlignment paddedAlignment = aligner.align(paddedsRef.getBytes(), paddedsHap.getBytes());
         final SmithWatermanAlignment notPaddedAlignment = aligner.align(notPaddedsRef.getBytes(), notpaddedsHap.getBytes());
         //Now verify that the two sequences have the same alignment and not match positions.
@@ -121,7 +124,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
         final String matchingSection = "CCCCC";
         final String reference = "AAA" + matchingSection;
         final String read = matchingSection;
-        assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, SWPairwiseAlignment.ORIGINAL_DEFAULT,
+        assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, SmithWatermanAligner.ORIGINAL_DEFAULT_PARAMETERS,
                                        strategy);
     }
 
@@ -147,7 +150,7 @@ public final class SWPairwiseAlignmentUnitTest extends BaseTest {
     public void testSubstringMatchLong(int expectedStart, String expectedCigar, SWAlignerArguments.OverhangStrategy strategy) {
         final String reference = "ATAGAAAATAGTTTTTGGAAATATGGGTGAAGAGACATCTCCTCTTATGGAAAAAGGGATTCTAGAATTTAACAATAAATATTCCCAACTTTCCCCAAGGCTTTAAAATCTACCTTGAAGGAGCAGCTGATGTATTTCTAGAACAGACTTAGGTGTCTTGGTGTGGCCTGTAAAGAGATACTGTCTTTCTCTTTTGAGTGTAAGAGAGAAAGGACAGTCTACTCAATAAAGAGTGCTGGGAAAACTGAATATCCACACACAGAATAATAAAACTAGATCCTATCTCTCACCATATACAAAGATCAACTCAAAACAAATTAAAGACCTAAATGTAAGACAAGAAATTATAAAACTACTAGAAAAAAACACAAGGGAAATGCTTCAGGACATTGGC";
         final String read      = "AAAAAAA";
-        assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, SWPairwiseAlignment.ORIGINAL_DEFAULT, strategy);
+        assertAlignmentMatchesExpected(reference, read, expectedStart, expectedCigar, SmithWatermanAligner.ORIGINAL_DEFAULT_PARAMETERS, strategy);
     }
 
 }

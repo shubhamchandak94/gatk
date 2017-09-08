@@ -3,6 +3,7 @@ package org.broadinstitute.hellbender.tools.walkers.haplotypecaller.readthreadin
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.TextCigarCodec;
 import org.apache.commons.lang3.tuple.Pair;
+import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.Kmer;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.graphs.KBestHaplotype;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.graphs.KBestHaplotypeFinder;
@@ -11,6 +12,8 @@ import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.graphs.SeqGra
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
+import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
+import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAligner;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
@@ -274,7 +277,10 @@ public final class ReadThreadingGraphUnitTest extends BaseTest {
         Assert.assertTrue(altSink != null, "We did not find a non-reference sink");
 
         // confirm that the SW alignment agrees with our expectations
-        final ReadThreadingGraph.DanglingChainMergeHelper result = rtgraph.generateCigarAgainstDownwardsReferencePath(altSink, 0, 4);
+        final ReadThreadingGraph.DanglingChainMergeHelper result = rtgraph.generateCigarAgainstDownwardsReferencePath(altSink, 0, 4,
+                                                                                                                      new SWPairwiseAlignment(
+                                                                                                                              SmithWatermanAligner.STANDARD_NGS_PARAMETERS,
+                                                                                                                              SWAlignerArguments.OverhangStrategy.LEADING_INDEL));
 
         if ( result == null ) {
             Assert.assertFalse(cigarIsGood);
@@ -380,7 +386,9 @@ public final class ReadThreadingGraphUnitTest extends BaseTest {
         Assert.assertTrue(altSource != null, "We did not find a non-reference source");
 
         // confirm that the SW alignment agrees with our expectations
-        final ReadThreadingGraph.DanglingChainMergeHelper result = rtgraph.generateCigarAgainstUpwardsReferencePath(altSource, 0, 1);
+        final ReadThreadingGraph.DanglingChainMergeHelper result = rtgraph.generateCigarAgainstUpwardsReferencePath(altSource, 0, 1,
+                                                                                                                    new SWPairwiseAlignment(SmithWatermanAligner.STANDARD_NGS_PARAMETERS,
+                                                                                                                                                                                                                                                        SWAlignerArguments.OverhangStrategy.LEADING_INDEL));
 
         if ( result == null ) {
             Assert.assertFalse(shouldBeMerged);

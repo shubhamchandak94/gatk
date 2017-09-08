@@ -8,6 +8,7 @@ import htsjdk.samtools.reference.IndexedFastaSequenceFile;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.variantcontext.VariantContextBuilder;
+import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
 import org.broadinstitute.hellbender.engine.AssemblyRegion;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.AssemblyResultSet;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.graphs.KBestHaplotype;
@@ -19,7 +20,10 @@ import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.fasta.CachingIndexedFastaSequenceFile;
 import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
 import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
+import org.broadinstitute.hellbender.utils.read.CigarUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
+import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
+import org.broadinstitute.hellbender.utils.smithwaterman.SmithWatermanAligner;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
@@ -169,7 +173,12 @@ public final class ReadThreadingAssemblerUnitTest extends BaseTest {
         final AssemblyRegion activeRegion = new AssemblyRegion(loc, null, true, 0, header);
         activeRegion.addAll(reads);
 //        logger.warn("Assembling " + activeRegion + " with " + engine);
-        final AssemblyResultSet assemblyResultSet =  assembler.runLocalAssembly(activeRegion, refHaplotype, refBases, loc, Collections.<VariantContext>emptyList(), null, header);
+        final AssemblyResultSet assemblyResultSet =  assembler.runLocalAssembly(activeRegion, refHaplotype, refBases, loc, Collections.<VariantContext>emptyList(), null, header,
+                                                                                new SWPairwiseAlignment(CigarUtils.NEW_SW_PARAMETERS,
+                                                                                                        SWAlignerArguments.OverhangStrategy.SOFTCLIP),
+                                                                                new SWPairwiseAlignment(
+                                                                                        SmithWatermanAligner.STANDARD_NGS_PARAMETERS,
+                                                                                        SWAlignerArguments.OverhangStrategy.LEADING_INDEL));
         return assemblyResultSet.getHaplotypeList();
     }
 
@@ -251,7 +260,10 @@ public final class ReadThreadingAssemblerUnitTest extends BaseTest {
             assembler.setRecoverDanglingBranches(false); // needed to pass some of the tests
             assembler.setDebugGraphTransformations(true);
             assembler.setDebugGraphOutputPath(createTempDir("debugGraphs"));
-            final SeqGraph graph = assembler.assemble(reads, refHaplotype, Collections.<Haplotype>emptyList(), header).get(0).getGraph();
+            final SeqGraph graph = assembler.assemble(reads, refHaplotype, Collections.<Haplotype>emptyList(), header,
+                                                      new SWPairwiseAlignment(
+                                                              SmithWatermanAligner.STANDARD_NGS_PARAMETERS,
+                                                              SWAlignerArguments.OverhangStrategy.LEADING_INDEL)).get(0).getGraph();
             if ( DEBUG ) graph.printGraph(new File("test.dot"), 0);
             return graph;
         }

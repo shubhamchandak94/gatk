@@ -6,7 +6,8 @@ import htsjdk.samtools.CigarOperator;
 import htsjdk.samtools.TextCigarCodec;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.AlignmentInterval;
+import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
+import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
 import org.broadinstitute.hellbender.utils.test.ReadClipperTestUtils;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
@@ -337,7 +338,9 @@ public final class CigarUtilsUnitTest {
 
     @Test(dataProvider = "testData_testComputeCigar")
     public void testComputeCigar(String s1, String s2, String expectedCigar) throws Exception {
-        final Cigar actualCigar = CigarUtils.calculateCigar(s1.getBytes(), s2.getBytes());
+        final Cigar actualCigar = CigarUtils.calculateCigar(s1.getBytes(), s2.getBytes(),
+                                                            new SWPairwiseAlignment(CigarUtils.NEW_SW_PARAMETERS,
+                                                                                    SWAlignerArguments.OverhangStrategy.SOFTCLIP));
         final Cigar decode = TextCigarCodec.decode(expectedCigar);
         Assert.assertEquals(actualCigar, decode);
     }

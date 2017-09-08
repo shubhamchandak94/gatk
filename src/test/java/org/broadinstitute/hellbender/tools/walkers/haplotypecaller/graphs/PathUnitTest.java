@@ -1,6 +1,9 @@
 package org.broadinstitute.hellbender.tools.walkers.haplotypecaller.graphs;
 
 import htsjdk.samtools.Cigar;
+import org.broadinstitute.gatk.nativebindings.smithwaterman.SWAlignerArguments;
+import org.broadinstitute.hellbender.utils.read.CigarUtils;
+import org.broadinstitute.hellbender.utils.smithwaterman.SWPairwiseAlignment;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -15,7 +18,8 @@ public final class PathUnitTest extends BaseTest {
         final SeqVertex v = new SeqVertex(hap);
         graph.addVertex(v);
         final Path<SeqVertex,BaseEdge> path = new Path<>(v, graph);
-        final Cigar cigar = path.calculateCigar(ref.getBytes());
+        final Cigar cigar = path.calculateCigar(ref.getBytes(), new SWPairwiseAlignment(CigarUtils.NEW_SW_PARAMETERS,
+                                                                                        SWAlignerArguments.OverhangStrategy.SOFTCLIP));
         Assert.assertNull(cigar, "Should have failed gracefully");
     }
 

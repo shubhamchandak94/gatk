@@ -24,12 +24,6 @@ import java.util.List;
  */
 public final class SWPairwiseAlignment implements SmithWatermanAligner {
 
-    // match=1, mismatch = -1/3, gap=-(1+k/3)
-    public static final SWAlignerArguments.Weights ORIGINAL_DEFAULT = new SWAlignerArguments.Weights(3, -1, -4, -3);
-
-    public static final SWAlignerArguments.Weights STANDARD_NGS = new SWAlignerArguments.Weights(25, -50, -110, -6);
-    public static final SWAlignerArguments.OverhangStrategy DEFAULT_OVERHANG_STRATEGY = SWAlignerArguments.OverhangStrategy.SOFTCLIP;
-
     /**
      * The state of a trace step through the matrix
      */
