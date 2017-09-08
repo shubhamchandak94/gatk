@@ -744,7 +744,7 @@ public final class MathUtils {
      * @return a newly allocated array corresponding the normalized values in array
      */
     public static double[] normalizeFromRealSpace(final double[] array) {
-        return normalizeFromRealSpace(array, false)
+        return normalizeFromRealSpace(array, false);
     }
 
     public static int maxElementIndex(final double[] array) {

@@ -12,7 +12,6 @@ import org.broadinstitute.hellbender.cmdline.programgroups.VariantProgramGroup;
 import org.broadinstitute.hellbender.tools.exome.HashedListTargetCollection;
 import org.broadinstitute.hellbender.tools.exome.TargetCollection;
 import org.broadinstitute.hellbender.utils.IndexRange;
-import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.tools.walkers.mutect.FilterMutectCalls;
 
@@ -55,12 +54,14 @@ public class CalculateContamination extends CommandLineProgram {
     private static final Logger logger = LogManager.getLogger(CalculateContamination.class);
 
     // we consider allele fractions in a small range around 0.5 to be heterozygous.  Beyond that range is LoH.
-    private static final double MIN_HET_AF = 0.4;
-    private static final double MAX_HET_AF = 0.6;
+    public static final double MIN_HET_AF = 0.4;
+    public static final double MAX_HET_AF = 0.6;
 
     private static final double INITIAL_CONTAMINATION_GUESS = 0.1;
 
-    private static final double LOH_STD_THRESHOLD = 3.0;
+    public static final double LOH_RATIO_DIFFERENCE_THRESHOLD = 0.2;
+    private static final double LOH_Z_SCORE_THRESHOLD = 3.0;
+    private static final double HET_CONTAMINATION_CONVERGENCE_THRESHOLD = 0.01;
 
     @Argument(fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME,
@@ -76,156 +77,66 @@ public class CalculateContamination extends CommandLineProgram {
 
     private static final Median MEDIAN = new Median();
 
-    private enum BiallelicGenotypes {
+    public enum BiallelicGenotypes {
         HOM_REF, HET, HOM_ALT
-    }
-
-    // statistics relevant to computing contamination and blacklisting possible LoH regions
-    private static class Stats {
-        private double homAltCount;
-        private double hetCount;
-
-        private double expectedHomAltCount;
-        private double expectedHetCount;
-        private double varianceOfHomAltCount;
-        private double varianceOfHetCount;
-
-        private double readCountInHomAltSites;
-        private double refCountInHomAltSites;
-        private double otherAltCountInHomAltSites;
-
-        private double refCountInHetSites;
-        private double altCountInHetSites;
-
-        private double expectedRefInHomAltPerUnitContamination;
-        private double expectedRefExcessInHetPerUnitContamination;
-
-        public void increment(final EnumMap<BiallelicGenotypes, Double> posteriors, final PileupSummary ps) {
-            final double homAltResponsibility = posteriors.get(BiallelicGenotypes.HOM_ALT);
-            final double hetResponsibility = posteriors.get(BiallelicGenotypes.HET);
-
-            homAltCount += homAltResponsibility;
-            hetCount += hetResponsibility;
-
-            final double homAltPrior = MathUtils.square(ps.getAlleleFrequency());
-            final double hetPrior = 2 * ps.getAlleleFrequency() * ( 1 - ps.getAlleleFrequency());
-            expectedHomAltCount += homAltPrior;
-            expectedHetCount += hetPrior;
-            varianceOfHomAltCount += homAltPrior * (1 - homAltPrior);
-            varianceOfHetCount += hetPrior * (1 - hetPrior);
-
-            readCountInHomAltSites += homAltResponsibility * ps.getTotalCount();
-            refCountInHomAltSites += homAltResponsibility * ps.getRefCount();
-            otherAltCountInHomAltSites += homAltResponsibility * ps.getOtherAltCount();
-
-            refCountInHetSites += hetResponsibility * ps.getRefCount();
-            altCountInHetSites += hetResponsibility * ps.getAltCount();
-
-            expectedRefInHomAltPerUnitContamination += homAltResponsibility * ps.getTotalCount() * ps.getRefFrequency();
-            expectedRefExcessInHetPerUnitContamination += hetResponsibility * ps.getTotalCount() * ( ps.getRefFrequency() - ps.getAlleleFrequency());
-        }
-
-        public void increment(final Stats other) {
-            this.homAltCount += other.homAltCount;
-            this.hetCount += other.hetCount;
-
-            this.expectedHomAltCount = other.expectedHomAltCount;
-            this.expectedHetCount += other.expectedHetCount;
-            this.varianceOfHomAltCount += other.varianceOfHomAltCount;
-            this.varianceOfHetCount += other.varianceOfHetCount;
-
-            this.readCountInHomAltSites += other.readCountInHomAltSites;
-            this.refCountInHomAltSites += other.refCountInHomAltSites;
-            this.otherAltCountInHomAltSites += other.otherAltCountInHomAltSites;
-
-            this.refCountInHetSites += other.refCountInHetSites;
-            this.altCountInHetSites += other.altCountInHetSites;
-
-            this.expectedRefInHomAltPerUnitContamination += other.expectedRefInHomAltPerUnitContamination;
-            this.expectedRefExcessInHetPerUnitContamination += other.expectedRefExcessInHetPerUnitContamination;
-        }
-
-        public double contaminationFromHomAlts() {
-            // if ref is A, alt is C, then # of ref reads due to error is roughly (# of G read + # of T reads)/2
-            final double refInHomAltDueToError = otherAltCountInHomAltSites / 2;
-            final double refCountInHomAltDueToContamination = Math.max(refCountInHomAltSites - refInHomAltDueToError, 0);
-            return refCountInHomAltDueToContamination / expectedRefInHomAltPerUnitContamination;
-        }
-
-        public double standardErrorOfContaminationFromHomAlts() {
-            return Math.sqrt(contaminationFromHomAlts() / expectedRefInHomAltPerUnitContamination);
-        }
-
-        public double contaminationFromHets() {
-            final double refExcessInHetSites = refCountInHetSites - altCountInHetSites;
-            return refExcessInHetSites / expectedRefExcessInHetPerUnitContamination;
-        }
-
-        public boolean isLossOfHeterozygosity() {
-            return false;
-            //TODO: this is a stub
-
-        }
-
-        public static Stats getStats(final Collection<PileupSummary> pileupSummaries, final double contamination) {
-            final Stats result = new Stats();
-            pileupSummaries.forEach(ps -> result.increment(genotypePosteriors(ps, contamination), ps));
-            return result;
-        }
     }
 
     @Override
     public Object doWork() {
         final List<PileupSummary> pileupSummaries = PileupSummary.readPileupSummaries(inputPileupSummariesTable);
         List<List<PileupSummary>> neighborhoods = splitSites(pileupSummaries);
-        double contamination = INITIAL_CONTAMINATION_GUESS;
+        double hetContamination = INITIAL_CONTAMINATION_GUESS;
+        double homAltContamination = INITIAL_CONTAMINATION_GUESS;
+        int iteration = 0;
 
-        while (true) {  // loop over contamination convergence
-            final Stats genomeStats = new Stats();
+        while (++iteration < 10) {  // loop over contamination convergence
+            final double contaminationForLambda = hetContamination;
+            final List<ContaminationStats> neighborhoodStats = neighborhoods.stream()
+                    .map(nbhd -> ContaminationStats.getStats(nbhd, contaminationForLambda))
+                    .collect(Collectors.toList());
 
-            neighborhoods.stream()
-                    .map(nbhd -> Stats.getStats(nbhd, contamination))
-                    .filter(stats -> !stats.isLossOfHeterozygosity())
-                    .forEach(genomeStats::increment);
+            final double medianHetCountRatio = MEDIAN.evaluate(neighborhoodStats.stream().mapToDouble(ContaminationStats::ratioOfActualToExpectedHets).toArray());
+            final double medianHomAltCountRatio = MEDIAN.evaluate(neighborhoodStats.stream().mapToDouble(ContaminationStats::ratioOfActualToExpectedHomAlts).toArray());
+
+            // total stats over all neighborhoods that we don't flag for loss of heterozygosity
+            final ContaminationStats genomeStats = new ContaminationStats();
+
+            for (final ContaminationStats stats : neighborhoodStats) {
+                final double hetRatioDifference = stats.ratioOfActualToExpectedHets() - medianHetCountRatio;
+                final double hetRatioZ = hetRatioDifference / stats.getStdOfHetCount();
+
+                final double homRatioDifference = stats.ratioOfActualToExpectedHomAlts() - medianHomAltCountRatio;
+                final double homRatioZ = homRatioDifference / stats.getStdOfHomAltCount();
+
+                // too few hets or too many hom alts indicates LoH
+                if (hetRatioDifference < -LOH_RATIO_DIFFERENCE_THRESHOLD && hetRatioZ < -LOH_Z_SCORE_THRESHOLD
+                        || homRatioDifference > LOH_RATIO_DIFFERENCE_THRESHOLD && homRatioZ > LOH_Z_SCORE_THRESHOLD) {
+                    logger.info(String.format("Discarding region with %d hets %d hom alts versus %.2f expected hets and " +
+                            "%.2f expected hom alts due to possible loss of heterozygosity", stats.getHetCount(), stats.getHomAltCount(), stats.getExpectedHetCount(), stats.getExpectedHomAltCount()));
+                } else {
+                    genomeStats.increment(stats);
+                }
+            }
+
+            final double newHetContamination = genomeStats.contaminationFromHets();
+            final boolean converged = Math.abs(hetContamination - newHetContamination) < HET_CONTAMINATION_CONVERGENCE_THRESHOLD;
+            hetContamination = newHetContamination;
+            homAltContamination = genomeStats.contaminationFromHomAlts();
+            logger.info(String.format("In iteration %d we estimate a contamination of %.4f based on hets and %.4f based on hom alts.", iteration, newHetContamination, homAltContamination));
+            if (converged) {
+                ContaminationRecord.writeContaminationTable(Arrays.asList(new ContaminationRecord(ContaminationRecord.Level.WHOLE_BAM.toString(), homAltContamination, genomeStats.standardErrorOfContaminationFromHomAlts())), outputTable);
+                break;
+            }
         }
 
 
 
 
 
-        ContaminationRecord.writeContaminationTable(Arrays.asList(new ContaminationRecord(ContaminationRecord.Level.WHOLE_BAM.toString(), contaminationAndError.getLeft(), contaminationAndError.getRight())), outputTable);
 
         return "SUCCESS";
     }
 
-
-    // contamination is a current rough estimate of contamination
-    private static EnumMap<BiallelicGenotypes, Double> genotypePosteriors(final PileupSummary ps, final double contamination) {
-        final double alleleFrequency = ps.getAlleleFrequency();
-        final double homRefPrior = MathUtils.square(1 - alleleFrequency);
-        final double hetPrior = 2 * alleleFrequency * (1 - alleleFrequency);
-        final double homAltPrior = MathUtils.square(alleleFrequency);
-
-        final int totalCount = ps.getTotalCount();
-        final int altCount = ps.getAltCount();
-
-        final double homRefLikelihood = MathUtils.uniformBinomialProbability(totalCount, altCount, 0, contamination);
-        final double homAltLikelihood = MathUtils.uniformBinomialProbability(totalCount, altCount, 1 - contamination, 1);
-        final double hetLikelihood = MathUtils.uniformBinomialProbability(totalCount, altCount, MIN_HET_AF - contamination / 2, MAX_HET_AF + contamination / 2);
-
-        final double[] unnormalized = new double[BiallelicGenotypes.values().length];
-        unnormalized[BiallelicGenotypes.HOM_REF.ordinal()] = homRefLikelihood * homRefPrior;
-        unnormalized[BiallelicGenotypes.HET.ordinal()] = hetLikelihood * hetPrior;
-        unnormalized[BiallelicGenotypes.HOM_ALT.ordinal()] = homAltLikelihood * homAltPrior;
-        final double[] normalized = MathUtils.normalizeFromRealSpace(unnormalized, true);
-
-        final EnumMap<BiallelicGenotypes, Double> result = new EnumMap<BiallelicGenotypes, Double>(BiallelicGenotypes.class);
-        result.put(BiallelicGenotypes.HOM_REF, normalized[0]);
-        result.put(BiallelicGenotypes.HET, normalized[1]);
-        result.put(BiallelicGenotypes.HOM_ALT, normalized[2]);
-
-        return result;
-    }
 
     // split list of sites into CNV-scale-sized sublists in order to flag individual sublists for loss of heterozygosity
     private static List<List<PileupSummary>> splitSites(final List<PileupSummary> sites) {
