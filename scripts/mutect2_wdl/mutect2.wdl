@@ -94,10 +94,8 @@ workflow Mutect2 {
         ref_dict = ref_dict,
         tumor_bam = tumor_bam,
         tumor_bam_index = tumor_bam_index,
-        tumor_sample_name = tumor_sample_name,
         normal_bam = normal_bam,
         normal_bam_index = normal_bam_index,
-        normal_sample_name = normal_sample_name,
         pon = pon,
         pon_index = pon_index,
         gnomad = gnomad,
@@ -191,10 +189,10 @@ workflow Mutect2 {
         File filtered_vcf = Filter.filtered_vcf
         File filtered_vcf_index = Filter.filtered_vcf_index
         File contamination_table = Filter.contamination_table
-        String tumor_sample_names = M2.tumor_sample_name
-        String tumor_sample_name = tumor_sample_names[0]
-        String normal_sample_names = M2.normal_sample_name
-        String normal_sample_names = normal_sample_names[0]
+        Array[String] tumor_bam_sample_names = M2.tumor_bam_sample_name
+        String tumor_bam_sample_name = tumor_bam_sample_names[0]
+        Array[String] normal_bam_sample_names = M2.normal_bam_sample_name
+        String normal_bam_sample_name = normal_bam_sample_names[0]
 
         # select_first() fails if nothing resolves to non-null, so putting in "null" for now.
         File? oncotated_m2_maf = select_first([oncotate_m2.oncotated_m2_maf, "null"])
@@ -212,10 +210,8 @@ task M2 {
   File ref_dict
   File tumor_bam
   File tumor_bam_index
-  String tumor_sample_name
   File? normal_bam
   File? normal_bam_index
-  String? normal_sample_name
   File? pon
   File? pon_index
   File? gnomad
@@ -269,8 +265,8 @@ task M2 {
   output {
     File output_vcf = "${output_vcf_name}.vcf"
     File? output_bamOut = "bamout.bam"
-    String tumor_sample_name = read_lines("tumor_name.txt")
-    String normal_sample_name = read_lines("normal_name.txt")
+    String tumor_bam_sample_name = read_lines("tumor_name.txt")[0]
+    String normal_bam_sample_name = read_lines("normal_name.txt")[0]
   }
 }
 
