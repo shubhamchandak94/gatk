@@ -191,11 +191,16 @@ workflow Mutect2 {
         File filtered_vcf = Filter.filtered_vcf
         File filtered_vcf_index = Filter.filtered_vcf_index
         File contamination_table = Filter.contamination_table
+        String tumor_sample_names = M2.tumor_sample_name
+        String tumor_sample_name = tumor_sample_names[0]
+        String normal_sample_names = M2.normal_sample_name
+        String normal_sample_names = normal_sample_names[0]
 
         # select_first() fails if nothing resolves to non-null, so putting in "null" for now.
         File? oncotated_m2_maf = select_first([oncotate_m2.oncotated_m2_maf, "null"])
         File? preadapter_detail_metrics = select_first([CollectSequencingArtifactMetrics.pre_adapter_metrics, "null"])
         File? merged_bam_out = select_first([MergeBamOuts.merged_bam_out, "null"])
+
   }
 }
 
@@ -233,6 +238,10 @@ task M2 {
   if [[ "_${normal_bam}" == *.bam ]]; then
       java -Xmx4g -jar $GATK_JAR GetSampleName -I ${normal_bam} -O normal_name.txt
       normal_command_line="-I ${normal_bam} -normal `cat normal_name.txt`"
+  else
+      # Note that normal_name.txt is always created, it's just empty if no normal sample was given.
+      #     This is done to allow an output parameter of the normal sample.
+      touch normal_name.txt
   fi
 
   java -Xmx4g -jar $GATK_JAR GetSampleName -I ${tumor_bam} -O tumor_name.txt
@@ -260,6 +269,8 @@ task M2 {
   output {
     File output_vcf = "${output_vcf_name}.vcf"
     File? output_bamOut = "bamout.bam"
+    String tumor_sample_name = read_lines("tumor_name.txt")
+    String normal_sample_name = read_lines("normal_name.txt")
   }
 }
 
@@ -477,6 +488,8 @@ task MergeBamOuts {
           #  Do not call this task if len(bam_outs) == 0
           set -e
           java -Xmx4G -jar ${picard_jar} GatherBamFiles I=${sep=" I=" bam_outs} O=${output_vcf_name}.out.bam R=${ref_fasta}
+
+          samtools index ${output_vcf_name}.out.bam ${output_vcf_name}.out.bam.bai
   >>>
 
   runtime {
@@ -488,6 +501,7 @@ task MergeBamOuts {
 
   output {
     File merged_bam_out = "${output_vcf_name}.out.bam"
+    File merged_bam_out_index = "${output_vcf_name}.out.bam.bai"
   }
 }
 
