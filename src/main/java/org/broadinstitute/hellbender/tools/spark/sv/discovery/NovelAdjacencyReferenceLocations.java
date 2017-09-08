@@ -52,7 +52,6 @@ public class NovelAdjacencyReferenceLocations {
         this.complication = kryo.readObject(input, BreakpointComplications.class);
     }
 
-    // TODO: 12/11/16 again this does not deal with inter-chromosome translocation yet
     /**
      * Returns the reference coordinates of the left and right breakpoints implied by this chimeric alignment.
      * If there is homologous sequence represented in the alignments, it will be assigned to the side of the breakpoint

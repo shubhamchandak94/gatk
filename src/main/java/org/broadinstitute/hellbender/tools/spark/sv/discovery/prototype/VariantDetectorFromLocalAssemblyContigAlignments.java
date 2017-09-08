@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery.prototype;
 
+import htsjdk.samtools.SAMSequenceDictionary;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.broadcast.Broadcast;
@@ -13,6 +14,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.discovery.AlignedContig;
 interface VariantDetectorFromLocalAssemblyContigAlignments {
 
     void inferSvAndWriteVCF(final JavaRDD<AlignedContig> localAssemblyContigs, final String vcfOutputFileName,
-                            final Broadcast<ReferenceMultiSource> broadcastReference, final String fastaReference,
+                            final Broadcast<ReferenceMultiSource> broadcastReference,
+                            final Broadcast<SAMSequenceDictionary> sequenceDictionaryBroadcast,
                             final Logger toolLogger);
 }

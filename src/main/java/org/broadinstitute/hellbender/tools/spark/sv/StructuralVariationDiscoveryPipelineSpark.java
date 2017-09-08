@@ -4,6 +4,7 @@ import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMFlag;
+import htsjdk.samtools.SAMSequenceDictionary;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -14,6 +15,8 @@ import org.broadinstitute.barclay.argparser.BetaFeature;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.StructuralVariationSparkProgramGroup;
+import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
+import org.broadinstitute.hellbender.engine.datasources.ReferenceWindowFunctions;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.*;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.AlignedAssemblyOrExcuse;
@@ -86,9 +89,11 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
         if(parsedAlignments.isEmpty()) return;
 
         // discover variants and write to vcf
+        final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource((com.google.cloud.dataflow.sdk.options.PipelineOptions)null,
+                discoverStageArgs.fastaReference, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
         DiscoverVariantsFromContigAlignmentsSAMSpark
-                .discoverVariantsAndWriteVCF(parsedAlignments, discoverStageArgs.fastaReference,
-                        ctx.broadcast(getReference()), pipelineOptions, vcfOutputFileName, localLogger);
+                .discoverVariantsAndWriteVCF(parsedAlignments, referenceSequenceDictionary,
+                        ctx.broadcast(getReference()), vcfOutputFileName, localLogger);
     }
 
     public static final class InMemoryAlignmentParser extends AlignedContigGenerator implements Serializable {

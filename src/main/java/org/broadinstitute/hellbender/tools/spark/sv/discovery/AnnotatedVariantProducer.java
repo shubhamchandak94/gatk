@@ -31,7 +31,7 @@ public class AnnotatedVariantProducer implements Serializable {
      * @param inferredType                      BND variants of mates to each other, assumed to be of size 2
      * @param contigAlignments                  chimeric alignments of supporting contig
      * @param broadcastReference                reference
-     * @throws IOException
+     * @throws IOException                      due to reference retrieval
      */
     public static List<VariantContext> produceAnnotatedBNDmatesVcFromNovelAdjacency(final NovelAdjacencyReferenceLocations novelAdjacencyReferenceLocations,
                                                                                     final List<SvType> inferredType,
@@ -61,7 +61,6 @@ public class AnnotatedVariantProducer implements Serializable {
         return Arrays.asList(builder0.make(), builder1.make());
     }
 
-    // TODO: 12/12/16 does not handle translocation yet
     /**
      * Produces a VC from a {@link NovelAdjacencyReferenceLocations}
      * (consensus among different assemblies if they all point to the same breakpoint).
@@ -105,10 +104,8 @@ public class AnnotatedVariantProducer implements Serializable {
         return vcBuilder.make();
     }
 
-    // TODO: 12/13/16 again ignoring translocation
     @VisibleForTesting
-    static List<Allele> produceAlleles(final SimpleInterval refLoc,
-                                       final ReferenceMultiSource reference, final SvType SvType)
+    static List<Allele> produceAlleles(final SimpleInterval refLoc, final ReferenceMultiSource reference, final SvType SvType)
             throws IOException {
 
         final byte[] refBases = reference.getReferenceBases(null, refLoc).getBases();
@@ -119,7 +116,6 @@ public class AnnotatedVariantProducer implements Serializable {
     /**
      * Not testing this because the complications are already tested in the NovelAdjacencyReferenceLocations class' own test,
      * more testing here would be actually testing VCBuilder.
-     * @param breakpointComplications
      */
     private static Map<String, Object> parseComplicationsAndMakeThemAttributeMap(final BreakpointComplications breakpointComplications) {
 
@@ -153,7 +149,7 @@ public class AnnotatedVariantProducer implements Serializable {
      * Utility structs for extraction information from the consensus NovelAdjacencyReferenceLocations out of multiple ChimericAlignments,
      * to be later added to annotations of the VariantContext extracted.
      */
-    static final class NovelAdjacencyEvidenceAnnotations implements Serializable {
+    private static final class NovelAdjacencyEvidenceAnnotations implements Serializable {
         private static final long serialVersionUID = 1L;
 
         final Integer minMQ;
@@ -163,11 +159,11 @@ public class AnnotatedVariantProducer implements Serializable {
 
         NovelAdjacencyEvidenceAnnotations(final ChimericAlignment chimericAlignment){
             minMQ = Math.min(chimericAlignment.regionWithLowerCoordOnContig.mapQual,
-                    chimericAlignment.regionWithHigherCoordOnContig.mapQual);
+                             chimericAlignment.regionWithHigherCoordOnContig.mapQual);
             minAL = Math.min(chimericAlignment.regionWithLowerCoordOnContig.referenceSpan.size(),
-                    chimericAlignment.regionWithHigherCoordOnContig.referenceSpan.size())
+                             chimericAlignment.regionWithHigherCoordOnContig.referenceSpan.size())
                     - AlignmentInterval.overlapOnContig(chimericAlignment.regionWithLowerCoordOnContig,
-                    chimericAlignment.regionWithHigherCoordOnContig);
+                                                        chimericAlignment.regionWithHigherCoordOnContig);
             sourceContigName = chimericAlignment.sourceContigName;
             insSeqMappings = chimericAlignment.insertionMappings;
         }

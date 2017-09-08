@@ -1,12 +1,13 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery.prototype;
 
+import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.variant.variantcontext.VariantContext;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.broadcast.Broadcast;
 import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
-import org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection;
+import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.AlignedContig;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.AlignmentInterval;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.ChimericAlignment;
@@ -18,19 +19,19 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import static org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection.DiscoverVariantsFromContigsAlignmentsSparkArgumentCollection.DEFAULT_MIN_ALIGNMENT_LENGTH;
 
 final class InsDelVariantDetector implements VariantDetectorFromLocalAssemblyContigAlignments {
 
     @Override
     public void inferSvAndWriteVCF(final JavaRDD<AlignedContig> localAssemblyContigs, final String vcfOutputFileName,
-                                   final Broadcast<ReferenceMultiSource> broadcastReference, final String fastaReference,
-                                   final Logger toolLogger){
+                                   final Broadcast<ReferenceMultiSource> broadcastReference,
+                                   final Broadcast<SAMSequenceDictionary> sequenceDictionaryBroadcast,
+                                   final Logger toolLogger) {
 
         final JavaPairRDD<byte[], List<ChimericAlignment>> chimericAlignments =
                 localAssemblyContigs
-                        .mapToPair(tig -> convertAlignmentIntervalToChimericAlignment(tig,
-                                StructuralVariationDiscoveryArgumentCollection.
-                                        DiscoverVariantsFromContigsAlignmentsSparkArgumentCollection.DEFAULT_MIN_ALIGNMENT_LENGTH));
+                        .mapToPair(tig -> convertAlignmentIntervalToChimericAlignment(tig, DEFAULT_MIN_ALIGNMENT_LENGTH));
 
         // usual business as in DiscoverVariantsFromContigAlignmentsSAMSpark#discoverVariantsAndWriteVCF()
         final JavaRDD<VariantContext> annotatedVariants =
@@ -41,7 +42,7 @@ final class InsDelVariantDetector implements VariantDetectorFromLocalAssemblyCon
                         .map(noveltyTypeAndEvidence -> DiscoverVariantsFromContigAlignmentsSAMSpark.annotateVariant(noveltyTypeAndEvidence._1,
                                 noveltyTypeAndEvidence._2._1, noveltyTypeAndEvidence._2._2, broadcastReference));
 
-        SVVCFWriter.writeVCF(null, vcfOutputFileName, fastaReference, annotatedVariants, toolLogger);
+        SVVCFWriter.writeVCF(vcfOutputFileName, sequenceDictionaryBroadcast.getValue(), annotatedVariants, toolLogger);
     }
 
     /**
@@ -68,8 +69,10 @@ final class InsDelVariantDetector implements VariantDetectorFromLocalAssemblyCon
             }
 
             final ChimericAlignment ca = new ChimericAlignment(current, next, insertionMappings, contig.contigName);
-            if (ca.isNotSimpleTranslocation())
-                results.add(ca);
+            if (!ca.isNotSimpleTranslocation())
+                throw new GATKException.ShouldNeverReachHereException("Mapped assembled contigs are sent down the wrong path: " +
+                        "contig suggesting \"translocation\" is sent down the insert/deletion path.\n" + contig.toString());
+            results.add(ca);
         }
         return new Tuple2<>(contig.contigSequence,results);
     }

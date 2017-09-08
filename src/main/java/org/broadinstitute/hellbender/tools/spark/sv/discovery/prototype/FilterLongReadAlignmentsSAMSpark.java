@@ -97,19 +97,15 @@ public final class FilterLongReadAlignmentsSAMSpark extends GATKSparkTool {
                         .sortBy(tig -> tig.contigName, true, reads.getNumPartitions()/100) // num partition is purely guess
                         .mapToPair(contig -> new Tuple2<>(contig.contigName,
                                 contig.alignmentIntervals.stream().map(AlignmentInterval::toPackedString).collect(Collectors.toList())))
-                        .map(FilterLongReadAlignmentsSAMSpark::formatContigInfo).collect().iterator(),
+                        .map(AlignedContig::formatContigInfo).collect().iterator(),
                 outputFilePrefix + "_newFiltering.ai");
 
         if (runOldFilteringToo) {
             FileUtils.writeLinesToSingleFile(
-                    oldWayOfFiltering(reads, header, localLogger).map(FilterLongReadAlignmentsSAMSpark::formatContigInfo)
+                    oldWayOfFiltering(reads, header, localLogger).map(AlignedContig::formatContigInfo)
                     .collect().iterator(),
                     outputFilePrefix + "_oldFiltering.ai");
         }
-    }
-
-    static String formatContigInfo(final Tuple2<String, List<String>> pair) {
-        return "(" + pair._1 + ",[" + pair._2 + "])";
     }
 
     /**
@@ -122,9 +118,9 @@ public final class FilterLongReadAlignmentsSAMSpark extends GATKSparkTool {
                                                                        final Logger toolLogger) {
 
         // parse SAM records transform to AlignmentInterval format and split gapped alignment
-        final JavaRDD<AlignedContig> parsedContigAlignmentsWithGapSplit
-                = new SAMFormattedContigAlignmentParser(longReads, header, true, toolLogger).getAlignedContigs()
-                .filter(contig -> contig.alignmentIntervals.size()>1).cache();
+        final JavaRDD<AlignedContig> parsedContigAlignmentsWithGapSplit =
+                new SAMFormattedContigAlignmentParser(longReads, header, true, toolLogger).getAlignedContigs()
+                        .filter(contig -> contig.alignmentIntervals.size()>1).cache();
 
         // delegates to ChimericAlignment.parseOneContig()
         return
@@ -155,15 +151,16 @@ public final class FilterLongReadAlignmentsSAMSpark extends GATKSparkTool {
                                                 final SAMFileHeader header,
                                                 final String nonCanonicalContigNamesFile,
                                                 final Logger toolLogger) {
+        longReads.cache();
+        toolLogger.info( "Processing " + longReads.count() + " raw alignments from " +
+                longReads.map(GATKRead::getName).distinct().count() + " contigs.");
 
-        toolLogger.info( "Processing this many raw alignments: " + longReads.count() );
-
-        final JavaRDD<AlignedContig> parsedContigAlignments
-                = new SAMFormattedContigAlignmentParser(longReads, header, false, toolLogger)
-                .getAlignedContigs()
-                .filter(FilterLongReadAlignmentsSAMSpark::contigFilter).cache();
-
-        toolLogger.info( "Primitive filtering based purely on MQ left these many contigs: " + parsedContigAlignments.count() );
+        final JavaRDD<AlignedContig> parsedContigAlignments =
+                new SAMFormattedContigAlignmentParser(longReads, header, false, toolLogger)
+                        .getAlignedContigs()
+                        .filter(FilterLongReadAlignmentsSAMSpark::contigFilter).cache();
+        longReads.unpersist();
+        toolLogger.info( "Primitive filtering based purely on MQ left " + parsedContigAlignments.count() + " contigs.");
 
         return filterAndSplitGappedAI(parsedContigAlignments, nonCanonicalContigNamesFile, header.getSequenceDictionary());
     }
@@ -211,9 +208,10 @@ public final class FilterLongReadAlignmentsSAMSpark extends GATKSparkTool {
                                                                 final Set<String> canonicalChromosomes) {
 
         // group 1: get max aligner score of mappings to canonical chromosomes and speed up in case of too many mappings
-        final int maxCanonicalChrAlignerScore = alignedContig.alignmentIntervals.stream()
-                .filter(alignmentInterval -> canonicalChromosomes.contains(alignmentInterval.referenceSpan.getContig()))
-                .mapToInt(ai -> ai.alnScore).max().orElse(0); // possible that no mapping to canonical chromosomes
+        final int maxCanonicalChrAlignerScore =
+                alignedContig.alignmentIntervals.stream()
+                        .filter(alignmentInterval -> canonicalChromosomes.contains(alignmentInterval.referenceSpan.getContig()))
+                        .mapToInt(ai -> ai.alnScore).max().orElse(0); // possible that no mapping to canonical chromosomes
 
         // speed up if number of alignments is too high (>10)
         // if mapped to canonical chromosomes, MQ must be >10; otherwise, must have AS higher than max canonical aligner score
@@ -317,11 +315,11 @@ public final class FilterLongReadAlignmentsSAMSpark extends GATKSparkTool {
      * or less summed mismatches if still tie.
      */
     private static Comparator<AlignedContig> sortConfigurations() {
-        Comparator<AlignedContig> numFirst
-                = (AlignedContig x, AlignedContig y) -> Integer.compare(x.alignmentIntervals.size(), y.alignmentIntervals.size());
-        Comparator<AlignedContig> mismatchSecond
-                = (AlignedContig x, AlignedContig y) -> Integer.compare(x.alignmentIntervals.stream().mapToInt(ai -> ai.mismatches).sum(),
-                                                                        y.alignmentIntervals.stream().mapToInt(ai -> ai.mismatches).sum());
+        Comparator<AlignedContig> numFirst =
+                (AlignedContig x, AlignedContig y) -> Integer.compare(x.alignmentIntervals.size(), y.alignmentIntervals.size());
+        Comparator<AlignedContig> mismatchSecond =
+                (AlignedContig x, AlignedContig y) -> Integer.compare(x.alignmentIntervals.stream().mapToInt(ai -> ai.mismatches).sum(),
+                                                                      y.alignmentIntervals.stream().mapToInt(ai -> ai.mismatches).sum());
         return numFirst.thenComparing(mismatchSecond);
     }
 

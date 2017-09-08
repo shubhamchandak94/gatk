@@ -5,6 +5,7 @@ import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.CigarOperator;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.util.SequenceUtil;
 import htsjdk.variant.variantcontext.VariantContext;
 import org.apache.logging.log4j.LogManager;
@@ -19,6 +20,7 @@ import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.StructuralVariationSparkProgramGroup;
 import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
+import org.broadinstitute.hellbender.engine.datasources.ReferenceWindowFunctions;
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
@@ -88,8 +90,10 @@ public final class DiscoverVariantsFromContigAlignmentsSAMSpark extends GATKSpar
                 = new SAMFormattedContigAlignmentParser(getReads(), getHeaderForReads(), true, localLogger)
                 .getAlignedContigs();
 
-        discoverVariantsAndWriteVCF(parsedContigAlignments, discoverStageArgs.fastaReference,
-                ctx.broadcast(getReference()), getAuthenticatedGCSOptions(), vcfOutputFileName, localLogger);
+        final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource((com.google.cloud.dataflow.sdk.options.PipelineOptions)null,
+                discoverStageArgs.fastaReference, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
+        discoverVariantsAndWriteVCF(parsedContigAlignments, referenceSequenceDictionary,
+                ctx.broadcast(getReference()), vcfOutputFileName, localLogger);
     }
 
     public static final class SAMFormattedContigAlignmentParser extends AlignedContigGenerator implements Serializable {
@@ -167,9 +171,9 @@ public final class DiscoverVariantsFromContigAlignmentsSAMSpark extends GATKSpar
      * turn into annotated {@link VariantContext}'s, and writes them to VCF.
      */
     public static void discoverVariantsAndWriteVCF(final JavaRDD<AlignedContig> alignedContigs,
-                                                   final String fastaReference, final Broadcast<ReferenceMultiSource> broadcastReference,
-                                                   final PipelineOptions pipelineOptions, final String vcfFileName,
-                                                   final Logger toolLogger) {
+                                                   final SAMSequenceDictionary referenceSequenceDictionary,
+                                                   final Broadcast<ReferenceMultiSource> broadcastReference,
+                                                   final String vcfFileName, final Logger toolLogger) {
 
         final JavaRDD<VariantContext> annotatedVariants =
                 alignedContigs.filter(alignedContig -> alignedContig.alignmentIntervals.size()>1)                                     // filter out any contigs that has less than two alignment records
@@ -181,7 +185,7 @@ public final class DiscoverVariantsFromContigAlignmentsSAMSpark extends GATKSpar
                         .map(noveltyTypeAndEvidence -> annotateVariant(noveltyTypeAndEvidence._1,                                     // annotate the novel adjacency and inferred type
                                 noveltyTypeAndEvidence._2._1, noveltyTypeAndEvidence._2._2, broadcastReference));
 
-        SVVCFWriter.writeVCF(pipelineOptions, vcfFileName, fastaReference, annotatedVariants, toolLogger);
+        SVVCFWriter.writeVCF( vcfFileName, referenceSequenceDictionary, annotatedVariants, toolLogger);
     }
 
     // TODO: 7/6/17 interface to be changed in the new implementation, where one contig produces a set of NARL's.
@@ -189,10 +193,9 @@ public final class DiscoverVariantsFromContigAlignmentsSAMSpark extends GATKSpar
      * Given contig alignments, emit novel adjacency not present on the reference to which the locally-assembled contigs were aligned.
      */
     public static Iterator<Tuple2<NovelAdjacencyReferenceLocations, ChimericAlignment>>
-    discoverNovelAdjacencyFromChimericAlignments(final Tuple2<byte[], List<ChimericAlignment>> tigSeqAndChimerics) {
-        return Utils.stream(tigSeqAndChimerics._2)
-                .map(ca -> new Tuple2<>(new NovelAdjacencyReferenceLocations(ca, tigSeqAndChimerics._1), ca))
-                .collect(Collectors.toList()).iterator();
+    discoverNovelAdjacencyFromChimericAlignments(final Tuple2<byte[], List<ChimericAlignment>> tigSeqAndChimeras) {
+        return Utils.stream(tigSeqAndChimeras._2)
+                .map(ca -> new Tuple2<>(new NovelAdjacencyReferenceLocations(ca, tigSeqAndChimeras._1), ca)).iterator();
     }
 
     // TODO: 7/6/17 interface to be changed in the new implementation, where a set of NRAL's associated with a single contig is considered together.

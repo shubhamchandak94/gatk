@@ -90,6 +90,7 @@ public final class BreakpointComplications {
         return dupAnnotIsFromOptimization;
     }
 
+    // =================================================================================================================
     @VisibleForTesting
     BreakpointComplications() {
 
@@ -123,22 +124,36 @@ public final class BreakpointComplications {
         final AlignmentInterval firstAlignmentInterval  = chimericAlignment.regionWithLowerCoordOnContig;
         final AlignmentInterval secondAlignmentInterval = chimericAlignment.regionWithHigherCoordOnContig;
 
-        // a segment with lower coordinate on the locally-assembled contig could map to a higher reference coordinate region
-        // under two basic types of SV's: inversion (strand switch necessary) and translocation (no strand switch necessary)
-        final boolean isNotSimpleTranslocation =
-                ChimericAlignment.isNotSimpleTranslocation(chimericAlignment.regionWithLowerCoordOnContig,
-                        chimericAlignment.regionWithHigherCoordOnContig, chimericAlignment.strandSwitch,
-                        ChimericAlignment.involvesRefPositionSwitch(firstAlignmentInterval, secondAlignmentInterval));
+        // if-else testing order matters here:
+        // if the two segments in the input chimeric alignment suggests simple translocation {@see ChimericAlignment#isNotSimpleTranslocation()}, then
+        //  we need other types of evidence to fully resolve type of event, until then we can only say a novel adjacency (BND) is detected;
+        // if the two segments in the input chimeric alignment map to the same chromosome, then
+        //  the segment with lower coordinate on the locally-assembled contig could map to a higher reference coordinate region
+        //  under two basic types of SV's: inversion (strand switch necessary) and "translocation" (no strand switch necessary)
+        final boolean suggestsSimpleTranslocation = !chimericAlignment.isNotSimpleTranslocation();
+        if (suggestsSimpleTranslocation) {
 
-        // TODO: 12/5/16 simple translocation, don't tackle yet
-        if (chimericAlignment.strandSwitch!= StrandSwitch.NO_SWITCH) { // the case involves an inversion
-            // TODO: 12/5/16 duplication detection to be done for inversion alleles
+        } else if (chimericAlignment.strandSwitch != StrandSwitch.NO_SWITCH) { // TODO: 9/9/17 the case involves an inversion, could be retired once same chr strand-switch BND calls are evaluated.
             initForSimpleInversion(firstAlignmentInterval, secondAlignmentInterval, contigSeq);
-        } else if (isNotSimpleTranslocation) {
+        } else {
             initForInsDel(chimericAlignment, leftReferenceSpan, rightReferenceSpan, contigSeq);
         }
     }
 
+    // =================================================================================================================
+    /**
+     * todo : see ticket #3529 @ https://github.com/broadinstitute/gatk/issues/3529
+     * @return true iff the two AI of the {@code longRead} overlaps on reference is more than half of the two AI's minimal read span.
+     */
+    @VisibleForTesting
+    public static boolean isLikelyInvertedDuplication(final AlignmentInterval one, final AlignmentInterval two) {
+        return 2 * AlignmentInterval.overlapOnRefSpan(one, two) >
+                Math.min(one.endInAssembledContig - one.startInAssembledContig,
+                         two.endInAssembledContig - two.startInAssembledContig) + 1;
+    }
+
+    // =================================================================================================================
+    //////////// BELOW ARE CODE PATH USED FOR INSERTION, DELETION, AND DUPLICATION (INV OR NOT) AND INVERSION, AND ARE TESTED FOR THAT PURPOSE
     private void initForSimpleInversion(final AlignmentInterval firstContigRegion, final AlignmentInterval secondContigRegion,
                                         final byte[] contigSeq) {
         homologyForwardStrandRep = getHomology(firstContigRegion, secondContigRegion, contigSeq);
@@ -148,17 +163,6 @@ public final class BreakpointComplications {
         cigarStringsForDupSeqOnCtg = null;
         dupAnnotIsFromOptimization = false;
         hasDuplicationAnnotation = false;
-    }
-
-    /**
-     * todo : see ticket #3529
-     * @return true iff the two AI of the {@code longRead} overlaps on reference is more than half of the two AI's minimal read span.
-     */
-    @VisibleForTesting
-    public static boolean isLikelyInvertedDuplication(final AlignmentInterval one, final AlignmentInterval two) {
-        return 2 * AlignmentInterval.overlapOnRefSpan(one, two) >
-                Math.min(one.endInAssembledContig - one.startInAssembledContig,
-                        two.endInAssembledContig - two.startInAssembledContig) + 1;
     }
 
     private void initForInsDel(final ChimericAlignment chimericAlignment, final SimpleInterval leftReferenceInterval,

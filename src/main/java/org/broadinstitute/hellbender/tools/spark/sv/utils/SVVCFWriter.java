@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.spark.sv.utils;
 
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.variant.variantcontext.VariantContext;
@@ -13,8 +12,6 @@ import htsjdk.variant.vcf.VCFHeaderLine;
 import htsjdk.variant.vcf.VCFStandardHeaderLines;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
-import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
-import org.broadinstitute.hellbender.engine.datasources.ReferenceWindowFunctions;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
@@ -34,15 +31,12 @@ import java.util.stream.Collectors;
 public class SVVCFWriter {
 
     /**
+     * todo
      * FASTA and Broadcast references are both required because 2bit Broadcast references currently order their
      * sequence dictionaries in a scrambled order, see https://github.com/broadinstitute/gatk/issues/2037.
      */
-    public static void writeVCF(final PipelineOptions pipelineOptions, final String vcfFileName,
-                                final String fastaReference, final JavaRDD<VariantContext> variantContexts,
-                                final Logger logger) {
-
-        final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource(pipelineOptions, fastaReference,
-                ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
+    public static void writeVCF(final String vcfFileName, final SAMSequenceDictionary referenceSequenceDictionary,
+                                final JavaRDD<VariantContext> variantContexts, final Logger logger) {
 
         final List<VariantContext> sortedVariantsList = sortVariantsByCoordinate(variantContexts.collect(), referenceSequenceDictionary);
 

@@ -1,6 +1,7 @@
 package org.broadinstitute.hellbender.tools.spark.sv.sga;
 
 import com.google.common.annotations.VisibleForTesting;
+import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.TextCigarCodec;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -11,6 +12,8 @@ import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.StructuralVariationSparkProgramGroup;
+import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
+import org.broadinstitute.hellbender.engine.datasources.ReferenceWindowFunctions;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection;
@@ -66,8 +69,10 @@ public final class DiscoverVariantsFromContigAlignmentsSGASpark extends GATKSpar
         final JavaRDD<AlignedContig> parsedContigAlignments
                 = new SGATextFormatAlignmentParser(ctx, inputAssemblies, inputAlignments, logContigAlignmentSimpleStats ? localLogger : null).getAlignedContigs();
 
-        DiscoverVariantsFromContigAlignmentsSAMSpark.discoverVariantsAndWriteVCF(parsedContigAlignments, fastaReference,
-                ctx.broadcast(getReference()), getAuthenticatedGCSOptions(), vcfOutput, localLogger);
+        final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource((com.google.cloud.dataflow.sdk.options.PipelineOptions)null,
+                fastaReference, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
+        DiscoverVariantsFromContigAlignmentsSAMSpark.discoverVariantsAndWriteVCF(parsedContigAlignments, referenceSequenceDictionary,
+                ctx.broadcast(getReference()), vcfOutput, localLogger);
     }
 
     public static final class SGATextFormatAlignmentParser extends AlignedContigGenerator {
