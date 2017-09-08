@@ -58,7 +58,7 @@ workflow Mutect2 {
   String? sequencing_center
   String? sequence_source
   File? default_config_file
-  Boolean? is_bamOut=false
+  Boolean is_bamOut=false
 
   call ProcessOptionalArguments {
     input:
