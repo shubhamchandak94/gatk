@@ -50,16 +50,7 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
             gatk_docker = gatk_docker
     }
 
-    call CNVTasks.CorrectGCBias {
-        input:
-            entity_id = CollectCoverage.entity_id,
-            coverage = CollectCoverage.coverage,
-            annotated_targets = AnnotateTargets.annotated_targets,
-            gatk_jar = gatk_jar,
-            gatk_docker = gatk_docker
-    }
-
-    call NormalizeSomaticReadCounts {
+    call DenoiseReadCounts {
         input:
             entity_id = CollectCoverage.entity_id,
             coverage = CorrectGCBias.corrected_coverage,
@@ -69,11 +60,10 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
             gatk_docker = gatk_docker
     }
 
-    call PerformSegmentation {
+    call ModelSegments {
         input:
             entity_id = CollectCoverage.entity_id,
-            tn_coverage = NormalizeSomaticReadCounts.tn_coverage,
-            is_wgs = is_wgs,
+            tn_coverage = DenoiseReadCounts.denoised_coverage,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
     }
@@ -100,17 +90,18 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
 
     output {
         String entity_id = CollectCoverage.entity_id
-        File tn_coverage = NormalizeSomaticReadCounts.tn_coverage
+        File coverage = CollectCoverage.coverage
+        File tn_coverage = DenoiseReadCounts.tn_coverage
         File called_segments = CallSegments.called_segments
     }
 }
 
-# Perform tangent normalization (noise reduction) on the proportional coverage file
+# Denoise the coverage
 task NormalizeSomaticReadCounts {
     String entity_id
     File coverage
     File padded_targets
-    File cnv_panel_of_normals
+    File read_count_panel_of_normals
     String gatk_jar
 
     # Runtime parameters
@@ -123,11 +114,9 @@ task NormalizeSomaticReadCounts {
         java -Xmx${default=4 mem}g -jar ${gatk_jar} NormalizeSomaticReadCounts \
             --input ${coverage} \
             --targets ${padded_targets} \
-            --panelOfNormals ${cnv_panel_of_normals} \
-            --tangentNormalized ${entity_id}.tn.tsv \
-            --factorNormalizedOutput ${entity_id}.fnt.tsv \
-            --preTangentNormalized ${entity_id}.preTN.tsv \
-            --betaHatsOutput ${entity_id}.betaHats.tsv
+            --panelOfNormals ${read_count_panel_of_normals} \
+            --denoisedCR ${entity_id}.denoisedCR.tsv \
+            --standardizedCR ${entity_id}.standardizedCR.tsv
     }
 
     runtime {
@@ -138,14 +127,12 @@ task NormalizeSomaticReadCounts {
     }
 
     output {
-        File tn_coverage = "${entity_id}.tn.tsv"
-        File fnt_coverage = "${entity_id}.fnt.tsv"
-        File pre_tn_coverage = "${entity_id}.preTN.tsv"
-        File betahats_coverage = "${entity_id}.betaHats.tsv"
+        File standardized_coverage = "${entity_id}.standardizedCR.tsv"
+        File denoised_coverage = "${entity_id}.denoisedCR.tsv"
     }
 }
 
-# Segment the tangent-normalized coverage profile
+# Segment the denoised copy-ratio profile
 task PerformSegmentation {
     String entity_id
     File tn_coverage

@@ -82,19 +82,10 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
         };
         runCommandLine(arguments);
         Assert.assertTrue(outputFile.exists());
-        Assert.assertFalse(new File(outputFile + SparkGenomeReadCounts.HDF5_WRITE_EXT).exists());
+        Assert.assertFalse(new File(outputFile + SparkGenomeReadCounts.HDF5_EXT).exists());
         Assert.assertTrue(outputFile.length() > 0);
 
-        // Proportional Coverage
-        final ReadCountCollection proportionalCoverage = ReadCountCollectionUtils.parse(outputFile);
-        Assert.assertTrue(proportionalCoverage.records().stream().anyMatch(t -> Math.abs(t.getDouble(0)) > 1e-10));
-
-        // The reads are all in three bins of contig 3 with values {.5, .25, .25}
-        Assert.assertTrue(proportionalCoverage.records().stream().filter(t -> t.getContig().equals("3")).anyMatch(t -> Math.abs(t.getDouble(0)) > .2));
-        Assert.assertTrue(Math.abs(proportionalCoverage.records().stream().filter(t -> t.getContig().equals("3")).mapToDouble(t -> t.getDouble(0)).sum() - 1.0) < 1e-10);
-
-        // raw coverage
-        final ReadCountCollection coverage = ReadCountCollectionUtils.parse(new File(outputFile.getAbsolutePath() + SparkGenomeReadCounts.RAW_COV_OUTPUT_EXTENSION));
+        final ReadCountCollection coverage = ReadCountCollectionUtils.parse(outputFile);
         Assert.assertTrue(coverage.records().stream().anyMatch(t -> Math.abs(t.getDouble(0)) > 1e-10));
 
         // The reads are all in three bins of contig 3 with values
@@ -110,7 +101,6 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
         Assert.assertEquals(targets.get(2).getName(), "target_1_4001_6000");
         Assert.assertEquals(targets.get(8).getName(), "target_2_1_2000");
         Assert.assertEquals(targets.get(17).getName(), "target_3_2001_4000");
-        Assert.assertEquals(proportionalCoverage.targets().size(), targets.size());
     }
 
     private ReadCountCollection loadReadCountCollection(File outputFile) {
@@ -135,12 +125,8 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
         };
         runCommandLine(arguments);
 
-        final ReadCountCollection proportionalCoverage = loadReadCountCollection(outputFile);
-        Assert.assertTrue(proportionalCoverage.records().stream().noneMatch(t -> t.getContig().equals("2") || t.getContig().equals("3")));
-
-        // raw coverage
-        final ReadCountCollection rawCoverage = loadReadCountCollection(new File(outputFile.getAbsolutePath() + SparkGenomeReadCounts.RAW_COV_OUTPUT_EXTENSION));
-        Assert.assertTrue(rawCoverage.records().stream().noneMatch(t -> t.getContig().equals("2") || t.getContig().equals("3")));
+        final ReadCountCollection coverage = loadReadCountCollection(outputFile);
+        Assert.assertTrue(coverage.records().stream().noneMatch(t -> t.getContig().equals("2") || t.getContig().equals("3")));
 
         final File targetsFile = new File(outputFile.getAbsolutePath()+".targets.tsv");
         final List<Target> targets = TargetTableReader.readTargetFile(targetsFile);
@@ -160,16 +146,11 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
         };
         runCommandLine(arguments);
 
-        final ReadCountCollection proportionalCoverage = loadReadCountCollection(outputFile);
-        Assert.assertTrue(proportionalCoverage.records().stream().anyMatch(t -> t.getContig().equals("1")));
-        Assert.assertTrue(proportionalCoverage.records().stream().anyMatch(t -> t.getContig().equals("2")));
-        Assert.assertTrue(proportionalCoverage.records().stream().noneMatch(t -> t.getContig().equals("3") || t.getContig().equals("4")));
-
-        // raw coverage
-        final ReadCountCollection rawCoverage = loadReadCountCollection(new File(outputFile.getAbsolutePath() + SparkGenomeReadCounts.RAW_COV_OUTPUT_EXTENSION));
-        Assert.assertTrue(rawCoverage.records().stream().anyMatch(t -> t.getContig().equals("1")));
-        Assert.assertTrue(rawCoverage.records().stream().anyMatch(t -> t.getContig().equals("2")));
-        Assert.assertTrue(rawCoverage.records().stream().noneMatch(t -> t.getContig().equals("3") || t.getContig().equals("4")));
+        // coverage
+        final ReadCountCollection coverage = loadReadCountCollection(outputFile);
+        Assert.assertTrue(coverage.records().stream().anyMatch(t -> t.getContig().equals("1")));
+        Assert.assertTrue(coverage.records().stream().anyMatch(t -> t.getContig().equals("2")));
+        Assert.assertTrue(coverage.records().stream().noneMatch(t -> t.getContig().equals("3") || t.getContig().equals("4")));
 
         final File targetsFile = new File(outputFile.getAbsolutePath()+".targets.tsv");
         final List<Target> targets = TargetTableReader.readTargetFile(targetsFile);
@@ -209,18 +190,16 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, BAM_FILE.getAbsolutePath(),
                 "-" + SparkGenomeReadCounts.OUTPUT_FILE_SHORT_NAME, outputFile.getAbsolutePath(),
                 "-" + SparkGenomeReadCounts.BINSIZE_SHORT_NAME, "10000",
-                "-" + SparkGenomeReadCounts.HDF5_WRITE_SHORT_NAME, "True"
+                "-" + SparkGenomeReadCounts.WRITE_HDF5_SHORT_NAME, "True"
         };
         runCommandLine(arguments);
         Assert.assertTrue(outputFile.exists());
-        final File hdf5File = new File(outputFile + SparkGenomeReadCounts.HDF5_WRITE_EXT);
+        final File hdf5File = new File(outputFile + SparkGenomeReadCounts.HDF5_EXT);
         Assert.assertTrue(hdf5File.exists());
         Assert.assertTrue(hdf5File.length() > 0);
-        final File tsvFile = new File(outputFile + SparkGenomeReadCounts.RAW_COV_OUTPUT_EXTENSION);
-        Assert.assertTrue(tsvFile.exists());
 
         final ReadCountCollection rccHdf5 = ReadCountCollectionUtils.parseHdf5AsDouble(hdf5File);
-        final ReadCountCollection rccTsv = ReadCountCollectionUtils.parse(tsvFile);
+        final ReadCountCollection rccTsv = ReadCountCollectionUtils.parse(outputFile);
 
         Assert.assertEquals(rccHdf5.counts(), rccTsv.counts());
         Assert.assertEquals(rccHdf5.columnNames(), rccTsv.columnNames());
@@ -231,7 +210,7 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
                 .allMatch(i -> rccHdf5.targets().get(i).getInterval().equals(rccTsv.targets().get(i).getInterval()))
         );
 
-        // Make sure we are putting raw counts in the HDF5, not proportional counts
+        // Make sure we are putting integer counts in the HDF5
         Assert.assertEquals(MathUtils.sum(rccHdf5.getColumn(0)), 4.0);
     }
 }

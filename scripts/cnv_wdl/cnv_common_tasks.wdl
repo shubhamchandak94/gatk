@@ -43,7 +43,6 @@ task CollectCoverage {
     File? padded_targets
     File bam
     File bam_idx
-    String? transform
     Boolean? keep_non_autosomes
     Boolean? disable_all_read_filters
     Boolean? disable_sequence_dictionary_validation
@@ -67,7 +66,7 @@ task CollectCoverage {
     String base_filename = basename(bam, ".bam")
  
     # Output file name depending on type of coverage
-    String cov_output_name = if (is_wgs && (select_first([transform, ""])  == "RAW")) then "${base_filename}.coverage.tsv.raw_cov" else "${base_filename}.coverage.tsv"
+    String cov_output_name = if is_wgs then "${base_filename}.coverage.hdf5" else "${base_filename}.coverage.tsv"
   
     command <<<
         if [ ${is_wgs} = true ]
@@ -80,16 +79,18 @@ task CollectCoverage {
                     --disableToolDefaultReadFilters ${default="false" disable_all_read_filters} \
                     --disableSequenceDictionaryValidation ${default="true" disable_sequence_dictionary_validation} \
                     $(if [ ${default="true" keep_duplicate_reads} = true ]; then echo " --disableReadFilter NotDuplicateReadFilter "; else echo ""; fi) \
-                    --outputFile ${base_filename}.coverage.tsv
+                    --outputFile ${base_filename}.coverage.tsv \
+                    --writeRawHdf5
             else
                 java -Xmx${default=4 mem}g -jar ${gatk_jar} CalculateTargetCoverage \
                     --input ${bam} \
                     --reference ${ref_fasta} \
                     --targets ${padded_targets} \
                     --groupBy SAMPLE \
-                    --transform ${default="PCOV" transform} \
+                    --transform RAW \
                     --targetInformationColumns FULL \
                     --interval_set_rule UNION \
+                    --interval_merging_rule OVERLAPPING_ONLY \
                     --interval_padding 0 \
                     --secondsBetweenProgressUpdates 10.0 \
                     --disableToolDefaultReadFilters ${default="false" disable_all_read_filters} \
@@ -143,37 +144,5 @@ task AnnotateTargets {
 
     output {
         File annotated_targets = "${entity_id}.annotated.tsv"
-    }
-}
-
-# Correct coverage profile(s) for sample-specific GC bias
-task CorrectGCBias {
-    String entity_id
-    File coverage   # This can be either single-sample or multi-sample
-    File annotated_targets
-    String gatk_jar
-
-    # Runtime parameters
-    Int? mem
-    String gatk_docker
-    Int? preemptible_attempts
-    Int? disk_space_gb
-
-    command {
-        java -Xmx${default=4 mem}g -jar ${gatk_jar} CorrectGCBias \
-          --input ${coverage} \
-          --targets ${annotated_targets} \
-          --output ${entity_id}.gc_corrected.tsv
-    }
-
-    runtime {
-        docker: "${gatk_docker}"
-        memory: select_first([mem, 5]) + " GB"
-        disks: "local-disk " + select_first([disk_space_gb, ceil(size(coverage, "GB"))+50]) + " HDD"
-        preemptible: select_first([preemptible_attempts, 2])
-    }
-
-    output {
-        File corrected_coverage = "${entity_id}.gc_corrected.tsv"
     }
 }

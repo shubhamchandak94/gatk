@@ -61,7 +61,7 @@ import java.util.stream.Collectors;
         programGroup = CopyNumberProgramGroup.class)
 @DocumentedFeature
 public class SparkGenomeReadCounts extends GATKSparkTool {
-    private static final long serialVersionUID = 1l;
+    private static final long serialVersionUID = 1L;
 
     private static final Set<String> NONAUTOSOMALCONTIGS = new HashSet<>(Arrays.asList("X", "Y", "MT", "M", "x", "y",
             "m", "chrX", "chrY", "chrMT", "chrM", "chrm"));
@@ -86,22 +86,22 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
             optional = true)
     protected int binsize = 10000;
 
-    protected static final String HDF5_WRITE_SHORT_NAME = "rawhdf5";
-    protected static final String HDF5_WRITE_LONG_NAME = "writeRawHdf5";
-    protected static final String HDF5_WRITE_EXT = ".raw_cov.hdf5";
+    protected static final String WRITE_HDF5_SHORT_NAME = "hdf5";
+    protected static final String WRITE_HDF5_LONG_NAME = "writeHdf5";
+    protected static final String HDF5_EXT = ".hdf5";
 
-    @Argument(doc = "Whether we should write an additional raw coverage file in HDF5 with extension " + HDF5_WRITE_EXT,
-            fullName = HDF5_WRITE_LONG_NAME,
-            shortName = HDF5_WRITE_SHORT_NAME,
+    private static final String TSV_EXT = ".tsv";
+
+    @Argument(doc = "Whether we should write an additional coverage file in HDF5 with extension " + HDF5_EXT,
+            fullName = WRITE_HDF5_LONG_NAME,
+            shortName = WRITE_HDF5_SHORT_NAME,
             optional = true)
-    protected boolean isWritingRawHdf5 = false;
+    protected boolean isWritingHdf5 = false;
 
     protected static final String OUTPUT_FILE_SHORT_NAME = "o";
     protected static final String OUTPUT_FILE_LONG_NAME = "outputFile";
 
-    public static final String RAW_COV_OUTPUT_EXTENSION = ".raw_cov";
-
-    @Argument(doc = "Output tsv file for the proportional coverage counts.  Raw coverage counts will also be written with extension '" + RAW_COV_OUTPUT_EXTENSION + "'",
+    @Argument(doc = "Output tsv file for the counts.",
             fullName = OUTPUT_FILE_LONG_NAME,
             shortName = OUTPUT_FILE_SHORT_NAME,
             optional = false
@@ -149,7 +149,7 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
             throw new UserException.BadInput("We do not support bams with more than one sample.");
         }
         final String sampleName = sampleCollection.sampleIds().get(0);
-        final String[] commentsForRawCoverage = {"##fileFormat  = tsv",
+        final String[] commentsForCoverageFile = {"##fileFormat  = tsv",
                 "##commandLine = " + getCommandLine(),
                 String.format("##title = Coverage counts in %d base bins for WGS", binsize)};
 
@@ -159,7 +159,7 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
         logger.info("Starting Spark coverage collection...");
         final long coverageCollectionStartTime = System.currentTimeMillis();
         final JavaRDD<GATKRead> rawReads = getReads();
-        final JavaRDD<GATKRead> reads = rawReads.filter(read -> filter.test(read));
+        final JavaRDD<GATKRead> reads = rawReads.filter(filter::test);
 
         //Note: using a field inside a closure will pull in the whole enclosing object to serialization
         // (which leads to bad performance and can blow up if some objects in the fields are not
@@ -175,10 +175,6 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
         final long coverageCollectionEndTime = System.currentTimeMillis();
         logger.info(String.format("Finished the spark coverage collection with %d targets and %d reads. Elapse of %d seconds",
                 readIntervalKeySet.size(), totalReads, (coverageCollectionEndTime - coverageCollectionStartTime) / 1000));
-
-        final String[] commentsForProportionalCoverage = {commentsForRawCoverage[0], commentsForRawCoverage[1],
-                String.format("##title = Proportional coverage counts in %d base bins for WGS (total reads: %d)",
-                        binsize, totalReads)};
 
         logger.info("Creating full genome bins...");
         final long createGenomeBinsStartTime = System.currentTimeMillis();
@@ -196,7 +192,7 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
         byKeyMutable.putAll(byKey);
 
         logger.info("Creating missing genome bins: Populating mutable mapping with zero counts for empty regions...");
-        fullGenomeBins.stream().forEach(b -> byKeyMutable.putIfAbsent(b, 0l));
+        fullGenomeBins.forEach(b -> byKeyMutable.putIfAbsent(b, 0l));
 
         final long createMissingGenomeBinsEndTime = System.currentTimeMillis();
         logger.info(String.format("Finished creating missing genome bins. Elapse of %d seconds",
@@ -213,34 +209,29 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
         logger.info("Creating proportional coverage... ");
         final long pCovFileStartTime = System.currentTimeMillis();
         final SortedMap<SimpleInterval, Double> byKeyProportionalSorted = new TreeMap<>(IntervalUtils.LEXICOGRAPHICAL_ORDER_COMPARATOR);
-        byKeySorted.entrySet().stream().forEach(e -> byKeyProportionalSorted.put(e.getKey(), (double) e.getValue() / totalReads));
+        byKeySorted.forEach((key, value) -> byKeyProportionalSorted.put(key, (double) value / totalReads));
         final long pCovFileEndTime = System.currentTimeMillis();
         logger.info(String.format("Finished creating proportional coverage map. Elapse of %d seconds",
                 (pCovFileEndTime - pCovFileStartTime) / 1000));
 
-        logger.info("Writing raw coverage file ...");
+        logger.info("Writing coverage file ...");
         final long writingCovFileStartTime = System.currentTimeMillis();
-        ReadCountCollectionUtils.writeReadCountsFromSimpleInterval(new File(outputFile.getAbsolutePath() + RAW_COV_OUTPUT_EXTENSION), sampleName, byKeySorted, commentsForRawCoverage);
+        ReadCountCollectionUtils.writeReadCountsFromSimpleInterval(new File(outputFile.getAbsolutePath()), sampleName, byKeySorted, commentsForCoverageFile);
         final long writingCovFileEndTime = System.currentTimeMillis();
         logger.info(String.format("Finished writing coverage file. Elapse of %d seconds",
                 (writingCovFileEndTime - writingCovFileStartTime) / 1000));
 
-        logger.info("Writing proportional coverage file ...");
-        final long writingPCovFileStartTime = System.currentTimeMillis();
-        ReadCountCollectionUtils.writeReadCountsFromSimpleInterval(outputFile, sampleName, byKeyProportionalSorted,
-                commentsForProportionalCoverage);
-        final long writingPCovFileEndTime = System.currentTimeMillis();
-        logger.info(String.format("Finished writing proportional coverage file. Elapse of %d seconds",
-                (writingPCovFileEndTime - writingPCovFileStartTime) / 1000));
-
-        if (isWritingRawHdf5) {
-            logger.info("Writing raw coverage file in HDF5...");
-            final long writingrawHdf5CovFileStartTime = System.currentTimeMillis();
-            ReadCountCollectionUtils.writeReadCountsFromSimpleIntervalToHdf5(new File(outputFile.getAbsolutePath() + HDF5_WRITE_EXT), sampleName,
+        if (isWritingHdf5) {
+            logger.info("Writing coverage file in HDF5...");
+            final String hdf5File = outputFile.getAbsolutePath().endsWith(TSV_EXT)
+                    ? outputFile.getAbsolutePath().substring(0, outputFile.getAbsolutePath().length() - TSV_EXT.length()) + HDF5_EXT    //if a TSV file, replace extension with HDF5 extension
+                    : outputFile.getAbsolutePath() + HDF5_EXT;                                                                          //else just append HDF5 extension
+            final long writingHdf5CovFileStartTime = System.currentTimeMillis();
+            ReadCountCollectionUtils.writeReadCountsFromSimpleIntervalToHdf5(new File(hdf5File), sampleName,
                     byKeySorted);
-            final long writingrawHdf5CovFileEndTime = System.currentTimeMillis();
-            logger.info(String.format("Finished writing raw coverage file (HDF5). Elapse of %d seconds",
-                    (writingrawHdf5CovFileEndTime - writingrawHdf5CovFileStartTime) / 1000));
+            final long writingHdf5CovFileEndTime = System.currentTimeMillis();
+            logger.info(String.format("Finished writing coverage file (HDF5). Elapse of %d seconds",
+                    (writingHdf5CovFileEndTime - writingHdf5CovFileStartTime) / 1000));
         }
     }
 
