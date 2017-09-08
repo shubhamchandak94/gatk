@@ -1,6 +1,5 @@
-package org.broadinstitute.hellbender.tools.walkers.orientationbias;
+package org.broadinstitute.hellbender.tools.walkers.readorientation;
 
-import org.testng.Assert;
 import org.testng.annotations.Test;
 import org.testng.internal.junit.ArrayAsserts;
 
@@ -9,9 +8,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.broadinstitute.hellbender.tools.walkers.orientationbias.ContextDependentArtifactFilterEngine.NUM_ALLELES;
-import static org.broadinstitute.hellbender.tools.walkers.orientationbias.ContextDependentArtifactFilterEngine.NUM_STATUSES;
-import static org.testng.Assert.*;
+import static org.broadinstitute.hellbender.tools.walkers.readorientation.ContextDependentArtifactFilterEngine.NUM_ALLELES;
+import static org.broadinstitute.hellbender.tools.walkers.readorientation.ContextDependentArtifactFilterEngine.NUM_STATUSES;
 
 /**
  * Created by tsato on 9/6/17.

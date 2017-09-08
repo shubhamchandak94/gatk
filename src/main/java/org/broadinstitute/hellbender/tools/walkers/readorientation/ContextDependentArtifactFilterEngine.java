@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.walkers.orientationbias;
+package org.broadinstitute.hellbender.tools.walkers.readorientation;
 
 import htsjdk.variant.variantcontext.Allele;
 import org.apache.commons.math3.distribution.BinomialDistribution;
@@ -21,7 +21,7 @@ public class ContextDependentArtifactFilterEngine {
     static final String[] ALL_ALLELES = new String[] { "A", "C", "G", "T" };
 
     // A, C, G, or T, since we only look at SNP sites
-    static final int NUM_ALLELES = ALL_ALLELES.length;
+    static final int NUM_ALLELES = ALL_ALLELES.length; // aka 4
 
     // When the increase in likelihood falls under this value, we call the algorithm converged
     static final double CONVERGENCE_THRESHOLD = 1e-3;
@@ -147,7 +147,7 @@ public class ContextDependentArtifactFilterEngine {
             numIterations++;
         }
 
-        return new Hyperparameters(pi, f, theta);
+        return new Hyperparameters(referenceContext, pi, f, theta);
     }
 
     // Given the current estimates of the parameters pi, f, and theta, compute the log10Responsibilities
@@ -269,22 +269,6 @@ public class ContextDependentArtifactFilterEngine {
 
     private static boolean checkLikelihoodHasConverged(final int numIterations){
         return numIterations > 10;
-    }
-
-    class Hyperparameters {
-        double[][] pi;
-        double[] f;
-        double[] theta;
-
-        public Hyperparameters(double[][] pi, double[] f, double[] theta){
-            this.pi = pi;
-            this.f = f;
-            this.theta = theta;
-        }
-
-        double[][] getPi(){ return pi; }
-        double[] getF(){ return f; }
-        double[] getTheta(){ return theta; }
     }
 
     enum States {

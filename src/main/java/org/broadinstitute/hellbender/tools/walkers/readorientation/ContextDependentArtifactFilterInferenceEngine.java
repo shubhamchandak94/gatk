@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.walkers.orientationbias;
+package org.broadinstitute.hellbender.tools.walkers.readorientation;
 
 import htsjdk.variant.variantcontext.VariantContext;
 import org.broadinstitute.barclay.argparser.Argument;

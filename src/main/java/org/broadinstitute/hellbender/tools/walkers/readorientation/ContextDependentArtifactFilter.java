@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.walkers.orientationbias;
+package org.broadinstitute.hellbender.tools.walkers.readorientation;
 
 import htsjdk.samtools.util.SequenceUtil;
 import htsjdk.variant.variantcontext.Allele;
@@ -16,7 +16,6 @@ import org.broadinstitute.hellbender.utils.read.ReadUtils;
 import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * Created by tsato on 7/26/17.
@@ -27,17 +26,14 @@ import java.util.stream.IntStream;
  * Inference phase will likely feature variant context and what not.
  */
 @CommandLineProgramProperties(
-        summary = "",
-        oneLineSummary = "",
+        summary = "yoooo",
+        oneLineSummary = "hooooo",
         programGroup = VariantProgramGroup.class
 )
-public class ContextDependentArtifactFilter extends LocusWalker {
-    @Argument(fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME, shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME, doc = "", common = false, optional = true)
-    private File OUTPUT_FILE = null;
 
+public class ContextDependentArtifactFilter extends LocusWalker {
     @Argument(fullName = "", shortName = "", doc = "", optional = true)
     private File gnomad = null;
-
 
     @Argument(fullName = "", shortName = "", doc = "", optional = true)
     static final int DEFAULT_INITIAL_LIST_SIZE = 37_000_000/64; // by default we assume that that all 64 reference 3-mers are equally likely
@@ -47,6 +43,9 @@ public class ContextDependentArtifactFilter extends LocusWalker {
 
     @Argument(fullName = "", shortName = "", doc = "exclude bases below this quality from pileup", optional = true)
     static final int MINIMUM_BASE_QUALITY = 10;
+
+    @Argument(fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME, shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME, doc = "a tab-seprated table of hyperparameters", optional = false)
+    static File output = null;
 
     public static Map<String, PerContextData> contextDependentDataMap;
 
@@ -151,7 +150,7 @@ public class ContextDependentArtifactFilter extends LocusWalker {
 
     @Override
     public Object onTraversalSuccess() {
-        Map<String, ContextDependentArtifactFilterEngine.Hyperparameters> hyperparameterEstimates = new HashMap<>();
+        List<Hyperparameters> hyperparameterEstimates = new ArrayList<>();
         // remember we run EM separately for each of 4^3 = 64 ref contexts
 
 
@@ -160,8 +159,8 @@ public class ContextDependentArtifactFilter extends LocusWalker {
             PerContextData contextData = contextDependentDataMap.get(refContext);
             ContextDependentArtifactFilterEngine engine = new ContextDependentArtifactFilterEngine(contextData);
             final int numSites = contextData.getNumLoci();
-            ContextDependentArtifactFilterEngine.Hyperparameters hyperparameters = engine.runEMAlgorithm();
-            hyperparameterEstimates.put(refContext, hyperparameters);
+            Hyperparameters hyperparameters = engine.runEMAlgorithm();
+            hyperparameterEstimates.add(hyperparameters);
 
 
 //            List<Integer> activeIndices = IntStream.range(0, numSites).filter(i -> contextData.getAltDepths().get(i) > 0)
@@ -172,6 +171,8 @@ public class ContextDependentArtifactFilter extends LocusWalker {
 //            int bogus = 3;
         }
 
+        Hyperparameters.writeHyperparameters(hyperparameterEstimates, output);
+
         /**
          *  internal state check - must go to a separate test at some point
          *  20:21196089-21196089, 9, 5 // ACG;
@@ -179,7 +180,7 @@ public class ContextDependentArtifactFilter extends LocusWalker {
          *  20:53355622-53355622, 9, 2 // AAC
          */
 
-        return null;
+        return "SUCCESS";
     }
 
     private List<String> makeAllPossible3Mers(){

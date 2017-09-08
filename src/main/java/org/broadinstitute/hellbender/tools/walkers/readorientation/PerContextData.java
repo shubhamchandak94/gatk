@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.walkers.orientationbias;
+package org.broadinstitute.hellbender.tools.walkers.readorientation;
 
 import htsjdk.variant.variantcontext.Allele;
 import org.broadinstitute.hellbender.engine.AlignmentContext;
@@ -31,8 +31,6 @@ public class PerContextData {
     double[] alleleFractions; // f
 
     double[] altF1R2Fractions; // theta
-
-
 
     public PerContextData(final String referenceContext){
         this.referenceContext = referenceContext;

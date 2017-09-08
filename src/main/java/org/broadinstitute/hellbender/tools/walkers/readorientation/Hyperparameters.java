@@ -1,6 +1,5 @@
-package org.broadinstitute.hellbender.tools.walkers.orientationbias;
+package org.broadinstitute.hellbender.tools.walkers.readorientation;
 
-import org.apache.commons.math3.util.Pair;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.BaseUtils;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -14,10 +13,7 @@ import htsjdk.variant.variantcontext.Allele;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
-
-import static org.broadinstitute.hellbender.tools.walkers.orientationbias.ContextDependentArtifactFilterEngine.*;
 
 /**
  * Created by tsato on 9/5/17.
@@ -131,7 +127,7 @@ class Hyperparameters {
             final double[] piT = Arrays.stream(dataLine.get(HyperparameterTableColumn.PI_T).split(","))
                     .mapToDouble(Double::parseDouble).toArray();
 
-            final double[][] pi = new double[NUM_ALLELES][NUM_STATUSES];
+            final double[][] pi = new double[ContextDependentArtifactFilterEngine.NUM_ALLELES][ContextDependentArtifactFilterEngine.NUM_STATUSES];
             pi[BaseUtils.simpleBaseToBaseIndex("A".getBytes()[0])] = piA;
             pi[BaseUtils.simpleBaseToBaseIndex("C".getBytes()[0])] = piC;
             pi[BaseUtils.simpleBaseToBaseIndex("G".getBytes()[0])] = piG;
@@ -152,7 +148,7 @@ class Hyperparameters {
         CONTEXT("context"),
         PI_A("pi_A"), PI_C("pi_C"), PI_G("pi_G"), PI_T("pi_T"),
         F("allele_fraction"),
-        THETA("f1r2_fraction");
+        THETA("alt_f1r2_fraction");
 
         private String columnName;
 
