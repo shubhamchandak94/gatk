@@ -35,6 +35,7 @@ sed -r "s/__GATK_DOCKER__/broadinstitute\/gatk\:$HASH_TO_USE/g" ${CNV_CROMWELL_T
 sed -r "s/__GATK_DOCKER__/broadinstitute\/gatk\:$HASH_TO_USE/g" ${CNV_CROMWELL_TEST_DIR}/cnv_somatic_panel_wes_workflow.json >cnv_somatic_panel_wes_workflow_mod.json
 sed -r "s/__GATK_DOCKER__/broadinstitute\/gatk\:$HASH_TO_USE/g" ${CNV_CROMWELL_TEST_DIR}/cnv_somatic_panel_wgs_workflow.json >cnv_somatic_panel_wgs_workflow_mod.json
 
+docker inspect broadinstitute/gatk:$HASH_TO_USE
 
 echo "Running ========"
 CROMWELL_JAR="cromwell-0.28.jar"

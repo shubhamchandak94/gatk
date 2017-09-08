@@ -25,6 +25,8 @@ fi
 echo "Docker build done =========="
 popd
 
+docker inspect broadinstitute/gatk:$HASH_TO_USE
+
 echo "Inserting docker image into json ========"
 CNV_CROMWELL_TEST_DIR="${WORKING_DIR}/gatk/scripts/cnv_cromwell_tests/germline/"
 sed -r "s/__GATK_DOCKER__/broadinstitute\/gatk\:$HASH_TO_USE/g" ${CNV_CROMWELL_TEST_DIR}/cnv_germline_cohort_calling_workflow_wes.json >cnv_germline_cohort_calling_workflow_wes_mod.json

@@ -21,6 +21,9 @@ else
   HASH_TO_USE=${TRAVIS_COMMIT}
   sudo bash build_docker.sh  -e ${HASH_TO_USE} -s -u -d $PWD/temp_staging/;
 fi
+
+docker inspect broadinstitute/gatk:$HASH_TO_USE
+
 echo "Docker build done =========="
 echo "Putting the newly built docker image into the json parameters"
 cd $WORKING_DIR/gatk/scripts/
@@ -32,6 +35,8 @@ echo "=================="
 # Create the tumor-only json by using the pair_list_tumor_only file
 sed -r "s/\"pair_list/\"pair_list_tumor_only/g" $WORKING_DIR/test_m2_wdl_multi_mod.json >$WORKING_DIR/test_m2_wdl_multi_mod_to.json
 cd $WORKING_DIR/
+
+docker inspect broadinstitute/gatk:$HASH_TO_USE
 
 echo "Running M2 WDL through cromwell (T/N)"
 ln -fs $WORKING_DIR/gatk/scripts/mutect2_wdl/mutect2.wdl
