@@ -99,9 +99,9 @@ workflow CNVSomaticPanelWorkflow {
 task CreateReadCountPanelOfNormals {
     String pon_entity_id
     Array[File] read_count_files
-    Float? minimum_interval_median_percentile = 25.
-    Float? maximum_zeros_in_sample_percentage = 2.
-    Float? maximum_zeros_in_interval_percentage = 5.
+    Float? minimum_interval_median_percentile = 25.0
+    Float? maximum_zeros_in_sample_percentage = 2.0
+    Float? maximum_zeros_in_interval_percentage = 5.0
     Float? extreme_sample_median_percentile = 2.5
     Float? extreme_outlier_truncation_percentile = 0.1
     Int? number_of_eigensamples = 20
