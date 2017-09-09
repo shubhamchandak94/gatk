@@ -51,7 +51,7 @@ workflow CNVSomaticAlleleFractionPairWorkflow {
             entity_id = GetBayesianHetCoverage.tumor_entity_id,
             hets = GetBayesianHetCoverage.tumor_hets,
             denoised_copy_ratio = tumor_denoised_copy_ratio,
-            called_segments = tumor_called_segments,
+            called_copy_ratio_segments = tumor_called_copy_ratio_segments,
             is_wgs = is_wgs,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
@@ -157,7 +157,7 @@ task AllelicCNV {
     String entity_id
     File hets
     File denoised_copy_ratio
-    File called_segments
+    File called_copy_ratio_segments
     Boolean is_wgs
     String gatk_jar
     Boolean? use_all_copy_ratio_segments
@@ -184,7 +184,7 @@ task AllelicCNV {
                 java -Xmx${default=4 mem}g -jar ${gatk_jar} AllelicCNV \
                     --tumorHets ${hets} \
                     --tangentNormalized ${denoised_copy_ratio} \
-                    --segments ${called_segments} \
+                    --segments ${called_copy_ratio_segments} \
                     --outputPrefix ${entity_id} \
                     --useAllCopyRatioSegments ${default=false use_all_copy_ratio_segments} \
                     --maxNumIterationsSNPSeg ${default=5 max_num_iterations_snp_seg} \
@@ -201,7 +201,7 @@ task AllelicCNV {
                 java -Xmx${default=4 mem}g -jar ${gatk_jar} AllelicCNV \
                     --tumorHets ${hets} \
                     --tangentNormalized ${denoised_copy_ratio} \
-                    --segments ${called_segments} \
+                    --segments ${called_copy_ratio_segments} \
                     --outputPrefix ${entity_id} \
                     --useAllCopyRatioSegments ${default=false use_all_copy_ratio_segments} \
                     --maxNumIterationsSNPSeg ${default=25 max_num_iterations_snp_seg} \
@@ -307,7 +307,7 @@ task ConvertACNVResults {
 
     output {
         File acs_segments = "${output_dir_}/${entity_id}-sim-final.acs.seg"
-        File cnb_called_segments = "${output_dir_}/${entity_id}-sim-final.cnb_called.seg"
+        File cnb_called_copy_ratio_segments = "${output_dir_}/${entity_id}-sim-final.cnb_called.seg"
         File cnv_segments = "${output_dir_}/${entity_id}-sim-final.cnv.seg"
         File titan_hets = "${output_dir_}/${entity_id}-sim-final.titan.het.tsv"
         File titan_denoised_copy_ratio = "${output_dir_}/${entity_id}-sim-final.titan.tn.tsv"
