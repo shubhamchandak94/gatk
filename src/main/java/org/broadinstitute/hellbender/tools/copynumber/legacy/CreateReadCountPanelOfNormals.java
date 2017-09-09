@@ -199,8 +199,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
         final List<Locatable> intervals = getIntervalsFromFirstReadCountFile(logger, inputReadCountFiles);
 
         //get GC content (null if not provided)
-        final double[] intervalGCContent = validateIntervalGCContent(logger, intervals,
-                TargetArgumentCollection.readTargetCollection(annotatedIntervalsFile));
+        final double[] intervalGCContent = validateIntervalGCContent(logger, intervals, annotatedIntervalsFile);
 
         //validate input read-count files (i.e., check intervals and that only integer counts are contained)
         //and aggregate as a RealMatrix with dimensions numIntervals x numSamples
@@ -231,12 +230,13 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     //code is duplicated in DenoiseReadCounts for now
     private static double[] validateIntervalGCContent(final Logger logger,
                                                       final List<Locatable> intervals,
-                                                      final TargetCollection<Target> annotatedIntervals) {
-        if (annotatedIntervals == null) {
+                                                      final File annotatedIntervalsFile) {
+        if (annotatedIntervalsFile == null) {
             logger.info("No GC-content annotations for intervals found; GC-bias correction will not be performed...");
             return null;
         }
-        logger.info("Validating and reading GC-content annotations for intervals...");
+        logger.info("Reading and validating GC-content annotations for intervals...");
+        final TargetCollection<Target> annotatedIntervals = TargetArgumentCollection.readTargetCollection(annotatedIntervalsFile);
         Utils.validateArg(annotatedIntervals.targets().stream().map(Target::getInterval).collect(Collectors.toList()).equals(intervals),
                 "Annotated intervals do not match intervals from first read-count file.");
         if (!annotatedIntervals.targets().stream().allMatch(t -> t.getAnnotations().hasAnnotation(TargetAnnotation.GC_CONTENT))) {
