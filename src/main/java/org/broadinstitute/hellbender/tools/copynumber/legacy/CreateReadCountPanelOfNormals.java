@@ -17,6 +17,7 @@ import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGrou
 import org.broadinstitute.hellbender.engine.spark.SparkCommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.legacy.coverage.denoising.svd.HDF5SVDReadCountPanelOfNormals;
+import org.broadinstitute.hellbender.tools.copynumber.legacy.formats.LegacyCopyNumberArgument;
 import org.broadinstitute.hellbender.tools.copynumber.temporary.SimpleReadCountCollection;
 import org.broadinstitute.hellbender.tools.exome.Target;
 import org.broadinstitute.hellbender.tools.exome.TargetAnnotation;
@@ -100,9 +101,13 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     )
     private List<File> inputReadCountFiles = new ArrayList<>();
 
-    @ArgumentCollection(
+    @Argument(
             doc = "Input annotated-interval file containing annotations for GC content in genomic intervals (output of AnnotateTargets).  " +
-                    "Intervals must be identical to and in the same order as those in the input read-count files."
+                    "If provided, explicit GC correction will be performed before performing SVD.  " +
+                    "Intervals must be identical to and in the same order as those in the input read-count files.",
+            fullName = LegacyCopyNumberArgument.ANNOTATED_INTERVALS_FILE_FULL_NAME,
+            shortName = LegacyCopyNumberArgument.ANNOTATED_INTERVALS_FILE_SHORT_NAME,
+            optional = true
     )
     private File annotatedIntervalsFile = null;
 
@@ -195,7 +200,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
 
         //get GC content (null if not provided)
         final double[] intervalGCContent = validateIntervalGCContent(logger, intervals,
-                new TargetArgumentCollection(() -> annotatedIntervalsFile).readTargetCollection(true));
+                TargetArgumentCollection.readTargetCollection(annotatedIntervalsFile));
 
         //validate input read-count files (i.e., check intervals and that only integer counts are contained)
         //and aggregate as a RealMatrix with dimensions numIntervals x numSamples

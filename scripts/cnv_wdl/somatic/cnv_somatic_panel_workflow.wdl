@@ -68,10 +68,10 @@ workflow CNVSomaticPanelWorkflow {
         }
     }
 
-	if (do_gc_correction) {
+	if (do_explicit_gc_correction) {
 		call CNVTasks.AnnotateTargets {
             input:
-                entity_id = combined_entity_id,
+                entity_id = pon_entity_id,
                 targets = CollectReadCounts.read_counts[0],
                 ref_fasta = ref_fasta,
                 ref_fasta_fai = ref_fasta_fai,
@@ -84,7 +84,7 @@ workflow CNVSomaticPanelWorkflow {
     call CreateReadCountPanelOfNormals {
         input:
             pon_entity_id = pon_entity_id,
-            read_count_files = CollectReadCounts.read_counts,
+            read_count_files = if iswgs then CollectReadCounts.read_counts_hdf5 else CollectReadCounts.read_counts,
             annotated_intervals = AnnotateTargets.annotated_targets,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
@@ -116,7 +116,7 @@ task CreateReadCountPanelOfNormals {
 
     command {
         java -Xmx${default=4 mem}g -jar ${gatk_jar} CreateReadCountPanelOfNormals \
-            --input ${read_count_files} \
+            --input ${sep=" --input " read_count_files} \
             --minimumIntervalMedianPercentile ${default="25." minimum_interval_median_percentile} \
             --maximumZerosInSamplePercentage ${default="2." maximum_zeros_in_sample_percentage} \
             --maximumZerosInIntervalPercentage ${default="5." maximum_zeros_in_interval_percentage} \

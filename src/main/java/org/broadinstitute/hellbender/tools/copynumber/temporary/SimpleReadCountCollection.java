@@ -88,7 +88,6 @@ public final class SimpleReadCountCollection {
                 String[] row;
                 while ((row = csvReader.readNext()) != null) {
                     if (!row[0].startsWith(COMMENT_STRING)) {  //skip comment lines
-                        csvReader.readNext();   //skip column header
                         break;
                     }
                 }

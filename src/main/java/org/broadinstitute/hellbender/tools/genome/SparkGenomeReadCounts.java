@@ -8,6 +8,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
+import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
@@ -98,13 +99,9 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
             optional = true)
     protected boolean isWritingHdf5 = false;
 
-    protected static final String OUTPUT_FILE_SHORT_NAME = "o";
-    protected static final String OUTPUT_FILE_LONG_NAME = "outputFile";
-
     @Argument(doc = "Output tsv file for the counts.",
-            fullName = OUTPUT_FILE_LONG_NAME,
-            shortName = OUTPUT_FILE_SHORT_NAME,
-            optional = false
+            fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME,
+            shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME
     )
     protected File outputFile;
 

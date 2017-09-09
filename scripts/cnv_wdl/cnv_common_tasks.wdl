@@ -64,10 +64,7 @@ task CollectReadCounts {
 
     # Sample name is derived from the bam filename
     String base_filename = basename(bam, ".bam")
- 
-    # Change output file extension to hdf5 for WGS
-    String read_counts_filename = if is_wgs then "${base_filename}.readCounts.hdf5" else "${base_filename}.readCounts.tsv"
-  
+
     command <<<
         if [ ${is_wgs} = true ]
             then
@@ -79,7 +76,7 @@ task CollectReadCounts {
                     --disableToolDefaultReadFilters ${default="false" disable_all_read_filters} \
                     --disableSequenceDictionaryValidation ${default="true" disable_sequence_dictionary_validation} \
                     $(if [ ${default="true" keep_duplicate_reads} = true ]; then echo " --disableReadFilter NotDuplicateReadFilter "; else echo ""; fi) \
-                    --outputFile ${base_filename}.readCounts.tsv \
+                    --output ${base_filename}.readCounts.tsv \
                     --writeHdf5
             else
                 java -Xmx${default=4 mem}g -jar ${gatk_jar} CalculateTargetCoverage \
@@ -109,7 +106,8 @@ task CollectReadCounts {
 
     output {
         String entity_id = base_filename
-        File read_counts = read_counts_filename
+        File read_counts = "${base_filename}.readCounts.tsv"
+        File? read_counts_hdf5 = if is_wgs then "${base_filename}.readCounts.hdf5" else "null"
     }
 }
 
@@ -132,6 +130,7 @@ task AnnotateTargets {
         java -Xmx${default=4 mem}g -jar ${gatk_jar} AnnotateTargets \
             --targets ${targets} \
             --reference ${ref_fasta} \
+            --interval_merging_rule OVERLAPPING_ONLY \
             --output ${entity_id}.annotated.tsv
     }
 

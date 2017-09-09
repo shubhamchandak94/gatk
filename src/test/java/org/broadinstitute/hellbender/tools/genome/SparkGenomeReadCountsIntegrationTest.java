@@ -27,7 +27,7 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
                 "--disableSequenceDictionaryValidation",
                 "-" + StandardArgumentDefinitions.REFERENCE_SHORT_NAME, REFERENCE_FILE.getAbsolutePath(),
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, BAM_FILE.getAbsolutePath(),
-                "-" + SparkGenomeReadCounts.OUTPUT_FILE_SHORT_NAME, outputFile.getAbsolutePath(),
+                "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputFile.getAbsolutePath(),
                 "-" + SparkGenomeReadCounts.BINSIZE_SHORT_NAME, "10000",
         };
         runCommandLine(arguments);
@@ -52,7 +52,7 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
                 "--disableSequenceDictionaryValidation",
                 "-" + StandardArgumentDefinitions.REFERENCE_SHORT_NAME, REFERENCE_FILE.getAbsolutePath(),
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, BAM_FILE.getAbsolutePath(),
-                "-" + SparkGenomeReadCounts.OUTPUT_FILE_SHORT_NAME, outputFile.getAbsolutePath(),
+                "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputFile.getAbsolutePath(),
                 "-" + SparkGenomeReadCounts.BINSIZE_SHORT_NAME, "16000",
         };
         runCommandLine(arguments);
@@ -77,7 +77,7 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
                 "--disableSequenceDictionaryValidation",
                 "-" + StandardArgumentDefinitions.REFERENCE_SHORT_NAME, REFERENCE_FILE.getAbsolutePath(),
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, BAM_FILE.getAbsolutePath(),
-                "-" + SparkGenomeReadCounts.OUTPUT_FILE_SHORT_NAME, outputFile.getAbsolutePath(),
+                "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputFile.getAbsolutePath(),
                 "-" + SparkGenomeReadCounts.BINSIZE_SHORT_NAME, "2000",
         };
         runCommandLine(arguments);
@@ -119,7 +119,7 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
                 "--disableSequenceDictionaryValidation",
                 "-" + StandardArgumentDefinitions.REFERENCE_SHORT_NAME, REFERENCE_FILE.getAbsolutePath(),
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, BAM_FILE.getAbsolutePath(),
-                "-" + SparkGenomeReadCounts.OUTPUT_FILE_SHORT_NAME, outputFile.getAbsolutePath(),
+                "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputFile.getAbsolutePath(),
                 "-" + SparkGenomeReadCounts.BINSIZE_SHORT_NAME, "10000",
                 "-L", "1"
         };
@@ -140,7 +140,7 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
                 "--disableSequenceDictionaryValidation",
                 "-" + StandardArgumentDefinitions.REFERENCE_SHORT_NAME, REFERENCE_FILE.getAbsolutePath(),
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, BAM_FILE.getAbsolutePath(),
-                "-" + SparkGenomeReadCounts.OUTPUT_FILE_SHORT_NAME, outputFile.getAbsolutePath(),
+                "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputFile.getAbsolutePath(),
                 "-" + SparkGenomeReadCounts.BINSIZE_SHORT_NAME, "10000",
                 "-L", "1", "-L", "2"
         };
@@ -164,7 +164,7 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
                 "--disableSequenceDictionaryValidation",
                 "-" + StandardArgumentDefinitions.REFERENCE_SHORT_NAME, REFERENCE_FILE.getAbsolutePath(),
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, BAM_FILE.getAbsolutePath(),
-                "-" + SparkGenomeReadCounts.OUTPUT_FILE_SHORT_NAME, outputFile.getAbsolutePath(),
+                "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputFile.getAbsolutePath(),
                 "-" + SparkGenomeReadCounts.BINSIZE_SHORT_NAME, "100",
                 "-L", "1:1-500"
         };
@@ -188,7 +188,7 @@ public class SparkGenomeReadCountsIntegrationTest extends CommandLineProgramTest
                 "--disableSequenceDictionaryValidation",
                 "-" + StandardArgumentDefinitions.REFERENCE_SHORT_NAME, REFERENCE_FILE.getAbsolutePath(),
                 "-" + StandardArgumentDefinitions.INPUT_SHORT_NAME, BAM_FILE.getAbsolutePath(),
-                "-" + SparkGenomeReadCounts.OUTPUT_FILE_SHORT_NAME, outputFile.getAbsolutePath(),
+                "-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME, outputFile.getAbsolutePath(),
                 "-" + SparkGenomeReadCounts.BINSIZE_SHORT_NAME, "10000",
                 "-" + SparkGenomeReadCounts.WRITE_HDF5_SHORT_NAME, "True"
         };

@@ -20,7 +20,7 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     File ref_fasta
     File ref_fasta_dict
     File ref_fasta_fai
-    File cnv_panel_of_normals
+    File read_count_pon
     Boolean do_gc_correction
     String gatk_jar
     String gatk_docker
@@ -112,7 +112,7 @@ task DenoiseReadCounts {
     runtime {
         docker: "${gatk_docker}"
         memory: select_first([mem, 5]) + " GB"
-        disks: "local-disk " + select_first([disk_space_gb, ceil(size(cnv_panel_of_normals, "GB")) + 50]) + " HDD"
+        disks: "local-disk " + select_first([disk_space_gb, ceil(size(read_count_pon, "GB")) + 50]) + " HDD"
         preemptible: select_first([preemptible_attempts, 2])
     }
 

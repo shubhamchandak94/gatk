@@ -37,7 +37,7 @@ Further explanation of other task-level parameters may be found by invoking the 
 
 The reference used must be the same between PoN and case samples.
 
-- ``CNVSomaticPairWorkflow.cnv_panel_of_normals`` -- Path to copy-ratio PoN created by the panel workflow. 
+- ``CNVSomaticPairWorkflow.read_count_pon`` -- Path to copy-ratio PoN created by the panel workflow. 
 - ``CNVSomaticPairWorkflow.common_sites`` -- (optional) List of common SNP sites to use in ``GetBayesianHetCoverage``.  If not provided, the allele-fraction subworkflow will not be run.
 - ``CNVSomaticPairWorkflow.gatk_jar`` -- Absolute path to gatk.jar.
 - ``CNVSomaticPairWorkflow.normal_bam_idx`` -- (optional, but required if ``normal_bam`` is provided)  File path or storage location (depending on backend) of the normal BAM file index.
