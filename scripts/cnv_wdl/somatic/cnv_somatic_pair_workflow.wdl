@@ -136,7 +136,7 @@ workflow CNVSomaticPairWorkflow {
         File tumor_called_copy_ratio_segments = TumorCopyRatioWorkflow.called_copy_ratio_segments
         File tumor_segmented_copy_ratio_plot = TumorCopyRatioWorkflow.segmented_copy_ratio_plot
         File tumor_copy_ratio_before_after_denoising_plot = TumorCopyRatioWorkflow.copy_ratio_before_after_denoising_plot
-        File tumor_copy_ratio_before_after_denoising_lim_4_plot = NormalCopyRatioWorkflow.copy_ratio_before_after_denoising_lim_4_plot
+        File tumor_copy_ratio_before_after_denoising_lim_4_plot = TumorCopyRatioWorkflow.copy_ratio_before_after_denoising_lim_4_plot
 
         File? tumor_hets = TumorAlleleFractionWorkflow.tumor_hets
         File? tumor_acnv_segments = TumorAlleleFractionWorkflow.acnv_segments
