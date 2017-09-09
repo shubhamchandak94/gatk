@@ -21,7 +21,7 @@ workflow CNVSomaticAlleleFractionPairWorkflow {
     File tumor_bam_idx
     File? normal_bam
     File? normal_bam_idx
-    File tumor_tn_coverage
+    File tumor_denoised_copy_ratio
     File tumor_called_segments
     File ref_fasta
     File ref_fasta_dict
@@ -50,7 +50,7 @@ workflow CNVSomaticAlleleFractionPairWorkflow {
         input:
             entity_id = GetBayesianHetCoverage.tumor_entity_id,
             hets = GetBayesianHetCoverage.tumor_hets,
-            tn_coverage = tumor_tn_coverage,
+            denoised_copy_ratio = tumor_denoised_copy_ratio,
             called_segments = tumor_called_segments,
             is_wgs = is_wgs,
             gatk_jar = gatk_jar,
@@ -61,7 +61,7 @@ workflow CNVSomaticAlleleFractionPairWorkflow {
         input:
             entity_id = GetBayesianHetCoverage.tumor_entity_id,
             hets = GetBayesianHetCoverage.tumor_hets,
-            tn_coverage = tumor_tn_coverage,
+            denoised_copy_ratio = tumor_denoised_copy_ratio,
             acnv_segments = AllelicCNV.acnv_segments,
             ref_fasta_dict = ref_fasta_dict,
             gatk_jar = gatk_jar,
@@ -72,7 +72,7 @@ workflow CNVSomaticAlleleFractionPairWorkflow {
         input:
             entity_id = GetBayesianHetCoverage.tumor_entity_id,
             hets = GetBayesianHetCoverage.tumor_hets,
-            tn_coverage = tumor_tn_coverage,
+            denoised_copy_ratio = tumor_denoised_copy_ratio,
             acnv_segments = AllelicCNV.acnv_segments,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
@@ -156,7 +156,7 @@ task GetBayesianHetCoverage {
 task AllelicCNV {
     String entity_id
     File hets
-    File tn_coverage
+    File denoised_copy_ratio
     File called_segments
     Boolean is_wgs
     String gatk_jar
@@ -183,7 +183,7 @@ task AllelicCNV {
             then
                 java -Xmx${default=4 mem}g -jar ${gatk_jar} AllelicCNV \
                     --tumorHets ${hets} \
-                    --tangentNormalized ${tn_coverage} \
+                    --tangentNormalized ${denoised_copy_ratio} \
                     --segments ${called_segments} \
                     --outputPrefix ${entity_id} \
                     --useAllCopyRatioSegments ${default=false use_all_copy_ratio_segments} \
@@ -200,7 +200,7 @@ task AllelicCNV {
             else
                 java -Xmx${default=4 mem}g -jar ${gatk_jar} AllelicCNV \
                     --tumorHets ${hets} \
-                    --tangentNormalized ${tn_coverage} \
+                    --tangentNormalized ${denoised_copy_ratio} \
                     --segments ${called_segments} \
                     --outputPrefix ${entity_id} \
                     --useAllCopyRatioSegments ${default=false use_all_copy_ratio_segments} \
@@ -233,7 +233,7 @@ task AllelicCNV {
 task PlotACNVResults {
     String entity_id
     File hets
-    File tn_coverage
+    File denoised_copy_ratio
     File acnv_segments
     File ref_fasta_dict
     String? output_dir
@@ -252,7 +252,7 @@ task PlotACNVResults {
         mkdir -p ${output_dir_}; \
         java -Xmx${default=4 mem}g -jar ${gatk_jar} PlotACNVResults \
             --hets ${hets} \
-            --tangentNormalized ${tn_coverage} \
+            --tangentNormalized ${denoised_copy_ratio} \
             --segments ${acnv_segments} \
             -SD ${ref_fasta_dict} \
             --output ${output_dir_} \
@@ -275,7 +275,7 @@ task PlotACNVResults {
 task ConvertACNVResults {
     String entity_id
     File hets
-    File tn_coverage
+    File denoised_copy_ratio
     File acnv_segments
     String? output_dir
     String gatk_jar
@@ -293,7 +293,7 @@ task ConvertACNVResults {
         mkdir -p ${output_dir_}; \
         java -Xmx${default=4 mem}g -jar ${gatk_jar} ConvertACNVResults \
             --tumorHets ${hets} \
-            --tangentNormalized ${tn_coverage} \
+            --tangentNormalized ${denoised_copy_ratio} \
             --segments ${acnv_segments} \
             --outputDir ${output_dir_}
     }
@@ -310,6 +310,6 @@ task ConvertACNVResults {
         File cnb_called_segments = "${output_dir_}/${entity_id}-sim-final.cnb_called.seg"
         File cnv_segments = "${output_dir_}/${entity_id}-sim-final.cnv.seg"
         File titan_hets = "${output_dir_}/${entity_id}-sim-final.titan.het.tsv"
-        File titan_tn_coverage = "${output_dir_}/${entity_id}-sim-final.titan.tn.tsv"
+        File titan_denoised_copy_ratio = "${output_dir_}/${entity_id}-sim-final.titan.tn.tsv"
     }
 }
