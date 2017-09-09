@@ -51,9 +51,9 @@ public final class CopyRatioModeller {
         //approximate the standard deviations of these distributions.
         final double coverageMin = data.getCoverageMin();
         final double coverageMax = data.getCoverageMax();
-        final double varianceEstimate = data.estimateVariance();
+        final double varianceEstimate = Math.max(data.estimateVariance(), VARIANCE_MIN);
         final double varianceSliceSamplingWidth = Math.sqrt(2. * varianceEstimate / data.getNumTargets()) / 10.;    //take the width down an order of magnitude to account for inflation by outliers
-        final double varianceMax = Math.max(10. * VARIANCE_MIN, Math.abs(coverageMax - coverageMin) * Math.abs(coverageMax - coverageMin));
+        final double varianceMax = Math.max(10. * varianceEstimate, Math.abs(coverageMax - coverageMin) * Math.abs(coverageMax - coverageMin));
         final double meanSliceSamplingWidth = Math.sqrt(varianceEstimate * data.getNumSegments() / data.getNumTargets());
 
         //the uniform log-likelihood for outliers is determined by the minimum and maximum coverages in the dataset;
