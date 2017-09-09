@@ -104,7 +104,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
             doc = "Input annotated-interval file containing annotations for GC content in genomic intervals (output of AnnotateTargets).  " +
                     "Intervals must be identical to and in the same order as those in the input read-count files."
     )
-    private TargetArgumentCollection annotatedIntervalArguments = new TargetArgumentCollection();
+    private File annotatedIntervalsFile = null;
 
     @Argument(
             doc = "Output file name for the panel of normals.  " +
@@ -195,7 +195,7 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
 
         //get GC content (null if not provided)
         final double[] intervalGCContent = validateIntervalGCContent(logger, intervals,
-                annotatedIntervalArguments.readTargetCollection(true));
+                new TargetArgumentCollection(() -> annotatedIntervalsFile).readTargetCollection(true));
 
         //validate input read-count files (i.e., check intervals and that only integer counts are contained)
         //and aggregate as a RealMatrix with dimensions numIntervals x numSamples

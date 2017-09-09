@@ -39,7 +39,7 @@ workflow CNVSomaticPanelWorkflow {
 
     # If true, AnnotateTargets will be run to create GC annotations and
     # explicit GC correction will be performed by CreateReadCountPanelOfNormals before PCA is performed
-    Boolean do_gc_correction = false
+    Boolean do_explicit_gc_correction = false
 
     # If no target file is input, then do WGS workflow
     Boolean is_wgs = !defined(targets)
@@ -70,14 +70,14 @@ workflow CNVSomaticPanelWorkflow {
 
 	if (do_gc_correction) {
 		call CNVTasks.AnnotateTargets {
-                input:
-                    entity_id = combined_entity_id,
-                    targets = CollectReadCounts.read_counts[0],
-                    ref_fasta = ref_fasta,
-                    ref_fasta_fai = ref_fasta_fai,
-                    ref_fasta_dict = ref_fasta_dict,
-                    gatk_jar = gatk_jar,
-                    gatk_docker = gatk_docker
+            input:
+                entity_id = combined_entity_id,
+                targets = CollectReadCounts.read_counts[0],
+                ref_fasta = ref_fasta,
+                ref_fasta_fai = ref_fasta_fai,
+                ref_fasta_dict = ref_fasta_dict,
+                gatk_jar = gatk_jar,
+                gatk_docker = gatk_docker
         }
 	}
 
@@ -85,6 +85,7 @@ workflow CNVSomaticPanelWorkflow {
         input:
             pon_entity_id = pon_entity_id,
             read_count_files = CollectReadCounts.read_counts,
+            annotated_intervals = AnnotateTargets.annotated_targets,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
     }
@@ -98,6 +99,13 @@ workflow CNVSomaticPanelWorkflow {
 task CreateReadCountPanelOfNormals {
     String pon_entity_id
     Array[File] read_count_files
+    Float? minimum_interval_median_percentile
+    Float? maximum_zeros_in_sample_percentage
+    Float? maximum_zeros_in_interval_percentage
+    Float? extreme_sample_median_percentile
+    Float? extreme_outlier_truncation_percentile
+    Int? number_of_eigensamples
+    File? annotated_intervals
     String gatk_jar
 
     # Runtime parameters
@@ -109,9 +117,14 @@ task CreateReadCountPanelOfNormals {
     command {
         java -Xmx${default=4 mem}g -jar ${gatk_jar} CreateReadCountPanelOfNormals \
             --input ${read_count_files} \
-            --extremeColumnMedianCountPercentileThreshold 2.5 \
-            --truncatePercentileThreshold 0.1 \
-            --output ${pon_entity_id}.pon
+            --minimumIntervalMedianPercentile ${default="25." minimum_interval_median_percentile} \
+            --maximumZerosInSamplePercentage ${default="2." maximum_zeros_in_sample_percentage} \
+            --maximumZerosInIntervalPercentage ${default="5." maximum_zeros_in_interval_percentage} \
+            --extremeSampleMedianPercentile ${default="2.5" extreme_sample_median_percentile} \
+            --extremeOutlierTruncationPercentile ${default="0.1" extreme_outlier_truncation_percentile} \
+            --numberOfEigensamples ${default="20" number_of_eigensamples} \
+            --annotatedIntervals ${default="null" annotated_intervals} \
+            --output ${pon_entity_id}.pon.hdf5
     }
 
     runtime {
@@ -122,6 +135,6 @@ task CreateReadCountPanelOfNormals {
     }
 
     output {
-        File pon_read_count = "${pon_entity_id}.pon"
+        File read_count_pon = "${pon_entity_id}.pon.hdf5"
     }
 }
