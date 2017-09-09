@@ -38,7 +38,7 @@ workflow CNVSomaticPairWorkflow {
     File ref_fasta
     File ref_fasta_dict
     File ref_fasta_fai
-    File cnv_panel_of_normals
+    File read_count_pon
     String gatk_jar
 
     # If no target file is input, then do WGS workflow
@@ -72,7 +72,7 @@ workflow CNVSomaticPairWorkflow {
             ref_fasta = ref_fasta,
             ref_fasta_dict = ref_fasta_dict,
             ref_fasta_fai = ref_fasta_fai,
-            cnv_panel_of_normals = cnv_panel_of_normals,
+            read_count_pon = read_count_pon,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
     }
@@ -86,7 +86,7 @@ workflow CNVSomaticPairWorkflow {
                 ref_fasta = ref_fasta,
                 ref_fasta_dict = ref_fasta_dict,
                 ref_fasta_fai = ref_fasta_fai,
-                cnv_panel_of_normals = cnv_panel_of_normals,
+                read_count_pon = read_count_pon,
                 gatk_jar = gatk_jar,
                 gatk_docker = gatk_docker
         }

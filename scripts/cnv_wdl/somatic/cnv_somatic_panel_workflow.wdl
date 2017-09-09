@@ -34,13 +34,15 @@ workflow CNVSomaticPanelWorkflow {
     File gatk_jar
     String gatk_docker
 
-    # CombineReadCounts name
-    String combined_entity_id = "combined_coverage"
     # PoN name
     String pon_entity_id
 
+    # If true, AnnotateTargets will be run to create GC annotations and
+    # explicit GC correction will be performed by CreateReadCountPanelOfNormals before PCA is performed
+    Boolean do_gc_correction = false
+
     # If no target file is input, then do WGS workflow
-    Boolean is_wgs = select_first([targets, ""]) == ""
+    Boolean is_wgs = !defined(targets)
 
     if (!is_wgs) {
         call CNVTasks.PadTargets {
@@ -53,7 +55,7 @@ workflow CNVSomaticPanelWorkflow {
     }
 
     scatter (normal_bam in normal_bams) {
-        call CNVTasks.CollectCoverage {
+        call CNVTasks.CollectReadCounts {
             input:
                 padded_targets = PadTargets.padded_targets,
                 bam = normal_bam[0],
@@ -66,84 +68,36 @@ workflow CNVSomaticPanelWorkflow {
         }
     }
 
-    call CombineReadCounts {
-        input:
-            combined_entity_id = combined_entity_id,
-            coverage_file_list = CollectCoverage.coverage,
-            gatk_jar = gatk_jar,
-            gatk_docker = gatk_docker
-    }
+	if (do_gc_correction) {
+		call CNVTasks.AnnotateTargets {
+                input:
+                    entity_id = combined_entity_id,
+                    targets = CollectReadCounts.read_counts[0],
+                    ref_fasta = ref_fasta,
+                    ref_fasta_fai = ref_fasta_fai,
+                    ref_fasta_dict = ref_fasta_dict,
+                    gatk_jar = gatk_jar,
+                    gatk_docker = gatk_docker
+        }
+	}
 
-    call CNVTasks.AnnotateTargets {
-        input:
-            entity_id = combined_entity_id,
-            targets = CollectCoverage.coverage[0],
-            ref_fasta = ref_fasta,
-            ref_fasta_fai = ref_fasta_fai,
-            ref_fasta_dict = ref_fasta_dict,
-            gatk_jar = gatk_jar,
-            gatk_docker = gatk_docker
-    }
-
-    call CNVTasks.CorrectGCBias {
-        input:
-            entity_id = combined_entity_id,
-            coverage = CombineReadCounts.combined_coverage,
-            annotated_targets = AnnotateTargets.annotated_targets,
-            gatk_jar = gatk_jar,
-            gatk_docker = gatk_docker
-    }
-
-    call CreatePanelOfNormals {
+    call CreateReadCountPanelOfNormals {
         input:
             pon_entity_id = pon_entity_id,
-            corrected_coverage = CorrectGCBias.corrected_coverage,
+            read_count_files = CollectReadCounts.read_counts,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
     }
 
     output {
-        File output_pon = CreatePanelOfNormals.output_pon
+        File read_count_pon = CreateReadCountPanelOfNormals.read_count_pon
     }
 }
 
-# Combine sample-level coverage files into a single file
-task CombineReadCounts {
-    String combined_entity_id
-    Array[File]+ coverage_file_list
-    Int? max_open_files
-    String gatk_jar
-
-    # Runtime parameters
-    Int? mem
-    String gatk_docker
-    Int? preemptible_attempts
-    Int? disk_space_gb
-
-    command {
-        java -Xmx${default=4 mem}g -jar ${gatk_jar} CombineReadCounts \
-            --input ${sep=" --input " coverage_file_list} \
-            --maxOpenFiles ${default=100 max_open_files} \
-            --output ${combined_entity_id}.tsv
-    }
-
-    runtime {
-        docker: "${gatk_docker}"
-        memory: select_first([mem, 5]) + " GB"
-        disks: "local-disk " + select_first([disk_space_gb, 100]) + " HDD"
-        preemptible: select_first([preemptible_attempts, 2])
-    }
-
-    output {
-        File combined_coverage = "${combined_entity_id}.tsv"
-    }
-}
-
-# Create panel of normals from combined, GC-corrected coverage profiles
-task CreatePanelOfNormals {
+# Create read-count panel of normals
+task CreateReadCountPanelOfNormals {
     String pon_entity_id
-    File corrected_coverage
-    Boolean? no_qc
+    Array[File] read_count_files
     String gatk_jar
 
     # Runtime parameters
@@ -153,13 +107,10 @@ task CreatePanelOfNormals {
     Int? disk_space_gb
 
     command {
-        # If there are no removed samples the output file still needs to be created
-        touch "${pon_entity_id}.pon.removed_samples.txt" ; \
-        java -Xmx${default=4 mem}g -jar ${gatk_jar} CreatePanelOfNormals \
-            --input ${corrected_coverage} \
+        java -Xmx${default=4 mem}g -jar ${gatk_jar} CreateReadCountPanelOfNormals \
+            --input ${read_count_files} \
             --extremeColumnMedianCountPercentileThreshold 2.5 \
             --truncatePercentileThreshold 0.1 \
-            --noQC ${default="false" no_qc} \
             --output ${pon_entity_id}.pon
     }
 
@@ -171,8 +122,6 @@ task CreatePanelOfNormals {
     }
 
     output {
-        File output_pon = "${pon_entity_id}.pon"
-        File removed_samples = "${pon_entity_id}.pon.removed_samples.txt"
-        File target_weights = "${pon_entity_id}.pon.target_weights.txt"
+        File pon_read_count = "${pon_entity_id}.pon"
     }
 }

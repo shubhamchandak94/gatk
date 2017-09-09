@@ -65,8 +65,8 @@ task CollectReadCounts {
     # Sample name is derived from the bam filename
     String base_filename = basename(bam, ".bam")
  
-    # Output file name depending on type of coverage
-    String cov_output_name = if is_wgs then "${base_filename}.coverage.hdf5" else "${base_filename}.coverage.tsv"
+    # Change output file extension to hdf5 for WGS
+    String read_counts_filename = if is_wgs then "${base_filename}.readCounts.hdf5" else "${base_filename}.readCounts.tsv"
   
     command <<<
         if [ ${is_wgs} = true ]
@@ -79,7 +79,7 @@ task CollectReadCounts {
                     --disableToolDefaultReadFilters ${default="false" disable_all_read_filters} \
                     --disableSequenceDictionaryValidation ${default="true" disable_sequence_dictionary_validation} \
                     $(if [ ${default="true" keep_duplicate_reads} = true ]; then echo " --disableReadFilter NotDuplicateReadFilter "; else echo ""; fi) \
-                    --outputFile ${base_filename}.coverage.tsv \
+                    --outputFile ${base_filename}.readCounts.tsv \
                     --writeHdf5
             else
                 java -Xmx${default=4 mem}g -jar ${gatk_jar} CalculateTargetCoverage \
@@ -96,7 +96,7 @@ task CollectReadCounts {
                     --disableToolDefaultReadFilters ${default="false" disable_all_read_filters} \
                     --disableSequenceDictionaryValidation ${default="true" disable_sequence_dictionary_validation} \
                     $(if [ ${default="true" keep_duplicate_reads} = true ]; then echo " --disableReadFilter NotDuplicateReadFilter "; else echo ""; fi) \
-                    --output ${base_filename}.coverage.tsv
+                    --output ${base_filename}.readCounts.tsv
         fi
     >>>
 
@@ -109,7 +109,7 @@ task CollectReadCounts {
 
     output {
         String entity_id = base_filename
-        File coverage = cov_output_name 
+        File read_counts = read_counts_filename
     }
 }
 

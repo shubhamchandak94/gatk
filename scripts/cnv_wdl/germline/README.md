@@ -80,7 +80,7 @@ The reference used must be the same between PoN and case samples.
 
 In addition, there are several task-level parameters that may be set by advanced users; for example:
 
-- ``gCNVCohortCallingWorkflow.CollectCoverage.wgs_bin_size`` -- Size of bins (in bp) for WGS coverage collection.  *This must be the same value used for all samples.*  Ignored if not running WGS.
+- ``gCNVCohortCallingWorkflow.CollectReadCounts.wgs_bin_size`` -- Size of bins (in bp) for WGS coverage collection.  *This must be the same value used for all samples.*  Ignored if not running WGS.
 - ``gCNVCohortCallingWorkflow.PadTargets.padding`` -- Amount of padding (in bp) to add to both sides of targets for WES coverage collection.  *This must be the same value used for all samples.*  Ignored if not running WES.
 
 

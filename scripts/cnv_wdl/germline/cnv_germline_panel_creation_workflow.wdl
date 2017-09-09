@@ -72,7 +72,7 @@ workflow CNVGermlinePanelWorkflow {
   }
 
   scatter (normal_bam in normal_bams) {
-    call CNVTasks.CollectCoverage {
+    call CNVTasks.CollectReadCounts {
       input:
         padded_targets = PadTargets.padded_targets,
         keep_non_autosomes = true,
@@ -89,7 +89,7 @@ workflow CNVGermlinePanelWorkflow {
   call CombineReadCounts {
     input:
       combined_entity_id = combined_entity_id,
-      coverage_file_list = CollectCoverage.coverage,
+      coverage_file_list = CollectReadCounts.read_counts,
       gatk_jar = gatk_jar,
       gatk_docker = gatk_docker
   }
@@ -97,7 +97,7 @@ workflow CNVGermlinePanelWorkflow {
   call CNVTasks.AnnotateTargets {
     input:
       entity_id = combined_entity_id,
-      targets = CollectCoverage.coverage[0],
+      targets = CollectReadCounts.read_counts[0],
       ref_fasta = ref_fasta,
       ref_fasta_fai = ref_fasta_fai,
       ref_fasta_dict = ref_fasta_dict,

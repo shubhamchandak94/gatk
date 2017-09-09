@@ -25,9 +25,6 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     String gatk_jar
     String gatk_docker
 
-    # If no padded target file is input, then do WGS workflow
-    Boolean is_wgs = !defined(padded_targets)
-
     call CNVTasks.CollectReadCounts {
         input:
             padded_targets = padded_targets,
@@ -42,16 +39,16 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
 
     call DenoiseReadCounts {
         input:
-            entity_id = CollectCoverage.entity_id,
-            read_counts = CollectCoverage.read_counts,
-            cnv_panel_of_normals = cnv_panel_of_normals,
+            entity_id = CollectReadCounts.entity_id,
+            read_counts = CollectReadCounts.read_counts,
+            read_count_panel_of_normals = read_count_panel_of_normals,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
     }
 
     call ModelSegments {
         input:
-            entity_id = CollectCoverage.entity_id,
+            entity_id = CollectReadCounts.entity_id,
             denoised_copy_ratios = DenoiseReadCounts.denoised_copy_ratios,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
@@ -59,16 +56,16 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
 
     call CallSegments {
         input:
-            entity_id = CollectCoverage.entity_id,
+            entity_id = CollectReadCounts.entity_id,
             denoised_copy_ratios = DenoiseReadCounts.denoised_copy_ratios,
-            segments = ModelSegments.copy_ratio_segments,
+            copy_ratio_segments = ModelSegments.copy_ratio_segments,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
     }
 
     call PlotSegmentedCopyRatio  {
         input:
-            entity_id = CollectCoverage.entity_id,
+            entity_id = CollectReadCounts.entity_id,
             standardized_copy_ratios = DenoiseReadCounts.standardized_copy_ratios,
             denoised_copy_ratios = DenoiseReadCounts.denoised_copy_ratios,
             called_copy_ratio_segments = CallSegments.called_copy_ratio_segments,
@@ -78,13 +75,14 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     }
 
     output {
-        String entity_id = CollectCoverage.entity_id
-        File coverage = CollectCoverage.coverage
-        File denoised_coverage = DenoiseReadCounts
-        File called_segments = CallSegments.called_segments
-        File segments_plot = "${output_dir_}/${entity_id}_FullGenome.png"
-        File before_after_normalization_plot = "${output_dir_}/${entity_id}_Before_After.png"
-        File before_after_cr_lim_4 = "${output_dir_}/${entity_id}_Before_After_CR_Lim_4.png"
+        String entity_id = CollectReadCounts.entity_id
+        File read_counts = CollectReadCounts.read_counts
+        File standardized_copy_ratio = DenoiseReadCounts.standardized_copy_ratio
+        File denoised_copy_ratio = DenoiseReadCounts.denoised_copy_ratio
+        File called_copy_ratio_segments = CallSegments.called_copy_ratio_segments
+        File segmented_copy_ratio_plot = PlotSegmentedCopyRatio.segmented_copy_ratio_plot
+        File copy_ratio_before_after_denoising_plot = PlotSegmentedCopyRatio.copy_ratio_before_after_denoising_plot
+        File copy_ratio_before_after_denoising_lim_4_plot = PlotSegmentedCopyRatio.copy_ratio_before_after_denoising_lim_4_plot
     }
 }
 
@@ -208,6 +206,7 @@ task PlotSegmentedCopyRatio {
     File ref_fasta_dict
     String? output_dir
     String gatk_jar
+
     # Runtime parameters
     Int? mem
     String gatk_docker
@@ -236,8 +235,8 @@ task PlotSegmentedCopyRatio {
     }
 
     output {
-        File segments_plot = "${output_dir_}/${entity_id}_FullGenome.png"
-        File before_after_normalization_plot = "${output_dir_}/${entity_id}_Before_After.png"
-        File before_after_cr_lim_4 = "${output_dir_}/${entity_id}_Before_After_CR_Lim_4.png"
+        File segmented_copy_ratio_plot = "${output_dir_}/${entity_id}_FullGenome.png"
+        File copy_ratio_before_after_denoising_plot = "${output_dir_}/${entity_id}_Before_After.png"
+        File copy_ratio_before_after_denoising_lim_4_plot = "${output_dir_}/${entity_id}_Before_After_CR_Lim_4.png"
     }
 }

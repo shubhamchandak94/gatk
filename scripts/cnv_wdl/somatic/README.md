@@ -28,7 +28,7 @@ The reference used must be the same between PoN and case samples.
 
 In additional, there are several task-level parameters that may be set by advanced users; for example:
 
-- ``CNVSomaticPanelWorkflow.CollectCoverage.wgs_bin_size`` -- Size of bins (in bp) for WGS coverage collection.  *This must be the same value used for all case samples.*  Ignored if not running WGS.
+- ``CNVSomaticPanelWorkflow.CollectReadCounts.wgs_bin_size`` -- Size of bins (in bp) for WGS coverage collection.  *This must be the same value used for all case samples.*  Ignored if not running WGS.
 - ``CNVSomaticPanelWorkflow.PadTargets.padding`` -- Amount of padding (in bp) to add to both sides of targets for WES coverage collection.  *This must be the same value used for all case samples.*  Ignored if not running WES.
 
 Further explanation of other task-level parameters may be found by invoking the ``--help`` documentation available in the gatk.jar for each tool.  

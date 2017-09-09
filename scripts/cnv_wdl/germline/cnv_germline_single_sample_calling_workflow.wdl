@@ -68,7 +68,7 @@ workflow gCNVSingleSampleWorkflow {
     }
   }
 
-  call CNVTasks.CollectCoverage {
+  call CNVTasks.CollectReadCounts {
     input:
       padded_targets = PadTargets.padded_targets,
       bam = normal_bam,
@@ -82,8 +82,8 @@ workflow gCNVSingleSampleWorkflow {
 
   call CNVTasks.AnnotateTargets {
     input:
-      entity_id = CollectCoverage.entity_id,
-      targets = CollectCoverage.coverage,
+      entity_id = CollectReadCounts.entity_id,
+      targets = CollectReadCounts.read_counts,
       ref_fasta = ref_fasta,
       ref_fasta_fai = ref_fasta_fai,
       ref_fasta_dict = ref_fasta_dict,
@@ -93,8 +93,8 @@ workflow gCNVSingleSampleWorkflow {
 
   call CNVTasks.CorrectGCBias {
     input:
-      entity_id = CollectCoverage.entity_id,
-      coverage = CollectCoverage.coverage,
+      entity_id = CollectReadCounts.entity_id,
+      coverage = CollectReadCounts.read_counts,
       annotated_targets = AnnotateTargets.annotated_targets,
       gatk_jar = gatk_jar,
       gatk_docker = gatk_docker
