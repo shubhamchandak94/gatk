@@ -100,8 +100,8 @@ workflow CNVSomaticPairWorkflow {
                 tumor_bam_idx = tumor_bam_idx,
                 normal_bam = normal_bam,    # If no normal BAM is input, tumor-only GetBayesianHetCoverage will be run
                 normal_bam_idx = normal_bam_idx,
-                tumor_tn_coverage = TumorCopyRatioWorkflow.tn_coverage,
-                tumor_called_segments = TumorCopyRatioWorkflow.called_segments,
+                tumor_denoised_copy_ratio = TumorCopyRatioWorkflow.denoised_copy_ratio
+                tumor_called_copy_ratio_segments = TumorCopyRatioWorkflow.called_copy_ratio_segments,
                 ref_fasta = ref_fasta,
                 ref_fasta_dict = ref_fasta_dict,
                 ref_fasta_fai = ref_fasta_fai,
@@ -114,20 +114,33 @@ workflow CNVSomaticPairWorkflow {
     if (is_run_oncotator) {
         call Oncotate.CNVOncotateCalledSegments as OncotateCalledCNVWorkflow {
             input:
-                 called_file=TumorCopyRatioWorkflow.called_segments,
-                 oncotator_docker=oncotator_docker
+                 called_file = TumorCopyRatioWorkflow.called_copy_ratio_segments,
+                 oncotator_docker = oncotator_docker
         }
     }
 
     output {
-        String tumor_entity_id = TumorCopyRatioWorkflow.entity_id
-        File tumor_tn_coverage = TumorCopyRatioWorkflow.tn_coverage
-        File tumor_called_segments = TumorCopyRatioWorkflow.called_segments
         String? normal_entity_id = NormalCopyRatioWorkflow.entity_id
-        File? normal_tn_coverage = NormalCopyRatioWorkflow.tn_coverage
-        File? normal_called_segments = NormalCopyRatioWorkflow.called_segments
+        File? normal_read_counts = NormalCopyRatioWorkflow.read_counts
+        File? normal_standardized_copy_ratio = NormalCopyRatioWorkflow.standardized_copy_ratio
+        File? normal_denoised_copy_ratio = NormalCopyRatioWorkflow.denoised_copy_ratio
+        File? normal_called_copy_ratio_segments = NormalCopyRatioWorkflow.called_copy_ratio_segments
+        File? normal_segmented_copy_ratio_plot = NormalCopyRatioWorkflow.segmented_copy_ratio_plot
+        File? normal_copy_ratio_before_after_denoising_plot = NormalCopyRatioWorkflow.copy_ratio_before_after_denoising_plot
+        File? normal_copy_ratio_before_after_denoising_lim_4_plot = NormalCopyRatioWorkflow.copy_ratio_before_after_denoising_lim_4_plot
+        
+        String tumor_entity_id = TumorCopyRatioWorkflow.entity_id
+        File tumor_read_counts = TumorCopyRatioWorkflow.read_counts
+        File tumor_standardized_copy_ratio = TumorCopyRatioWorkflow.standardized_copy_ratio
+        File tumor_denoised_copy_ratio = TumorCopyRatioWorkflow.denoised_copy_ratio
+        File tumor_called_copy_ratio_segments = TumorCopyRatioWorkflow.called_copy_ratio_segments
+        File tumor_segmented_copy_ratio_plot = TumorCopyRatioWorkflow.segmented_copy_ratio_plot
+        File tumor_copy_ratio_before_after_denoising_plot = TumorCopyRatioWorkflow.copy_ratio_before_after_denoising_plot
+        File tumor_copy_ratio_before_after_denoising_lim_4_plot = NormalCopyRatioWorkflow.copy_ratio_before_after_denoising_lim_4_plot
+        
         File? tumor_hets = TumorAlleleFractionWorkflow.tumor_hets
         File? tumor_acnv_segments = TumorAlleleFractionWorkflow.acnv_segments
+        
         File? oncotated_called_file = OncotateCalledCNVWorkflow.oncotated_called_file
     }
 }

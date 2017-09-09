@@ -255,6 +255,7 @@ public final class KernelSegmenter<T> {
                 logger.warn(String.format("Number of points needed to calculate local changepoint costs (2 * window size = %d) " +
                         "exceeds number of data points %d.  Local changepoint costs will not be calculated for this window size.",
                         2 * windowSize, data.size()));
+                continue;
             }
             final double[] windowCosts = calculateWindowCosts(reducedObservationMatrix, kernelApproximationDiagonal, windowSize);
 

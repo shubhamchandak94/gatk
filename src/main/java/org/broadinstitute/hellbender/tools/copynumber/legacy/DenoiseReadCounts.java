@@ -87,14 +87,14 @@ public final class DenoiseReadCounts extends CommandLineProgram {
             fullName = LegacyCopyNumberArgument.STANDARDIZED_COPY_RATIO_PROFILE_FILE_FULL_NAME,
             shortName = LegacyCopyNumberArgument.STANDARDIZED_COPY_RATIO_PROFILE_FILE_SHORT_NAME
     )
-    private File standardizedProfileFile;
+    private File standardizedCopyRatioProfileFile;
 
     @Argument(
             doc = "Output file for denoised copy-ratio profile.",
             fullName = LegacyCopyNumberArgument.DENOISED_COPY_RATIO_PROFILE_FILE_FULL_NAME,
             shortName = LegacyCopyNumberArgument.DENOISED_COPY_RATIO_PROFILE_FILE_SHORT_NAME
     )
-    private File denoisedProfileFile;
+    private File denoisedCopyRatioProfileFile;
 
     @Argument(
             doc = "Number of eigensamples to use for denoising.  " +
@@ -102,7 +102,6 @@ public final class DenoiseReadCounts extends CommandLineProgram {
                     "is smaller than this, all eigensamples will be used.",
             fullName = NUMBER_OF_EIGENSAMPLES_LONG_NAME,
             shortName = NUMBER_OF_EIGENSAMPLES_SHORT_NAME,
-            minValue = 1,
             optional = true
     )
     private Integer numEigensamplesRequested = null;
@@ -113,6 +112,8 @@ public final class DenoiseReadCounts extends CommandLineProgram {
             throw new UserException.HardwareFeatureException("Cannot load the required HDF5 library. " +
                     "HDF5 is currently supported on x86-64 architecture and Linux or OSX systems.");
         }
+        Utils.validateArg(numEigensamplesRequested == null || numEigensamplesRequested > 0,
+                "Number of eigensamples to use for denoising must be non-negative.");
 
         IOUtils.canReadFile(inputReadCountFile);
         logger.info(String.format("Reading read-count file (%s)...", inputReadCountFile));
@@ -144,7 +145,7 @@ public final class DenoiseReadCounts extends CommandLineProgram {
                 final SVDDenoisedCopyRatioResult denoisedCopyRatioResult = panelOfNormals.denoise(readCounts, numEigensamples);
 
                 logger.info("Writing standardized and denoised copy-ratio profiles...");
-                denoisedCopyRatioResult.write(standardizedProfileFile, denoisedProfileFile);
+                denoisedCopyRatioResult.write(standardizedCopyRatioProfileFile, denoisedCopyRatioProfileFile);
             }
         } else {    //standardize and perform optional GC-bias correction
             //get GC content (null if not provided)
@@ -161,7 +162,7 @@ public final class DenoiseReadCounts extends CommandLineProgram {
             //construct a result with denoised profile identical to standardized profile
             final SVDDenoisedCopyRatioResult standardizedResult = new SVDDenoisedCopyRatioResult(
                     readCounts.targets(), readCounts.columnNames(), standardizedProfile, standardizedProfile);
-            standardizedResult.write(standardizedProfileFile, denoisedProfileFile);
+            standardizedResult.write(standardizedCopyRatioProfileFile, denoisedCopyRatioProfileFile);
         }
 
         logger.info("Read counts successfully denoised.");

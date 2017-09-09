@@ -17,6 +17,7 @@ import org.broadinstitute.hellbender.utils.Utils;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -107,7 +108,7 @@ public final class ModelSegments extends CommandLineProgram {
             optional = true,
             minValue = 1
     )
-    private List<Integer> windowSizes = Arrays.asList(8, 16, 32, 64, 128, 256);
+    private List<Integer> windowSizes = new ArrayList<>(Arrays.asList(8, 16, 32, 64, 128, 256));
 
     @Argument(
             doc = "Linear factor A for the penalty on the number of changepoints per chromosome.  " +

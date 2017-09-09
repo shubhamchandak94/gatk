@@ -21,7 +21,6 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     File ref_fasta_dict
     File ref_fasta_fai
     File read_count_pon
-    Boolean do_gc_correction
     String gatk_jar
     String gatk_docker
 
@@ -41,7 +40,7 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
         input:
             entity_id = CollectReadCounts.entity_id,
             read_counts = CollectReadCounts.read_counts,
-            read_count_panel_of_normals = read_count_panel_of_normals,
+            read_count_pon = read_count_pon,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
     }
@@ -49,7 +48,7 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     call ModelSegments {
         input:
             entity_id = CollectReadCounts.entity_id,
-            denoised_copy_ratios = DenoiseReadCounts.denoised_copy_ratios,
+            denoised_copy_ratio = DenoiseReadCounts.denoised_copy_ratio,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
     }
@@ -57,7 +56,7 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     call CallSegments {
         input:
             entity_id = CollectReadCounts.entity_id,
-            denoised_copy_ratios = DenoiseReadCounts.denoised_copy_ratios,
+            denoised_copy_ratio = DenoiseReadCounts.denoised_copy_ratio,
             copy_ratio_segments = ModelSegments.copy_ratio_segments,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
@@ -66,8 +65,8 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     call PlotSegmentedCopyRatio  {
         input:
             entity_id = CollectReadCounts.entity_id,
-            standardized_copy_ratios = DenoiseReadCounts.standardized_copy_ratios,
-            denoised_copy_ratios = DenoiseReadCounts.denoised_copy_ratios,
+            standardized_copy_ratio = DenoiseReadCounts.standardized_copy_ratio,
+            denoised_copy_ratio = DenoiseReadCounts.denoised_copy_ratio,
             called_copy_ratio_segments = CallSegments.called_copy_ratio_segments,
             ref_fasta_dict = ref_fasta_dict,
             gatk_jar = gatk_jar,
@@ -90,23 +89,23 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
 task DenoiseReadCounts {
     String entity_id
     File read_counts
-    File read_count_panel_of_normals
-    Int? number_of_eigensamples
+    File read_count_pon
+    Int? number_of_eigensamples #null = use all eigensamples in panel by default
     String gatk_jar
 
     # Runtime parameters
-    Int? mem
+    Int? mem = 4
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
 
     command {
-        java -Xmx${default=4 mem}g -jar ${gatk_jar} NormalizeSomaticReadCounts \
+        java -Xmx${mem}g -jar ${gatk_jar} DenoiseReadCounts \
             --input ${read_counts} \
-            --panelOfNormals ${read_count_panel_of_normals} \
+            --readCountPanelOfNormals ${read_count_pon} \
             --numberOfEigensamples ${default="null" number_of_eigensamples} \
-            --standardizedCR ${entity_id}.standardizedCR.tsv \
-            --denoisedCR ${entity_id}.denoisedCR.tsv
+            --standardizedCopyRatioProfile ${entity_id}.standardizedCR.tsv \
+            --denoisedCopyRatioProfile ${entity_id}.denoisedCR.tsv
     }
 
     runtime {
@@ -117,38 +116,38 @@ task DenoiseReadCounts {
     }
 
     output {
-        File standardized_copy_ratios = "${entity_id}.standardizedCR.tsv"
-        File denoised_copy_ratios = "${entity_id}.denoisedCR.tsv"
+        File standardized_copy_ratio = "${entity_id}.standardizedCR.tsv"
+        File denoised_copy_ratio = "${entity_id}.denoisedCR.tsv"
     }
 }
 
 # Segment the denoised copy-ratio profile
 task ModelSegments {
     String entity_id
-    File denoised_copy_ratios
-    Int? max_num_segments_per_chromosome
-    Float? kernel_variance
-    Int? kernel_approximation_dimension
-    Array[Int]? window_sizes
-    Float? num_changepoints_penalty_linear_factor
-    Float? num_changepoints_penalty_log_linear_factor
+    File denoised_copy_ratio
+    Int? max_num_segments_per_chromosome = 50
+    Float? kernel_variance = 0.0
+    Int? kernel_approximation_dimension = 100
+    Array[Int]? window_sizes = [8, 16, 32, 64, 128, 256]
+    Float? num_changepoints_penalty_linear_factor = 1.0
+    Float? num_changepoints_penalty_log_linear_factor = 1.0
     String gatk_jar
 
     # Runtime parameters
-    Int? mem
+    Int? mem = 4
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
 
     command {
-        java -Xmx${default=4 mem}g -jar ${gatk_jar} ModelSegments \
-            --input ${denoised_copy_ratios} \
-            --maxNumSegmentsPerChromosome ${default="50" max_num_segments_per_chromosome} \
-            --kernelVariance ${default="0." kernel_variance} \
-            --kernelApproximationDimension ${default="100" kernel_approximation_dimension} \
-            --windowSizes ${default="[8, 16, 32, 64, 128, 256]" window_sizes} \
-            --numChangepointsPenaltyLinearFactor ${default="1." num_changepoints_penalty_linear_factor} \
-            --numChangepointsPenaltyLogLinearFactor ${default="1." num_changepoints_penalty_log_linear_factor} \
+        java -Xmx${mem}g -jar ${gatk_jar} ModelSegments \
+            --input ${denoised_copy_ratio} \
+            --maxNumSegmentsPerChromosome ${max_num_segments_per_chromosome} \
+            --kernelVariance ${kernel_variance} \
+            --kernelApproximationDimension ${kernel_approximation_dimension} \
+            --windowSizes ${sep= " --windowSizes " window_sizes} \
+            --numChangepointsPenaltyLinearFactor ${num_changepoints_penalty_linear_factor} \
+            --numChangepointsPenaltyLogLinearFactor ${num_changepoints_penalty_log_linear_factor} \
             --output ${entity_id}.seg
     }
 
@@ -167,19 +166,19 @@ task ModelSegments {
 # Make calls (amplified, neutral, or deleted) on each segment
 task CallSegments {
     String entity_id
-    File denoised_copy_ratios
+    File denoised_copy_ratio
     File copy_ratio_segments
     String gatk_jar
 
     # Runtime parameters
-    Int? mem
+    Int? mem = 4
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
 
     command {
-        java -Xmx${default=4 mem}g -jar ${gatk_jar} CallSegments \
-            --tangentNormalized ${denoised_copy_ratios} \
+        java -Xmx${mem}g -jar ${gatk_jar} CallSegments \
+            --tangentNormalized ${denoised_copy_ratio} \
             --segments ${copy_ratio_segments} \
             --legacy false \
             --output ${entity_id}.called
@@ -200,15 +199,15 @@ task CallSegments {
 # Create plots of coverage data and copy-ratio estimates
 task PlotSegmentedCopyRatio {
     String entity_id
-    File standardized_copy_ratios
-    File denoised_copy_ratios
+    File standardized_copy_ratio
+    File denoised_copy_ratio
     File called_copy_ratio_segments
     File ref_fasta_dict
     String? output_dir
     String gatk_jar
 
     # Runtime parameters
-    Int? mem
+    Int? mem = 4
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
@@ -218,9 +217,9 @@ task PlotSegmentedCopyRatio {
 
     command {
         mkdir -p ${output_dir_}; \
-        java -Xmx${default=4 mem}g -jar ${gatk_jar} PlotSegmentedCopyRatio \
-            --preTangentNormalized ${standardized_copy_ratios} \
-            --tangentNormalized ${denoised_copy_ratios} \
+        java -Xmx${mem}g -jar ${gatk_jar} PlotSegmentedCopyRatio \
+            --preTangentNormalized ${standardized_copy_ratio} \
+            --tangentNormalized ${denoised_copy_ratio} \
             --segments ${called_copy_ratio_segments} \
             -SD ${ref_fasta_dict} \
             --output ${output_dir_} \

@@ -99,31 +99,31 @@ workflow CNVSomaticPanelWorkflow {
 task CreateReadCountPanelOfNormals {
     String pon_entity_id
     Array[File] read_count_files
-    Float? minimum_interval_median_percentile
-    Float? maximum_zeros_in_sample_percentage
-    Float? maximum_zeros_in_interval_percentage
-    Float? extreme_sample_median_percentile
-    Float? extreme_outlier_truncation_percentile
-    Int? number_of_eigensamples
-    File? annotated_intervals
+    Float? minimum_interval_median_percentile = 25.
+    Float? maximum_zeros_in_sample_percentage = 2.
+    Float? maximum_zeros_in_interval_percentage = 5.
+    Float? extreme_sample_median_percentile = 2.5
+    Float? extreme_outlier_truncation_percentile = 0.1
+    Int? number_of_eigensamples = 20
+    File? annotated_intervals   #null = do not perform explicit GC correction by default
     String gatk_jar
 
     # Runtime parameters
-    Int? mem
+    Int? mem = 4
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
 
     command {
-        java -Xmx${default=4 mem}g -jar ${gatk_jar} CreateReadCountPanelOfNormals \
+        java -Xmx${mem}g -jar ${gatk_jar} CreateReadCountPanelOfNormals \
             --input ${sep=" --input " read_count_files} \
-            --minimumIntervalMedianPercentile ${default="25." minimum_interval_median_percentile} \
-            --maximumZerosInSamplePercentage ${default="2." maximum_zeros_in_sample_percentage} \
-            --maximumZerosInIntervalPercentage ${default="5." maximum_zeros_in_interval_percentage} \
-            --extremeSampleMedianPercentile ${default="2.5" extreme_sample_median_percentile} \
-            --extremeOutlierTruncationPercentile ${default="0.1" extreme_outlier_truncation_percentile} \
-            --numberOfEigensamples ${default="20" number_of_eigensamples} \
-            --annotatedIntervals ${default="null" annotated_intervals} \
+            --minimumIntervalMedianPercentile ${minimum_interval_median_percentile} \
+            --maximumZerosInSamplePercentage ${maximum_zeros_in_sample_percentage} \
+            --maximumZerosInIntervalPercentage ${maximum_zeros_in_interval_percentage} \
+            --extremeSampleMedianPercentile ${extreme_sample_median_percentile} \
+            --extremeOutlierTruncationPercentile ${extreme_outlier_truncation_percentile} \
+            --numberOfEigensamples ${number_of_eigensamples} \
+            --annotatedIntervals ${annotated_intervals} \
             --output ${pon_entity_id}.pon.hdf5
     }
 
