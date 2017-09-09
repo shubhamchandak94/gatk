@@ -62,7 +62,7 @@ public class ConvertACNVResults extends SparkCommandLineProgram {
     protected static final String GATK_SEG_FILE_TAG = "cnv";
     protected static final String CGA_ACS_SEG_FILE_TAG = "acs";
     protected static final String BALANCED_SEG_FILE_TAG = "cnb_called";
-    protected static final String TITAN_TN_FILE_TAG = "titan.tn";
+    protected static final String TITAN_TN_FILE_TAG = "titan.denoisedCR";
     protected static final String TITAN_HET_FILE_TAG = "titan.het";
 
 
