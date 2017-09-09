@@ -128,7 +128,7 @@ workflow CNVSomaticPairWorkflow {
         File? normal_segmented_copy_ratio_plot = NormalCopyRatioWorkflow.segmented_copy_ratio_plot
         File? normal_copy_ratio_before_after_denoising_plot = NormalCopyRatioWorkflow.copy_ratio_before_after_denoising_plot
         File? normal_copy_ratio_before_after_denoising_lim_4_plot = NormalCopyRatioWorkflow.copy_ratio_before_after_denoising_lim_4_plot
-        
+
         String tumor_entity_id = TumorCopyRatioWorkflow.entity_id
         File tumor_read_counts = TumorCopyRatioWorkflow.read_counts
         File tumor_standardized_copy_ratio = TumorCopyRatioWorkflow.standardized_copy_ratio
@@ -137,10 +137,10 @@ workflow CNVSomaticPairWorkflow {
         File tumor_segmented_copy_ratio_plot = TumorCopyRatioWorkflow.segmented_copy_ratio_plot
         File tumor_copy_ratio_before_after_denoising_plot = TumorCopyRatioWorkflow.copy_ratio_before_after_denoising_plot
         File tumor_copy_ratio_before_after_denoising_lim_4_plot = NormalCopyRatioWorkflow.copy_ratio_before_after_denoising_lim_4_plot
-        
+
         File? tumor_hets = TumorAlleleFractionWorkflow.tumor_hets
         File? tumor_acnv_segments = TumorAlleleFractionWorkflow.acnv_segments
-        
+
         File? oncotated_called_file = OncotateCalledCNVWorkflow.oncotated_called_file
     }
 }

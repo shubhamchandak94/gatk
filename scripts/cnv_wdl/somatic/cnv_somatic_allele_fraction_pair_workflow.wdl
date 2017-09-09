@@ -310,6 +310,6 @@ task ConvertACNVResults {
         File cnb_called_copy_ratio_segments = "${output_dir_}/${entity_id}-sim-final.cnb_called.seg"
         File cnv_segments = "${output_dir_}/${entity_id}-sim-final.cnv.seg"
         File titan_hets = "${output_dir_}/${entity_id}-sim-final.titan.het.tsv"
-        File titan_denoised_copy_ratio = "${output_dir_}/${entity_id}-sim-final.titan.tn.tsv"
+        File titan_denoised_copy_ratio = "${output_dir_}/${entity_id}-sim-final.titan.denoisedCR.tsv"
     }
 }

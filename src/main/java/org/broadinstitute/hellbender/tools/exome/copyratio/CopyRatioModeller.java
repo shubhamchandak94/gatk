@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class CopyRatioModeller {
-    private static final double EPSILON = 1E-10;
+    private static final double EPSILON = 1E-20;
     private static final double VARIANCE_MIN = EPSILON;
 
     private static final double OUTLIER_PROBABILITY_INITIAL = 0.05;
