@@ -128,6 +128,14 @@ public final class SvDiscoverFromLocalAssemblyContigAlignmentsSpark extends GATK
         new SimpleStrandSwitchVariantDetector()
                 .inferSvAndWriteVCF(contigsByPossibleRawTypes.get(RawTypes.Inv), outputDir+"/"+ RawTypes.Inv.name()+".vcf",
                         referenceMultiSourceBroadcast, sequenceDictionaryBroadcast, localLogger);
+
+        // here contigs supporting cpx having only 2 alignments could be handled easily together with ref block order switch ones
+        final JavaRDD<AlignedContig> diffChrTrans =
+                contigsByPossibleRawTypes.get(RawTypes.Cpx).filter(tig -> tig.alignmentIntervals.size() == 2);
+        new SuspectedTransLocDetector()
+                .inferSvAndWriteVCF(contigsByPossibleRawTypes.get(RawTypes.DispersedDupOrMEI).union(diffChrTrans),
+                        outputDir+"/"+ RawTypes.DispersedDupOrMEI.name()+".vcf",
+                        referenceMultiSourceBroadcast, sequenceDictionaryBroadcast, localLogger);
     }
 
     private enum RawTypes {

@@ -26,7 +26,7 @@ public class NovelAdjacencyReferenceLocations {
     public final StrandSwitch strandSwitch;
     public final BreakpointComplications complication;
 
-    public NovelAdjacencyReferenceLocations(final ChimericAlignment chimericAlignment, final byte[] contigSequence){
+    public NovelAdjacencyReferenceLocations(final ChimericAlignment chimericAlignment, final byte[] contigSequence) {
 
         // first get strand switch type, then get complications, finally use complications to justify breakpoints
         strandSwitch = chimericAlignment.strandSwitch;

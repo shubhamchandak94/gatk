@@ -42,7 +42,7 @@ final class SimpleStrandSwitchVariantDetector implements VariantDetectorFromLoca
         //             then split the input reads into two classes--those judged by IsLikelyInvertedDuplication are likely invdup and those aren't
         //             finally send the two split reads down different path, one for invdup and one for BND records
         final Tuple2<JavaRDD<AlignedContig>, JavaRDD<AlignedContig>> invDupAndStrandSwitchBreakpoints =
-                RDDUtils.split(contigs.map(ContigAlignmentsModifier::removeOverlap),
+                RDDUtils.split(contigs.map(tig -> ContigAlignmentsModifier.removeOverlap(tig, sequenceDictionaryBroadcast.getValue())),
                         contig -> BreakpointComplications.isLikelyInvertedDuplication(contig.alignmentIntervals.get(0),
                                 contig.alignmentIntervals.get(1)), true);
 
