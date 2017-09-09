@@ -22,7 +22,7 @@ workflow CNVSomaticAlleleFractionPairWorkflow {
     File? normal_bam
     File? normal_bam_idx
     File tumor_denoised_copy_ratio
-    File tumor_called_segments
+    File tumor_called_copy_ratio_segments
     File ref_fasta
     File ref_fasta_dict
     File ref_fasta_fai
