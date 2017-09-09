@@ -148,3 +148,35 @@ task AnnotateTargets {
         File annotated_targets = "${entity_id}.annotated.tsv"
     }
 }
+
+# Correct coverage profile(s) for sample-specific GC bias
+task CorrectGCBias {
+    String entity_id
+    File coverage   # This can be either single-sample or multi-sample
+    File annotated_targets
+    String gatk_jar
+
+    # Runtime parameters
+    Int? mem
+    String gatk_docker
+    Int? preemptible_attempts
+    Int? disk_space_gb
+
+    command {
+        java -Xmx${default=4 mem}g -jar ${gatk_jar} CorrectGCBias \
+          --input ${coverage} \
+          --targets ${annotated_targets} \
+          --output ${entity_id}.gc_corrected.tsv
+    }
+
+    runtime {
+        docker: "${gatk_docker}"
+        memory: select_first([mem, 5]) + " GB"
+        disks: "local-disk " + select_first([disk_space_gb, ceil(size(coverage, "GB"))+50]) + " HDD"
+        preemptible: select_first([preemptible_attempts, 2])
+    }
+
+    output {
+        File corrected_coverage = "${entity_id}.gc_corrected.tsv"
+    }
+}
