@@ -100,7 +100,7 @@ workflow CNVSomaticPairWorkflow {
                 tumor_bam_idx = tumor_bam_idx,
                 normal_bam = normal_bam,    # If no normal BAM is input, tumor-only GetBayesianHetCoverage will be run
                 normal_bam_idx = normal_bam_idx,
-                tumor_denoised_copy_ratio = TumorCopyRatioWorkflow.denoised_copy_ratio
+                tumor_denoised_copy_ratio = TumorCopyRatioWorkflow.denoised_copy_ratio,
                 tumor_called_copy_ratio_segments = TumorCopyRatioWorkflow.called_copy_ratio_segments,
                 ref_fasta = ref_fasta,
                 ref_fasta_dict = ref_fasta_dict,
