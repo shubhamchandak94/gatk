@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class CopyRatioModeller {
-    private static final double EPSILON = 1E-20;
+    private static final double EPSILON = 1E-10;
     private static final double VARIANCE_MIN = EPSILON;
 
     private static final double OUTLIER_PROBABILITY_INITIAL = 0.05;
@@ -53,7 +53,7 @@ public final class CopyRatioModeller {
         final double coverageMax = data.getCoverageMax();
         final double varianceEstimate = data.estimateVariance();
         final double varianceSliceSamplingWidth = Math.sqrt(2. * varianceEstimate / data.getNumTargets()) / 10.;    //take the width down an order of magnitude to account for inflation by outliers
-        final double varianceMax = Math.abs(coverageMax - coverageMin) * Math.abs(coverageMax - coverageMin);
+        final double varianceMax = Math.max(10. * VARIANCE_MIN, Math.abs(coverageMax - coverageMin) * Math.abs(coverageMax - coverageMin));
         final double meanSliceSamplingWidth = Math.sqrt(varianceEstimate * data.getNumSegments() / data.getNumTargets());
 
         //the uniform log-likelihood for outliers is determined by the minimum and maximum coverages in the dataset;
