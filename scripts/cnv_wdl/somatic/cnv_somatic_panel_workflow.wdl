@@ -84,7 +84,7 @@ workflow CNVSomaticPanelWorkflow {
     call CreateReadCountPanelOfNormals {
         input:
             pon_entity_id = pon_entity_id,
-            read_count_files = if iswgs then CollectReadCounts.read_counts_hdf5 else CollectReadCounts.read_counts,
+            read_count_files = if is_wgs then CollectReadCounts.read_counts_hdf5 else CollectReadCounts.read_counts,
             annotated_intervals = AnnotateTargets.annotated_targets,
             gatk_jar = gatk_jar,
             gatk_docker = gatk_docker
