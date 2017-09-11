@@ -224,8 +224,8 @@ task M2 {
     -I ${tumor_bam} \
     -tumor `cat tumor_name.txt` \
     $normal_command_line \
-    ${"--germline_resource " + gnomad} \
-    ${"--normal_panel " + pon} \
+    ${"--germline-resource " + gnomad} \
+    ${"-pon " + pon} \
     ${"-L " + intervals} \
     -O "${output_vcf_name}.vcf" \
     ${m2_extra_args}
@@ -367,7 +367,7 @@ task Filter {
     if [[ "${variants_for_contamination}" == *.vcf ]]; then
         java -Xmx4g -jar $GATK_JAR GetPileupSummaries -I ${tumor_bam} ${"-L " + intervals} -V ${variants_for_contamination} -O pileups.table
         java -Xmx4g -jar $GATK_JAR CalculateContamination -I pileups.table -O contamination.table
-        contamination_cmd="-contaminationTable contamination.table"
+        contamination_cmd="--contamination-table contamination.table"
     fi
 
     java -Xmx4g -jar $GATK_JAR FilterMutectCalls -V ${unfiltered_vcf} \
