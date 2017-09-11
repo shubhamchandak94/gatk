@@ -20,13 +20,13 @@ hadoop fs -mkdir -p $TARGET_DIR
 #gsutil cp gs://hellbender/q4_spark_eval/WGS-G94982-NA12878.bam - | hadoop fs -put - $TARGET_DIR/WGS-G94982-NA12878.bam
 #gsutil cp gs://hellbender/q4_spark_eval/WGS-G94982-NA12878.bai - | hadoop fs -put - $TARGET_DIR/WGS-G94982-NA12878.bai
 # BAM with NC_007605 reads removed since this contig is not in the reference
-gsutil cp gs://gatk-tom-testdata/WGS-G94982-NA12878-no-NC_007605.bam - | hadoop fs -put - /user/tom/q4_spark_eval/WGS-G94982-NA12878-no-NC_007605.bam
+gsutil gs://broad-spark-eval-test-data/genome/WGS-G94982-NA12878-no-NC_007605.bam - | hadoop fs -put - /user/tom/q4_spark_eval/WGS-G94982-NA12878-no-NC_007605.bam
 
 # Download reference (b37) (ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/b37/)
-gsutil cp gs://gatk-tom-testdata/human_g1k_v37.2bit - | hadoop fs -put - $TARGET_DIR/human_g1k_v37.2bit
-gsutil cp gs://gatk-tom-testdata/human_g1k_v37.dict - | hadoop fs -put - $TARGET_DIR/human_g1k_v37.dict
-gsutil cp gs://gatk-tom-testdata/human_g1k_v37.fasta - | hadoop fs -put - $TARGET_DIR/human_g1k_v37.fasta
-gsutil cp gs://gatk-tom-testdata/human_g1k_v37.fasta.fai - | hadoop fs -put - $TARGET_DIR/human_g1k_v37.fasta.fai
+gsutil gs://broad-spark-eval-test-data/genome/human_g1k_v37.2bit - | hadoop fs -put - $TARGET_DIR/human_g1k_v37.2bit
+gsutil gs://broad-spark-eval-test-data/genome/human_g1k_v37.dict - | hadoop fs -put - $TARGET_DIR/human_g1k_v37.dict
+gsutil gs://broad-spark-eval-test-data/genome/human_g1k_v37.fasta - | hadoop fs -put - $TARGET_DIR/human_g1k_v37.fasta
+gsutil gs://broad-spark-eval-test-data/genome/human_g1k_v37.fasta.fai - | hadoop fs -put - $TARGET_DIR/human_g1k_v37.fasta.fai
 
 # (Code for generating 2bit)
 #hadoop fs -get $TARGET_DIR/human_g1k_v37.fasta
@@ -35,10 +35,10 @@ gsutil cp gs://gatk-tom-testdata/human_g1k_v37.fasta.fai - | hadoop fs -put - $T
 #./faToTwoBit human_g1k_v37.fasta human_g1k_v37.2bit
 
 # Download known sites VCF (b37) (ftp://gsapubftp-anonymous@ftp.broadinstitute.org/bundle/b37/)
-gsutil cp gs://gatk-tom-testdata/dbsnp_138.b37.vcf - | hadoop fs -put - $TARGET_DIR/dbsnp_138.b37.vcf
+gsutil gs://broad-spark-eval-test-data/genome/dbsnp_138.b37.vcf - | hadoop fs -put - $TARGET_DIR/dbsnp_138.b37.vcf
 
 # Download exome intervals
-gsutil cp gs://hellbender/q4_spark_eval/Broad.human.exome.b37.interval_list Broad.human.exome.b37.interval_list
+gsutil cp gs://broad-spark-eval-test-data/genome/Broad.human.exome.b37.interval_list Broad.human.exome.b37.interval_list
 
 # List data
 hadoop fs -ls -h $TARGET_DIR

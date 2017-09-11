@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 
-# Copy data prep script to GCS cluster, then run it
+# Copy small data to HDFS on GCS
 
-gcloud compute scp copy_small_to_hdfs.sh "$GCS_CLUSTER"-m:copy_small_to_hdfs.sh \
-  --zone us-central1-a
-gcloud compute ssh "$GCS_CLUSTER"-m \
-  --command "./copy_small_to_hdfs.sh /user/$USER/small_spark_eval" \
-  --zone us-central1-a
+${GATK_HOME:-../..}/gatk-launch ParallelCopyGCSDirectoryIntoHDFSSpark \
+    --inputGCSPath gs://broad-spark-eval-test-data/small/ \
+    --outputHDFSDirectory hdfs://${GCS_CLUSTER}-m:8020/user/$USER/small_spark_eval \
+    -apiKey $API_KEY \
+    -- \
+    --sparkRunner GCS \
+    --cluster $GCS_CLUSTER
