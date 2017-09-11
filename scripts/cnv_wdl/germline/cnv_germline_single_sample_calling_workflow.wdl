@@ -31,7 +31,7 @@
 
 import "cnv_common_tasks.wdl" as CNVTasks
 
-workflow gCNVSingleSampleWorkflow {
+workflow CNVGermlineSingleSampleWorkflow {
   # Workflow input files
   File? targets
   File normal_bam

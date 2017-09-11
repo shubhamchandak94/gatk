@@ -34,9 +34,9 @@
 ################
 
 
-import "cnv_germline_single_sample_calling_workflow.wdl" as gCNVCalling
+import "cnv_germline_single_sample_calling_workflow.wdl" as CNVGermlineCalling
 
-workflow gCNVCohortCallingWorkflow {
+workflow CNVGermlineCohortCallingWorkflow {
   # Workflow input files
   File? targets
   File normal_bams_list
@@ -61,7 +61,7 @@ workflow gCNVCohortCallingWorkflow {
   String output_path
 
   scatter (normal_bam in normal_bams) {
-    call gCNVCalling.gCNVSingleSampleWorkflow as CohortCalling {
+    call CNVGermlineCalling.CNVGermlineSingleSampleWorkflow as CohortCalling {
       input:
         targets = targets,
         normal_bam = normal_bam[0],
