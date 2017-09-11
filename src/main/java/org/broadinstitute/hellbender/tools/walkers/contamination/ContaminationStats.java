@@ -108,7 +108,7 @@ class ContaminationStats {
 
     public double contaminationFromHets() {
         final double refExcessInHetSites = refCountInHetSites - altCountInHetSites;
-        return refExcessInHetSites / expectedRefExcessInHetPerUnitContamination;
+        return Math.max(refExcessInHetSites / expectedRefExcessInHetPerUnitContamination, 0);
     }
 
     public boolean isLossOfHeterozygosity() {
@@ -148,6 +148,10 @@ class ContaminationStats {
         unnormalized[CalculateContamination.BiallelicGenotypes.HOM_REF.ordinal()] = homRefLikelihood * homRefPrior;
         unnormalized[CalculateContamination.BiallelicGenotypes.HET.ordinal()] = hetLikelihood * hetPrior;
         unnormalized[CalculateContamination.BiallelicGenotypes.HOM_ALT.ordinal()] = homAltLikelihood * homAltPrior;
+        if (Double.isNaN(unnormalized[0])) {
+            int j = 2;
+            double test = MathUtils.uniformBinomialProbability(totalCount, altCount, 0, contamination);
+        }
         final double[] normalized = MathUtils.normalizeFromRealSpace(unnormalized, true);
 
         final EnumMap<CalculateContamination.BiallelicGenotypes, Double> result = new EnumMap<CalculateContamination.BiallelicGenotypes, Double>(CalculateContamination.BiallelicGenotypes.class);

@@ -90,9 +90,9 @@ public class CalculateContamination extends CommandLineProgram {
         int iteration = 0;
 
         while (++iteration < 10) {  // loop over contamination convergence
-            final double contaminationForLambda = hetContamination;
+            final double contamination = homAltContamination < INITIAL_CONTAMINATION_GUESS ? homAltContamination : hetContamination;
             final List<ContaminationStats> neighborhoodStats = neighborhoods.stream()
-                    .map(nbhd -> ContaminationStats.getStats(nbhd, contaminationForLambda))
+                    .map(nbhd -> ContaminationStats.getStats(nbhd, contamination))
                     .collect(Collectors.toList());
 
             final double medianHetCountRatio = MEDIAN.evaluate(neighborhoodStats.stream().mapToDouble(ContaminationStats::ratioOfActualToExpectedHets).toArray());
@@ -112,7 +112,7 @@ public class CalculateContamination extends CommandLineProgram {
                 if (hetRatioDifference < -LOH_RATIO_DIFFERENCE_THRESHOLD && hetRatioZ < -LOH_Z_SCORE_THRESHOLD
                         || homRatioDifference > LOH_RATIO_DIFFERENCE_THRESHOLD && homRatioZ > LOH_Z_SCORE_THRESHOLD) {
                     logger.info(String.format("Discarding region with %d hets %d hom alts versus %.2f expected hets and " +
-                            "%.2f expected hom alts due to possible loss of heterozygosity", stats.getHetCount(), stats.getHomAltCount(), stats.getExpectedHetCount(), stats.getExpectedHomAltCount()));
+                            "%.2f expected hom alts due to possible loss of heterozygosity", (int) stats.getHetCount(), (int) stats.getHomAltCount(), stats.getExpectedHetCount(), stats.getExpectedHomAltCount()));
                 } else {
                     genomeStats.increment(stats);
                 }

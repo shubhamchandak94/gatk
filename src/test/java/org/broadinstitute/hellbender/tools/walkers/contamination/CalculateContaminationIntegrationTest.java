@@ -26,7 +26,7 @@ public class CalculateContaminationIntegrationTest extends CommandLineProgramTes
 
         // if allele frequency is 0.2, then hets are about 10 times as common as hom var
         // thus we make nine hets for every hom var
-        for (int n = 0; n < 1000; n++) {
+        for (int n = 1; n < 1000; n++) {
             int position = n * spacing;
                 ps.add(n % 10 == 0
                         ? new PileupSummary(contig, position, (int) (depth*refContamination), (int) (depth * (1 - refContamination)), 0, alleleFrequency)
