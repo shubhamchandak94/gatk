@@ -90,7 +90,6 @@ task CollectReadCounts {
                     --transform RAW \
                     --targetInformationColumns FULL \
                     --interval_set_rule UNION \
-                    --interval_merging_rule OVERLAPPING_ONLY \
                     --interval_padding 0 \
                     --secondsBetweenProgressUpdates 10.0 \
                     --disableToolDefaultReadFilters ${disable_all_read_filters} \
@@ -133,7 +132,6 @@ task AnnotateTargets {
         java -Xmx${mem}g -jar ${gatk_jar} AnnotateTargets \
             --targets ${targets} \
             --reference ${ref_fasta} \
-            --interval_merging_rule OVERLAPPING_ONLY \
             --output ${entity_id}.annotated.tsv
     }
 
