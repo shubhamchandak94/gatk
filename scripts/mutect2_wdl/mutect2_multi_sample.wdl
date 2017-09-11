@@ -66,10 +66,8 @@ workflow Mutect2_Multi {
     File? variants_for_contamination_index
 	Boolean is_run_orientation_bias_filter
 	Boolean is_run_oncotator
-    String m2_docker
-    String oncotator_docker
     File? gatk4_jar_override
-    Int preemptible_attempts
+
     File? onco_ds_tar_gz
     String? onco_ds_local_db_dir
     Array[String] artifact_modes
@@ -79,6 +77,10 @@ workflow Mutect2_Multi {
     String? sequencing_center
     String? sequence_source
     File? default_config_file
+
+     String gatk_docker
+     String oncotator_docker
+     Int? preemptible_attempts
 
 	scatter( row in pairs ) {
 	    #      If the condition is true, variables inside the 'if' block retain their values outside the block.
@@ -112,7 +114,7 @@ workflow Mutect2_Multi {
                     is_run_orientation_bias_filter = is_run_orientation_bias_filter,
                     is_run_oncotator = is_run_oncotator,
                     oncotator_docker = oncotator_docker,
-                    m2_docker = m2_docker,
+                    gatk_docker = gatk_docker,
                     gatk4_jar_override = gatk4_jar_override,
                     preemptible_attempts = preemptible_attempts,
                     onco_ds_tar_gz = onco_ds_tar_gz,

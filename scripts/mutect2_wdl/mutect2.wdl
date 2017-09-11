@@ -44,11 +44,8 @@ workflow Mutect2 {
   File? variants_for_contamination_index
   Boolean is_run_orientation_bias_filter
   Boolean is_run_oncotator
-  String m2_docker
-  String basic_bash_docker = "ubuntu:16.04"
-  String oncotator_docker
+
   File? gatk4_jar_override
-  Int preemptible_attempts
   File? onco_ds_tar_gz
   String? onco_ds_local_db_dir
   Array[String] artifact_modes
@@ -58,6 +55,11 @@ workflow Mutect2 {
   String? sequencing_center
   String? sequence_source
   File? default_config_file
+
+  Int? preemptible_attempts
+  String gatk_docker
+  String basic_bash_docker = "ubuntu:16.04"
+  String oncotator_docker
 
   call ProcessOptionalArguments {
     input:
@@ -79,7 +81,7 @@ workflow Mutect2 {
       ref_dict = ref_dict,
       gatk4_jar_override = gatk4_jar_override,
       preemptible_attempts = preemptible_attempts,
-      m2_docker = m2_docker
+      gatk_docker = gatk_docker
 
   }
 
@@ -104,7 +106,7 @@ workflow Mutect2 {
         output_vcf_name = ProcessOptionalArguments.output_name,
         gatk4_jar_override = gatk4_jar_override,
         preemptible_attempts = preemptible_attempts,
-        m2_docker = m2_docker,
+        gatk_docker = gatk_docker,
         m2_extra_args = m2_extra_args
     }
   }
@@ -116,14 +118,14 @@ workflow Mutect2 {
       output_vcf_name = ProcessOptionalArguments.output_name,
       gatk4_jar_override = gatk4_jar_override,
       preemptible_attempts = preemptible_attempts,
-      m2_docker = m2_docker
+      gatk_docker = gatk_docker
   }
 
   if (is_run_orientation_bias_filter) {
       call CollectSequencingArtifactMetrics {
         input:
             preemptible_attempts = preemptible_attempts,
-            m2_docker = m2_docker,
+            gatk_docker = gatk_docker,
             tumor_bam = tumor_bam,
             tumor_bam_index = tumor_bam_index,
             ref_fasta = ref_fasta,
@@ -139,7 +141,7 @@ workflow Mutect2 {
       unfiltered_vcf = MergeVCFs.output_vcf,
       output_vcf_name = ProcessOptionalArguments.output_name,
       intervals = intervals,
-      m2_docker = m2_docker,
+      gatk_docker = gatk_docker,
       preemptible_attempts = preemptible_attempts,
       pre_adapter_metrics = CollectSequencingArtifactMetrics.pre_adapter_metrics,
       tumor_bam = tumor_bam,
@@ -199,10 +201,14 @@ task M2 {
   File? gnomad
   File? gnomad_index
   String output_vcf_name
-  String m2_docker
   File? gatk4_jar_override
-  Int preemptible_attempts
   String? m2_extra_args
+
+  # Runtime parameters
+  Int? mem
+  String gatk_docker
+  Int? preemptible_attempts
+  Int? disk_space_gb
 
   command <<<
 
@@ -232,10 +238,10 @@ task M2 {
   >>>
 
   runtime {
-      docker: "${m2_docker}"
-      memory: "5 GB"
-      disks: "local-disk " + 500 + " HDD"
-      preemptible: "${preemptible_attempts}"
+        docker: "${gatk_docker}"
+        memory: select_first([mem, 5]) + " GB"
+        disks: "local-disk " + select_first([disk_space_gb, 100]) + " HDD"
+        preemptible: select_first([preemptible_attempts, 2])
   }
 
   output {
@@ -250,8 +256,12 @@ task ProcessOptionalArguments {
   String tumor_sample_name
   String? normal_bam
   String? normal_sample_name
-  Int preemptible_attempts
+
+  # Runtime parameters
+  Int? mem
   String docker
+  Int? preemptible_attempts
+  Int? disk_space_gb
 
   command {
       if [[ "_${normal_bam}" == *.bam ]]; then
@@ -262,10 +272,10 @@ task ProcessOptionalArguments {
   }
 
   runtime {
-    docker: "${docker}"
-    memory: "1 GB"
-    disks: "local-disk " + 10 + " HDD"
-    preemptible: "${preemptible_attempts}"
+        docker: "${docker}"
+        memory: select_first([mem, 1]) + " GB"
+        disks: "local-disk " + select_first([disk_space_gb, 10]) + " HDD"
+        preemptible: select_first([preemptible_attempts, 2])
   }
 
   output {
@@ -278,8 +288,12 @@ task MergeVCFs {
   Array[File] input_vcfs
   String output_vcf_name
   File? gatk4_jar_override
-  Int preemptible_attempts
-  String m2_docker
+
+  # Runtime parameters
+  Int? mem
+  String gatk_docker
+  Int? preemptible_attempts
+  Int? disk_space_gb
 
   # using MergeVcfs instead of GatherVcfs so we can create indices
   # WARNING 2015-10-28 15:01:48 GatherVcfs  Index creation not currently supported when gathering block compressed VCFs.
@@ -294,10 +308,10 @@ task MergeVCFs {
   }
 
   runtime {
-    docker: "${m2_docker}"
-    memory: "3 GB"
-    disks: "local-disk " + 300 + " HDD"
-    preemptible: "${preemptible_attempts}"
+        docker: "${gatk_docker}"
+        memory: select_first([mem, 5]) + " GB"
+        disks: "local-disk " + select_first([disk_space_gb, 100]) + " HDD"
+        preemptible: select_first([preemptible_attempts, 2])
   }
 
   output {
@@ -307,13 +321,17 @@ task MergeVCFs {
 }
 
 task CollectSequencingArtifactMetrics {
-  Int preemptible_attempts
-  String m2_docker
   File tumor_bam
   File tumor_bam_index
   File ref_fasta
   File ref_fasta_index
   File picard_jar
+
+  # Runtime parameters
+  Int? mem
+  String gatk_docker
+  Int? preemptible_attempts
+  Int? disk_space_gb
 
   command {
         set -e
@@ -325,10 +343,10 @@ task CollectSequencingArtifactMetrics {
   }
 
   runtime {
-    docker: "${m2_docker}"
-    memory: "5 GB"
-    disks: "local-disk " + 500 + " HDD"
-    preemptible: "${preemptible_attempts}"
+        docker: "${gatk_docker}"
+        memory: select_first([mem, 5]) + " GB"
+        disks: "local-disk " + select_first([disk_space_gb, 100]) + " HDD"
+        preemptible: select_first([preemptible_attempts, 2])
   }
 
   output {
@@ -342,8 +360,6 @@ task Filter {
   File unfiltered_vcf
   String output_vcf_name
   File? intervals
-  Int preemptible_attempts
-  String m2_docker
   File? pre_adapter_metrics
   File? tumor_bam
   File? tumor_bam_index
@@ -353,6 +369,12 @@ task Filter {
   File? variants_for_contamination
   File? variants_for_contamination_index
   String? m2_extra_filtering_args
+
+  # Runtime parameters
+  Int? mem
+  String gatk_docker
+  Int? preemptible_attempts
+  Int? disk_space_gb
 
   command {
     set -e
@@ -385,10 +407,10 @@ task Filter {
   }
 
   runtime {
-    docker: "${m2_docker}"
-    memory: "5 GB"
-    disks: "local-disk " + 600 + " HDD"
-    preemptible: "${preemptible_attempts}"
+        docker: "${gatk_docker}"
+        memory: select_first([mem, 5]) + " GB"
+        disks: "local-disk " + select_first([disk_space_gb, 100]) + " HDD"
+        preemptible: select_first([preemptible_attempts, 2])
   }
 
   output {
@@ -406,8 +428,12 @@ task SplitIntervals {
   File ref_fasta_index
   File ref_dict
   File? gatk4_jar_override
-  Int preemptible_attempts
-  String m2_docker
+
+  # Runtime parameters
+  Int? mem
+  String gatk_docker
+  Int? preemptible_attempts
+  Int? disk_space_gb
 
   command {
     # fail if *any* command below (not just the last) doesn't return 0, in particular if GATK SplitIntervals fails
@@ -425,10 +451,10 @@ task SplitIntervals {
   }
 
   runtime {
-    docker: "${m2_docker}"
-    memory: "3 GB"
-    disks: "local-disk " + 100 + " HDD"
-    preemptible: "${preemptible_attempts}"
+        docker: "${gatk_docker}"
+        memory: select_first([mem, 3]) + " GB"
+        disks: "local-disk " + select_first([disk_space_gb, 100]) + " HDD"
+        preemptible: select_first([preemptible_attempts, 2])
   }
 
   output {
@@ -442,7 +468,6 @@ task oncotate_m2 {
     File m2_vcf
     String case_id
     String? control_id
-    Int preemptible_attempts
     String oncotator_docker
     File? onco_ds_tar_gz
     String? onco_ds_local_db_dir
@@ -450,6 +475,13 @@ task oncotate_m2 {
     String? sequencing_center
     String? sequence_source
     File? default_config_file
+
+  # Runtime parameters
+  Int? mem
+  String oncotator_docker
+  Int? preemptible_attempts
+  Int? disk_space_gb
+
     command <<<
 
           # fail if *any* command below (not just the last) doesn't return 0, in particular if wget fails
@@ -485,10 +517,10 @@ task oncotate_m2 {
 
     runtime {
         docker: "${oncotator_docker}"
-        memory: "3 GB"
+        memory: select_first([mem, 3]) + " GB"
         bootDiskSizeGb: 12
-        disks: "local-disk 100 HDD"
-        preemptible: "${preemptible_attempts}"
+        disks: "local-disk " + select_first([disk_space_gb, 100]) + " HDD"
+        preemptible: select_first([preemptible_attempts, 2])
     }
 
     output {
