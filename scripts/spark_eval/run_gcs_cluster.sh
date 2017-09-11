@@ -12,21 +12,12 @@ if [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-# If the first argument is an integer, it's the number of worker nodes to use
-re='^[0-9]+$'
-if [[ $1 =~ $re ]] ; then
-  NUM_WORKERS=$1
-  shift
-else
-  NUM_WORKERS=5
-fi
-
 # Create cluster
 gcloud dataproc clusters create "$GCS_CLUSTER" \
   --zone us-central1-a \
   --master-machine-type n1-standard-4 \
   --master-boot-disk-size 500 \
-  --num-workers $NUM_WORKERS \
+  --num-workers ${NUM_WORKERS:-10} \
   --worker-machine-type n1-standard-16 \
   --worker-boot-disk-size 2000 \
   --image-version 1.1 \
