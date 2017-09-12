@@ -4,8 +4,8 @@
 #  gatk4_jar: java jar file containing gatk 4 (protected)
 #  intervals: genomic intervals
 #  ref_fasta, ref_fasta_index, ref_dict: reference genome, index, and dictionary
-#  tumor_bam, tumor_bam_index, and tumor_sample_name: self-explanatory
-#  normal_bam, normal_bam_index, and normal_sample_name: self-explanatory
+#  tumor_bam, tumor_bam_index: self-explanatory
+#  normal_bam, normal_bam_index: self-explanatory
 #  pon, pon_index: optional panel of normals and index in vcf format containing known false positves
 #  scatter_count: number of parallel jobs when scattering over intervals
 #  gnomad, gnomad_index: optional database of known germline variants, obtainable from http://gnomad.broadinstitute.org/downloads
@@ -31,10 +31,8 @@ workflow Mutect2 {
   File ref_dict
   File tumor_bam
   File tumor_bam_index
-  String tumor_sample_name
   File? normal_bam
   File? normal_bam_index
-  String? normal_sample_name
   File? pon
   File? pon_index
   Int scatter_count
@@ -72,7 +70,6 @@ workflow Mutect2 {
       gatk4_jar_override = gatk4_jar_override,
       preemptible_attempts = preemptible_attempts,
       gatk_docker = gatk_docker
-
   }
 
   scatter (subintervals in SplitIntervals.interval_files ) {
@@ -85,10 +82,8 @@ workflow Mutect2 {
         ref_dict = ref_dict,
         tumor_bam = tumor_bam,
         tumor_bam_index = tumor_bam_index,
-        tumor_sample_name = tumor_sample_name,
         normal_bam = normal_bam,
         normal_bam_index = normal_bam_index,
-        normal_sample_name = normal_sample_name,
         pon = pon,
         pon_index = pon_index,
         gnomad = gnomad,
@@ -146,8 +141,6 @@ workflow Mutect2 {
         call oncotate_m2 {
             input:
                 m2_vcf = Filter.filtered_vcf,
-                case_id = tumor_sample_name,
-                control_id = normal_sample_name,
                 preemptible_attempts = preemptible_attempts,
                 oncotator_docker = oncotator_docker,
                 onco_ds_tar_gz = onco_ds_tar_gz,
@@ -179,10 +172,8 @@ task M2 {
   File ref_dict
   File tumor_bam
   File tumor_bam_index
-  String tumor_sample_name
   File? normal_bam
   File? normal_bam_index
-  String? normal_sample_name
   File? pon
   File? pon_index
   File? gnomad
@@ -425,8 +416,6 @@ task SplitIntervals {
 
 task oncotate_m2 {
     File m2_vcf
-    String case_id
-    String? control_id
     String oncotator_docker
     File? onco_ds_tar_gz
     String? onco_ds_local_db_dir
@@ -445,6 +434,11 @@ task oncotate_m2 {
 
           # fail if *any* command below (not just the last) doesn't return 0, in particular if wget fails
           set -e
+
+          #get tumor and normal sample names from the M2 vcf header
+          #normal sample gives an empty string if not present
+          case_id=grep 'tumor_sample=' $vcf | sed 's/\#\#tumor_sample\=//'
+          control_id=grep 'normal_sample=' $vcf | sed 's/\#\#normal_sample\=//'
 
           # local db dir is a directory and has been specified
           if [[ -d "${onco_ds_local_db_dir}" ]]; then
@@ -466,11 +460,11 @@ task oncotate_m2 {
           fi
 
         ${default="/root/oncotator_venv/bin/oncotator" oncotator_exe} --db-dir onco_dbdir/ -c $HOME/tx_exact_uniprot_matches.AKT1_CRLF2_FGFR1.txt  \
-            -v ${m2_vcf} ${case_id}.maf.annotated hg19 -i VCF -o TCGAMAF --skip-no-alt --infer-onps --collapse-number-annotations --log_name oncotator.log \
+            -v ${m2_vcf} $case_id.maf.annotated hg19 -i VCF -o TCGAMAF --skip-no-alt --infer-onps --collapse-number-annotations --log_name oncotator.log \
             -a Center:${default="Unknown" sequencing_center} \
             -a source:${default="Unknown" sequence_source} \
-            -a normal_barcode:${default=" " control_id} \
-            -a tumor_barcode:${case_id} \
+            -a normal_barcode:$control_id \
+            -a tumor_barcode:$case_id \
             ${"--default_config " + default_config_file}
     >>>
 
@@ -483,6 +477,6 @@ task oncotate_m2 {
     }
 
     output {
-        File oncotated_m2_maf="${case_id}.maf.annotated"
+        File oncotated_m2_maf=select_first(glob("*..maf.annotated"))
     }
 }

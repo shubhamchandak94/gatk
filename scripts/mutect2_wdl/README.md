@@ -57,14 +57,14 @@ Recommended default values (where possible) are found in ``mutect2_multi_sample_
 - ``Mutect2_Multi.m2_extra_filtering_args`` -- (optional) a string of additional command line arguments of the form "-argument1 value1 -argument2 value2" for Mutect 2 filtering.  Most users will not need this.
 - ``Mutect2_Multi.pair_list`` -- a tab-separated table with no header in the following formats.  For tumor-normal mode:
  ```
- TUMOR_1_BAM</TAB>TUMOR_1_BAM_INDEX</TAB>TUMOR_1_SAMPLE</TAB>NORMAL_1_BAM</TAB>NORMAL_1_BAM_INDEX</TAB>NORMAL_1_SAMPLE</TAB>
- TUMOR_2_BAM</TAB>TUMOR_2_BAM_INDEX</TAB>TUMOR_2_SAMPLE</TAB>NORMAL_2_BAM</TAB>NORMAL_2_BAM_INDEX</TAB>NORMAL_2_SAMPLE</TAB>
+ TUMOR_1_BAM</TAB>TUMOR_1_BAM_INDEX</TAB>NORMAL_1_BAM</TAB>NORMAL_1_BAM_INDEX
+ TUMOR_2_BAM</TAB>TUMOR_2_BAM_INDEX</TAB>NORMAL_2_BAM</TAB>NORMAL_2_BAM_INDEX
  . . .
  ```
 For tumor-only mode:
 ```
-TUMOR_1_BAM</TAB>TUMOR_1_BAM_INDEX</TAB>TUMOR_1_SAMPLE
-TUMOR_2_BAM</TAB>TUMOR_2_BAM_INDEX</TAB>TUMOR_2_SAMPLE
+TUMOR_1_BAM</TAB>TUMOR_1_BAM_INDEX
+TUMOR_2_BAM</TAB>TUMOR_2_BAM_INDEX
 . . .
 ```
 
@@ -94,10 +94,8 @@ Recommended default values (where possible) are found in ``mutect2_template.json
 - ``Mutect2.ref_dict`` -- Please see parameter description above in the mutect2_multi_sample.
 - ``Mutect2.tumor_bam`` -- File path or storage location (depending on backend) of the tumor bam file.
 - ``Mutect2.tumor_bam_index`` --  File path or storage location (depending on backend) of the tumor bam file index.
-- ``Mutect2.tumor_sample_name`` -- A name to identify the tumor sample being used.
 - ``Mutect2.normal_bam`` -- (optional) File path or storage location (depending on backend) of the normal bam file.
 - ``Mutect2.normal_bam_index`` --  (optional, but required if ``Mutect2.normal_bam`` is specified)  File path or storage location (depending on backend) of the normal bam file index.
-- ``Mutect2.normal_sample_name`` --  (optional, but required if ``Mutect2.normal_bam`` is specified)  A name to identify the normal sample being used.
 - ``Mutect2.pon`` -- Please see parameter description above in the mutect2_multi_sample.
 - ``Mutect2.pon_index`` -- Please see parameter description above in the mutect2_multi_sample.
 - ``Mutect2.scatter_count`` -- Please see parameter description above in the mutect2_multi_sample.
@@ -152,15 +150,15 @@ Recommended default values (where possible) are found in ``mutect2-replicate-val
 - ``Mutect2ReplicateValidation.m2_extra_filtering_args`` -- Please see parameter description above in the mutect2_multi_sample.
 - ``Mutect2ReplicateValidation.replicate_pair_list`` -- tab-separated values with six columns in the following format:
  ```
- REP_1_BAM</TAB>REP_1_BAM_INDEX</TAB>REP_1_SAMPLE</TAB>REP_2_BAM</TAB>REP_2_BAM_INDEX</TAB>REP_2_SAMPLE</TAB>
- REP_3_BAM</TAB>REP_3_BAM_INDEX</TAB>REP_3_SAMPLE</TAB>REP_4_BAM</TAB>REP_4_BAM_INDEX</TAB>REP_4_SAMPLE</TAB>
+ REP_1_BAM</TAB>REP_1_BAM_INDEX</TAB>REP_2_BAM</TAB>REP_2_BAM_INDEX
+ REP_3_BAM</TAB>REP_3_BAM_INDEX</TAB>REP_4_BAM</TAB>REP_4_BAM_INDEX
  . . .
  ```
 For example:
 
 ```
-gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V3.bam    gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V3.bai    SM-612V3        gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V4.bam gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V4.bai    SM-612V4
-gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V3.bam    gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V3.bai    SM-612V3        gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V5.bam gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V5.bai    SM-612V5
+gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V3.bam    gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V3.bai    gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V4.bam gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V4.bai
+gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V3.bam    gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V3.bai    gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V5.bam gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V5.bai
 ```
 ### Example json
 
@@ -207,5 +205,5 @@ gs://broad-dsde-methods/takuto/na12878-crsp-ice/SM-612V3.bam    gs://broad-dsde-
 Associated pair_list file (tab separated):
 
 ```
-/home/lichtens/test_onco_m2/gatk/src/test/resources/large/mutect/dream_synthetic_bams/tumor_1.bam	/home/lichtens/test_onco_m2/gatk/src/test/resources/large/mutect/dream_synthetic_bams/tumor_1.bam.bai	 synthetic.challenge.set1.tumor  /home/lichtens/test_onco_m2/gatk/src/test/resources/large/mutect/dream_synthetic_bams/normal_1.bam    /home/lichtens/test_onco_m2/gatk/src/test/resources/large/mutect/dream_synthetic_bams/normal_1.bam.bai	synthetic.challenge.set1.normal
+/home/lichtens/test_onco_m2/gatk/src/test/resources/large/mutect/dream_synthetic_bams/tumor_1.bam	/home/lichtens/test_onco_m2/gatk/src/test/resources/large/mutect/dream_synthetic_bams/tumor_1.bam.bai	 /home/lichtens/test_onco_m2/gatk/src/test/resources/large/mutect/dream_synthetic_bams/normal_1.bam    /home/lichtens/test_onco_m2/gatk/src/test/resources/large/mutect/dream_synthetic_bams/normal_1.bam.bai
 ```

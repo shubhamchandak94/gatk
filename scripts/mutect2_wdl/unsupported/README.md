@@ -22,7 +22,7 @@ The following resources:
 * A reference .fasta file, along with accompanying .fasta.fai and .dict files.
 * A gatk4 java .jar file.
 * A Picard java .jar file.
-* Three lists of .bam files -- one each for 5-plex, 10-plex and 20-plex replicates -- where each row has the format <bam_file.bam></TAB><bam_index.bai></TAB><sample_name>
+* Three lists of .bam files -- one each for 5-plex, 10-plex and 20-plex replicates -- where each row has the format <bam_file.bam></TAB><bam_index.bai>
 * A list of .bam files of the specificity validation's replicates.
 * An intervals file.
 * A gnomAD vcf.

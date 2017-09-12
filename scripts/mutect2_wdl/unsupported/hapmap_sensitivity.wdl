@@ -49,7 +49,6 @@ workflow HapmapSensitivity {
     scatter (row in replicates) {
         File bam = row[0]
         File index = row[1]
-        String sample = row[2]
 
         call MixingFractions {
             input: gatk = gatk, vcf = RestrictIntervals.output_vcf, vcf_idx = RestrictIntervals.output_vcf_idx, bam = bam, bam_idx = index
@@ -70,7 +69,6 @@ workflow HapmapSensitivity {
                 scatter_count = scatter_count,
                 tumor_bam = bam,
                 tumor_bam_index = index,
-                tumor_sample_name = sample,
                 intervals = intervals,
                 ref_fasta = ref_fasta,
                 ref_fasta_index = ref_fasta_index,

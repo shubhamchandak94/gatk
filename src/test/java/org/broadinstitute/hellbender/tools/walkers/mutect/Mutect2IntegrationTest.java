@@ -63,7 +63,7 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
                 "-normal", normalSample,
                 "-R", b37_reference_20_21,
                 "-L", "20",
-                "-germline_resource", GNOMAD.getAbsolutePath(),
+                "-germline-resource", GNOMAD.getAbsolutePath(),
                 "-XL", mask.getAbsolutePath(),
                 "-O", unfilteredVcf.getAbsolutePath()
         };

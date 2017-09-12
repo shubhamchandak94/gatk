@@ -10,12 +10,12 @@
 #  variants_for_contamination, variants_for_contamination_index: vcf of common variants with allele frequencies fo calculating contamination
 #  is_run_orientation_bias_filter: if true, run the orientation bias filter post-processing step
 #  pair_list: a tab-separated table with no header in the following format:
-#   TUMOR_1_BAM</TAB>TUMOR_1_BAM_INDEX</TAB>TUMOR_1_SAMPLE</TAB>NORMAL_1_BAM</TAB>NORMAL_1_BAM_INDEX</TAB>NORMAL_1_SAMPLE
-#   TUMOR_2_BAM</TAB>TUMOR_2_BAM_INDEX</TAB>TUMOR_2_SAMPLE</TAB>NORMAL_2_BAM</TAB>NORMAL_2_BAM_INDEX</TAB>NORMAL_2_SAMPLE
+#   TUMOR_1_BAM</TAB>TUMOR_1_BAM_INDEX</TAB>NORMAL_1_BAM</TAB>NORMAL_1_BAM_INDEX
+#   TUMOR_2_BAM</TAB>TUMOR_2_BAM_INDEX</TAB>NORMAL_2_BAM</TAB>NORMAL_2_BAM_INDEX
 #   . . .
 #  Tumor-only input is the same but without the columns for the normal:
-#  TUMOR_1_BAM</TAB>TUMOR_1_BAM_INDEX</TAB>TUMOR_1_SAMPLE
-#  TUMOR_2_BAM</TAB>TUMOR_2_BAM_INDEX</TAB>TUMOR_2_SAMPLE
+#  TUMOR_1_BAM</TAB>TUMOR_1_BAM_INDEX
+#  TUMOR_2_BAM</TAB>TUMOR_2_BAM_INDEX
 #   . . .
 
 import "mutect2.wdl" as m2
@@ -85,10 +85,9 @@ workflow Mutect2_Multi {
 	scatter( row in pairs ) {
 	    #      If the condition is true, variables inside the 'if' block retain their values outside the block.
 	    #      Otherwise they are treated as null, which in WDL is equivalent to an empty optional
-        if(length(row) == 6) {
-            File normal_bam = row[3]
-            File normal_bam_index = row[4]
-            String normal_sample_name = row[5]
+        if(length(row) == 4) {
+            File normal_bam = row[2]
+            File normal_bam_index = row[3]
         }
 
             call m2.Mutect2 {
@@ -100,10 +99,8 @@ workflow Mutect2_Multi {
                     ref_dict = ref_dict,
                     tumor_bam = row[0],
                     tumor_bam_index = row[1],
-                    tumor_sample_name = row[2],
                     normal_bam = normal_bam,
                     normal_bam_index = normal_bam_index,
-                    normal_sample_name = normal_sample_name,
                     pon = pon,
                     pon_index = pon_index,
                     scatter_count = scatter_count,
