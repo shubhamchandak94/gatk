@@ -5,15 +5,12 @@ import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.vcf.*;
 import org.apache.commons.lang3.ArrayUtils;
-import org.bdgenomics.formats.avro.GenotypeAllele;
 import org.broadinstitute.barclay.argparser.CommandLineException;
 import org.broadinstitute.hellbender.engine.FeatureContext;
 import org.broadinstitute.hellbender.engine.FeatureDataSource;
 import org.broadinstitute.hellbender.engine.FeatureInput;
-import org.broadinstitute.hellbender.engine.ReferenceContext;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.AS_RMSMappingQuality;
-import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.ReducibleAnnotation;
 import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.ReducibleAnnotationData;
 import org.broadinstitute.hellbender.utils.*;
 import org.broadinstitute.hellbender.utils.genotyper.*;
@@ -61,7 +58,7 @@ public final class VariantAnnotatorEngineUnitTest extends BaseTest {
         final ReducibleAnnotationData<Object> myData = new ReducibleAnnotationData<>("-10.0");
 
         new AS_RMSMappingQuality().calculateRawData(vc, likelihoods, myData);
-        Map<String, List<ReducibleAnnotationData<Object>>> testAnnotationData = new HashMap<>();
+        Map<String, List<Object>> testAnnotationData = new HashMap<>();
         testAnnotationData.put(new AS_RMSMappingQuality().getRawKeyName(), Collections.singletonList(myData));
 
         Map<String, Object> value = vae.combineAnnotations(alleles, testAnnotationData);

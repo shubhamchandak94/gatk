@@ -4,6 +4,7 @@ import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.vcf.VCFConstants;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.walkers.annotator.VariantAnnotatorEngine;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
@@ -30,11 +31,12 @@ public class ReferenceConfidenceVariantContextMergerUnitTest extends BaseTest {
     private final Allele ATC = Allele.create("ATC");
     private final Allele del = Allele.SPAN_DEL;
     private final Allele ATCref = Allele.create("ATC", true);
+    private final VariantAnnotatorEngine annotatorEngine = VariantAnnotatorEngine.ofAllMinusExcluded(Collections.EMPTY_LIST, null, Collections.EMPTY_LIST);
 
     @Test(dataProvider = "referenceConfidenceMergeData")
     public void testReferenceConfidenceMerge(final String testID, final List<VariantContext> toMerge, final Locatable loc,
                                              final boolean returnSiteEvenIfMonomorphic, final boolean uniquifySamples, final VariantContext expectedResult) {
-        ReferenceConfidenceVariantContextMerger merger = new ReferenceConfidenceVariantContextMerger();
+        ReferenceConfidenceVariantContextMerger merger = new ReferenceConfidenceVariantContextMerger(annotatorEngine);
         final VariantContext result = merger.merge(toMerge, loc, returnSiteEvenIfMonomorphic ? (byte) 'A' : null, true, uniquifySamples);
         if ( result == null ) {
             Assert.assertTrue(expectedResult == null);

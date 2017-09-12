@@ -130,13 +130,6 @@ public final class CombineGVCFs extends MultiVariantWalker {
      * The rsIDs from this file are used to populate the ID column of the output.  Also, the DB INFO flag will be set when appropriate. Note that dbSNP is not used in any way for the calculations themselves.
      */
 
-//    protected DbsnpArgumentCollection dbsnp = new DbsnpArgumentCollection();
-//    public FeatureInput<VariantContext> getDbsnpRodBinding() { return dbsnp.dbsnp; }
-//    public List<RodBinding<VariantContext>> getCompRodBindings() { return Collections.emptyList(); }
-//    public RodBinding<VariantContext> getSnpEffRodBinding() { return null; }
-//    public List<RodBinding<VariantContext>> getResourceRodBindings() { return Collections.emptyList(); }
-//    public boolean alwaysAppendDbsnpId() { return false; }
-
     // the annotation engine
     @ArgumentCollection
     protected DbsnpArgumentCollection dbsnp = new DbsnpArgumentCollection();
@@ -144,7 +137,7 @@ public final class CombineGVCFs extends MultiVariantWalker {
     List<VariantContext> currentVariants = new ArrayList<>();
     PositionalState currentPositionalState;
     VariantContextWriter vcfWriter;
-    ReferenceConfidenceVariantContextMerger referenceConfidenceVariantContextMerger = new ReferenceConfidenceVariantContextMerger();
+    ReferenceConfidenceVariantContextMerger referenceConfidenceVariantContextMerger;
     SAMSequenceDictionary sequenceDictionary;
 
 
@@ -154,10 +147,13 @@ public final class CombineGVCFs extends MultiVariantWalker {
     SimpleInterval prevPos = null;
     byte refAfterPrevPos;
     byte[] storedReference;
+    ReferenceContext storedReferenceContext;
+    private SimpleInterval storedReferenceLoc;
     private OverlapDetector overlapDetector;
     private boolean hasReduced = false;
-    private SimpleInterval storedReferenceLoc;
 
+    //TODO remove these testing methods
+    List<VariantContext> variantsInOrder = new ArrayList<>();
 
     /**
      * This method keeps track of all the variants it is passed and will feed all the variants that start at the same
@@ -177,6 +173,8 @@ public final class CombineGVCFs extends MultiVariantWalker {
      */
     @Override
     public void apply(VariantContext variant, ReadsContext readsContext, ReferenceContext referenceContext, FeatureContext featureContext) {
+        variantsInOrder.add(variant);
+
         // Filtering out reads which start outside of the specified intervals
         if (ignoreIntervalsOutsideStart && !overlapDetector.overlapsAny(new SimpleInterval(variant.getContig(),variant.getStart(),variant.getStart()))) {
             return;
@@ -220,9 +218,10 @@ public final class CombineGVCFs extends MultiVariantWalker {
         // Update the stored reference if it has a later stop position than the current stored reference
         if ( (storedReferenceLoc == null) ||
                 (!currentPositionalState.loc.getContig().equals(storedReferenceLoc.getContig()) ) ||
-                (storedReferenceLoc.getStart() + storedReference.length < currentPositionalState.loc.getStart() + currentPositionalState.refBases.length)) {
+                (storedReferenceLoc.getEnd() < currentPositionalState.loc.getEnd())) {
             storedReference = currentPositionalState.refBases;
-            storedReferenceLoc = currentPositionalState.refBasesStart;
+            storedReferenceLoc = currentPositionalState.refBasesLoc;
+            storedReferenceContext = currentPositionalState.refBasesSource;
         }
     }
 
@@ -235,11 +234,13 @@ public final class CombineGVCFs extends MultiVariantWalker {
     @VisibleForTesting
     void createIntermediateVariants(SimpleInterval intervalToClose) {
         Set<Integer> sitesToStop = new HashSet<>();
+        ResizeReferenceIfNeeded(intervalToClose);
+
         // Perform any band breaking that needs to be done since the last one
         if ( multipleAtWhichToBreakBands > 0) {
             // TODO figure out +1 from previous code
-            for (int i = intervalToClose.getStart()/multipleAtWhichToBreakBands; i < (intervalToClose.getEnd()-1)/multipleAtWhichToBreakBands; i++) {
-                sitesToStop.add(multipleAtWhichToBreakBands*(i+1));
+            for (int i = (intervalToClose.getStart()/multipleAtWhichToBreakBands)*multipleAtWhichToBreakBands; i <= intervalToClose.getEnd(); i+=multipleAtWhichToBreakBands) {
+                sitesToStop.add(i);
             }
         }
 
@@ -261,12 +262,32 @@ public final class CombineGVCFs extends MultiVariantWalker {
             //TODO be sure about these reference bases and how to get them
             SimpleInterval loc = new SimpleInterval(intervalToClose.getContig(),i,i);
             if (( i <= intervalToClose.getEnd() && i>= intervalToClose.getStart()) && (overlapDetector==null || overlapDetector.overlapsAny(loc))) {
-                byte[] refBases = Arrays.copyOfRange(storedReference, i - storedReferenceLoc.getStart(), i - storedReferenceLoc.getStart() + 1);
+                byte[] refBases = Arrays.copyOfRange(storedReference, i - storedReferenceLoc.getStart(), i - storedReferenceLoc.getStart() + 2);
                 PositionalState tmp = new PositionalState(Collections.emptyList(), refBases, new SimpleInterval(intervalToClose.getContig(), i, i));
                 endPreviousStates(tmp.loc, refBases, tmp, true);
             }
         }
 
+    }
+
+    /**
+     * Method which ensures the reference covers the entire interval to close by resizing the stored ReferenceContext window
+     * @param intervalToClose
+     */
+    private void ResizeReferenceIfNeeded(SimpleInterval intervalToClose) {
+        int leftEdge = 1;
+        int rightEdge = 1;
+        if (storedReferenceLoc.getStart() > intervalToClose.getStart()) {
+            leftEdge = storedReferenceContext.getInterval().getStart() - intervalToClose.getStart();
+        }
+        if (storedReferenceLoc.getEnd() < intervalToClose.getEnd()) {
+            rightEdge = intervalToClose.getEnd() - storedReferenceContext.getInterval().getEnd();
+        }
+        if (rightEdge != 1 || leftEdge != 1) {
+            storedReferenceContext.setWindow(leftEdge,rightEdge);
+            storedReferenceLoc = storedReferenceContext.getWindow();
+            storedReference = storedReferenceContext.getBases();
+        }
     }
 
     /**
@@ -276,14 +297,16 @@ public final class CombineGVCFs extends MultiVariantWalker {
      */
     private void updatePositionalState(List<VariantContext> currentVariants, ReferenceContext referenceContext) {
         if (currentVariants.size()==1 ) {
-            currentPositionalState = new PositionalState(new ArrayList<>(currentVariants), referenceContext.getBases(), referenceContext.getInterval());
-            currentPositionalState.refBasesStart = referenceContext.getWindow();
+            currentPositionalState = new PositionalState(new ArrayList<>(currentVariants), referenceContext, referenceContext.getInterval());
+            currentPositionalState.refBasesLoc = referenceContext.getWindow();
         } else {
             currentPositionalState.VCs.clear();
             currentPositionalState.VCs.addAll(currentVariants);
-            currentPositionalState.refBases = (referenceContext.getBases().length > currentPositionalState.refBases.length?
-                    referenceContext.getBases() : currentPositionalState.refBases);
-            currentPositionalState.refBasesStart = referenceContext.getWindow();
+            if (referenceContext.getBases().length > currentPositionalState.refBases.length) {
+                currentPositionalState.refBases = referenceContext.getBases();
+                currentPositionalState.refBasesLoc = referenceContext.getWindow();
+                currentPositionalState.refBasesSource = referenceContext;
+            }
         }
     }
 
@@ -292,18 +315,30 @@ public final class CombineGVCFs extends MultiVariantWalker {
         final Set<String> samples = new HashSet<>();
         byte[] refBases;
         SimpleInterval loc;
-        public SimpleInterval refBasesStart;
+        public SimpleInterval refBasesLoc;
+        public ReferenceContext refBasesSource;
 
+        public PositionalState(final List<VariantContext> VCs, ReferenceContext referenceContext, final SimpleInterval loc) {
+            this.VCs = VCs;
+            for (final VariantContext vc : VCs) {
+                samples.addAll(vc.getSampleNames());
+            }
+            this.refBases = referenceContext.getBases();
+            this.refBasesLoc = referenceContext.getWindow();
+            this.refBasesSource = referenceContext;
+            this.loc = loc;
+        }
+
+        //TODO two constructors
         public PositionalState(final List<VariantContext> VCs, final byte[] refBases, final SimpleInterval loc) {
             this.VCs = VCs;
-            for(final VariantContext vc : VCs){
+            for (final VariantContext vc : VCs) {
                 samples.addAll(vc.getSampleNames());
             }
             this.refBases = refBases;
             this.loc = loc;
         }
     }
-
 
     @Override
     public void onTraversalStart() {
@@ -327,6 +362,8 @@ public final class CombineGVCFs extends MultiVariantWalker {
         // optimization to prevent mods when we always just want to break bands
         if ( multipleAtWhichToBreakBands == 1 )
             USE_BP_RESOLUTION = true;
+        else if (USE_BP_RESOLUTION)
+            multipleAtWhichToBreakBands = 1;
     }
 
     /**
@@ -399,36 +436,6 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
         //if there's a starting VC with a sample that's already in a current VC, don't skip this position
         return lastPosRun != null && thisPos == lastPosRun.getStart() + 1 && intersection.isEmpty();
-    }
-
-    /**
-     * Does the given list of VariantContexts contain any whose context ends at the given position?
-     *
-     * @param VCs  list of VariantContexts
-     * @param pos  the position to check against
-     * @return true if there are one or more VCs that end at pos, false otherwise
-     */
-    private boolean containsEndingContext(final List<VariantContext> VCs, final int pos) {
-        if ( VCs == null ) throw new IllegalArgumentException("The list of VariantContexts cannot be null");
-
-        for ( final VariantContext vc : VCs ) {
-            if ( isEndingContext(vc, pos) )
-                return true;
-        }
-        return false;
-    }
-
-    /**
-     * Does the given variant context end (in terms of reference blocks, not necessarily formally) at the given position.
-     * Note that for the purposes of this method/tool, deletions are considered to be single base events (as opposed to
-     * reference blocks), hence the check for the number of alleles (because we know there will always be a <NON_REF> allele).
-     *
-     * @param vc   the variant context
-     * @param pos  the position to query against
-     * @return true if this variant context "ends" at this position, false otherwise
-     */
-    private boolean isEndingContext(final VariantContext vc, final int pos) {
-        return vc.getNAlleles() > 2 || vc.getEnd() == pos;
     }
 
     /**
@@ -549,14 +556,12 @@ public final class CombineGVCFs extends MultiVariantWalker {
 
         } else{
             reduceQueuedState();
-
             // Create variants with whatever remains
             SimpleInterval interval = prevPos != null ? new SimpleInterval(prevPos.getContig(), prevPos.getStart(), prevPos.getStart() + storedReference.length + 1) :
                     currentPositionalState.loc;
             createIntermediateVariants(interval);
         }
 
-        //TODO the reference bases are almost certainly wrong here
         // there shouldn't be any state left unless the user cut in the middle of a gVCF block
         if ( !VCs.isEmpty() )
             logger.warn("You have asked for an interval that cuts in the middle of one or more gVCF blocks. Please note that this will cause you to lose records that don't end within your interval.");

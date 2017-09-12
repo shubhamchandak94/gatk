@@ -26,32 +26,12 @@ import java.util.stream.Stream;
 public class ReferenceConfidenceVariantContextMerger {
 
     private final GenotypeLikelihoodCalculators calculators;
-    private VariantAnnotatorEngine annotatorEngine;
+    protected final VariantAnnotatorEngine annotatorEngine;
 
     @VisibleForTesting
-    public ReferenceConfidenceVariantContextMerger(){
-        calculators = new GenotypeLikelihoodCalculators();
-    }
-
-    ReferenceConfidenceVariantContextMerger(VariantAnnotatorEngine engine){
+    protected ReferenceConfidenceVariantContextMerger(VariantAnnotatorEngine engine){
         calculators = new GenotypeLikelihoodCalculators();
         annotatorEngine = engine;
-    }
-
-
-    /**
-     * Combine annotation values by computing the medianish middle element
-     * @param values a list of integers
-     * @return the median element
-     */
-    private static <T extends Comparable<? super T>> T combineAnnotationValues(final List<T> values) {
-        Utils.nonEmpty(values);
-        final int size = values.size();
-        if ( size == 1 ) { return values.get(0); }
-        else {
-            final List<T> sorted = values.stream().sorted().collect(Collectors.toList());
-            return sorted.get(size / 2);
-        }
     }
 
     /**
@@ -92,7 +72,7 @@ public class ReferenceConfidenceVariantContextMerger {
 
         final Set<String> rsIDs = new LinkedHashSet<>(1); // most of the time there's one id
         int depth = 0;
-        final Map<String, List<ReducibleAnnotationData<Object>>> annotationMap = new LinkedHashMap<>();
+        final Map<String, List<Object>> annotationMap = new LinkedHashMap<>();
 
         final GenotypesContext genotypes = GenotypesContext.create();
 
@@ -279,14 +259,10 @@ public class ReferenceConfidenceVariantContextMerger {
         }
     }
 
-    public Map<String, Object> mergeAttributes(int depth, Map<String, List<Comparable>> annotationMap) {
+    public Map<String, Object> mergeAttributes(int depth, List<Allele> alleleList, Map<String, List<Object>> annotationMap) {
         final Map<String, Object> attributes = new LinkedHashMap<>();
 
-        // when combining annotations use the median value from all input vcs which had annotations provided
-        annotationMap.entrySet().stream()
-                .filter(p -> !p.getValue().isEmpty())
-                .forEachOrdered(p -> attributes.put(p.getKey(), combineAnnotationValues(p.getValue()))
-        );
+        attributes.putAll(annotatorEngine.combineAnnotations(alleleList, annotationMap));
 
         if ( depth > 0 ) {
             attributes.put(VCFConstants.DEPTH_KEY, String.valueOf(depth));
@@ -354,33 +330,56 @@ public class ReferenceConfidenceVariantContextMerger {
     /**
      * Adds attributes to the global map from the new context in a sophisticated manner
      *
-     * @param myAttributes               attributes to add from
+     * @param vcPair                     variant context with attributes to add from
      * @param annotationMap              map of annotations for combining later
      */
     @VisibleForTesting
-    protected static <T extends Comparable<? super T>> void addReferenceConfidenceAttributes(final Map<String, Object> myAttributes,
-                                                                                             final Map<String, List<Comparable>> annotationMap) {
-        for ( final Map.Entry<String, Object> p : myAttributes.entrySet() ) {
+    protected void addReferenceConfidenceAttributes(final VCWithNewAlleles vcPair, final Map<String, List<Object>> annotationMap) {
+        for ( final Map.Entry<String, Object> p : vcPair.getVc().getAttributes().entrySet() ) {
             final String key = p.getKey();
-            final Object value = p.getValue();
 
-            // add the annotation values to a list for combining later
-            List<Comparable> values = annotationMap.get(key);
-            if( values == null ) {
-                values = new ArrayList<>();
-                annotationMap.put(key, values);
-            }
-            try {
-                final String stringValue = value.toString();
-                // Branch to avoid unintentional, implicit type conversions that occur with the ? operator.
-                if (stringValue.contains(".")) {
-                    values.add(Double.parseDouble(stringValue));
-                } else {
-                    values.add(Integer.parseInt(stringValue));
+            // If the key corresponds to a requested reducible key, store ReducibleAnnotationData
+            if (annotatorEngine.isReducibleRawKey(key)) {//TODO figure out how to signal the annotaions here
+                final List<Object> valueList = vcPair.getVc().getAttributeAsList(key);
+
+                List<ReducibleAnnotationData<?>> values = (List<ReducibleAnnotationData<?>>)(List<?>) annotationMap.get(key);
+                if (values == null) {
+                    values = new ArrayList<>();
+                    annotationMap.put(key, (List<Object>)(List<?>) values);
                 }
-            } catch (final NumberFormatException e) {
-                // nothing to do
-                //TODO This comes directly from gatk3, we should determine if we should log this or if it happens so much it is not useful to log
+                String combinedString = "";
+                for (int i = 0; i < valueList.size(); i++) {
+                    if (i > 0)
+                        combinedString += ",";
+                    combinedString += valueList.get(i);
+                }
+
+                ReducibleAnnotationData<Object> pairData = new AlleleSpecificAnnotationData<>(vcPair.getNewAlleles(), combinedString);
+                values.add(pairData);
+
+            // Otherwise simply treat it as a number
+            } else{
+                final Object value = p.getValue();
+
+                // add the annotation values to a list for combining later
+                List<Comparable<?>> values = (List<Comparable<?>>)(List<?>) annotationMap.get(key);
+                if (values == null) {
+                    values = new ArrayList<>();
+                    annotationMap.put(key, (List<Object>)(List<?>) values);
+                }
+                try {
+                    final String stringValue = value.toString();
+                    // Branch to avoid unintentional, implicit type conversions that occur with the ? operator.
+                    if (stringValue.contains(".")) {
+                        values.add(Double.parseDouble(stringValue));
+                    } else {
+                        values.add(Integer.parseInt(stringValue));
+                    }
+                    // TODO Check for string anoations matching?
+                } catch (final NumberFormatException e) {
+                    // nothing to do
+                    //TODO This comes directly from gatk3, we should determine if we should log this or if it happens so much it is not useful to log
+                }
             }
         }
     }
@@ -530,53 +529,5 @@ public class ReferenceConfidenceVariantContextMerger {
         }
 
         return newAD;
-    }
-
-
-
-
-    protected <T extends Comparable<? super T>> void addReferenceConfidenceAttributes(final VCWithNewAlleles vcPair,
-                                                                                      final Map<String, List<ReducibleAnnotationData<Object>>> annotationMap) {
-        for (final Map.Entry<String, Object> p : vcPair.getVc().getAttributes().entrySet()) {
-            final String key = p.getKey();
-            final List<Object> valueList = vcPair.getVc().getAttributeAsList(key);
-
-            // add the annotation values to a list for combining later
-            List<ReducibleAnnotationData<Object>> values = annotationMap.get(key);
-            if (values == null) {
-                values = new ArrayList<>();
-                annotationMap.put(key, values);
-            }
-            String combinedString = "";
-            for(int i=0; i < valueList.size(); i++) {
-                if (i > 0)
-                    combinedString += ",";
-                combinedString += valueList.get(i);
-            }
-
-            ReducibleAnnotationData<Object> pairData = new AlleleSpecificAnnotationData<>(vcPair.getNewAlleles(), combinedString);
-            values.add(pairData);
-            annotationMap.put(key, values);
-        }
-
-    }
-
-
-    public Map<String, Object> mergeAttributes(int depth, List<Allele> alleleList, Map<String, List<ReducibleAnnotationData<Object>>> annotationMap) {
-        final Map<String, Object> attributes = new LinkedHashMap<>();
-
-        attributes.putAll(annotatorEngine.combineAnnotations(alleleList, annotationMap));
-        annotationMap.entrySet().stream()
-                .filter(p -> !p.getValue().isEmpty())
-                .forEachOrdered(p -> attributes.put(p.getKey(), (p.getValue()))
-                );
-
-        if ( depth > 0 ) {
-            attributes.put(VCFConstants.DEPTH_KEY, String.valueOf(depth));
-        }
-
-        // remove stale AC and AF based attributes
-        removeStaleAttributesAfterMerge(attributes);
-        return attributes;
     }
 }

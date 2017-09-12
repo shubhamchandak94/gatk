@@ -73,7 +73,7 @@ public class CombineGVCFsIntegrationTest extends CommandLineProgramTest {
                 {new File[]{getTestFile("gvcfExample1.vcf"),getTestFile("gvcfExample2.vcf"),}, getTestFile("testBreakBandsArgumet.vcf"), Arrays.asList(" -L ",  "20:69485-69791", "--breakBandsAtMultiplesOf", "5"), b37_reference_20_21},
                 // Testing mismatched reference bases
                 {new File[]{getTestFile("combine-gvcf-wrong-ref-input1.vcf"),getTestFile("combine-gvcf-wrong-ref-input2.vcf"),}, getTestFile("testWrongReferenceBaseBugFix.vcf"), Arrays.asList(), b37_reference_20_21},
-
+                //TODO add a test for behavior across chromosome spanning
 
 // {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}
 //                {new File[]{getTestFile("spanningDel.1.g.vcf"),getTestFile("spanningDel.2.g.vcf")}, getTestFile("spanningDeletionRestrictToStartExpected.vcf"), Arrays.asList(), b37_reference_20_21}

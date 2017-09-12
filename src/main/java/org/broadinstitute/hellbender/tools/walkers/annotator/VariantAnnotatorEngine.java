@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 public final class VariantAnnotatorEngine {
     private final List<InfoFieldAnnotation> infoAnnotations;
     private final List<GenotypeAnnotation> genotypeAnnotations;
+    private Set<String> reducableKeys;
 
     private final VariantOverlapAnnotator variantOverlapAnnotator;
 
@@ -136,16 +137,19 @@ public final class VariantAnnotatorEngine {
         return descriptions;
     }
 
-    //TODO the following methods are not hooked up to any tools
+
     /**
      * Combine (raw) data for reducible annotations (those that use raw data in gVCFs)
      * Mutates annotationMap by removing the annotations that were combined
+     *
+     * Additionally, will combine other annotations by parsing them as numbers and reducing them
+     * down to the
      * @param allelesList   the list of merged alleles across all variants being combined
      * @param annotationMap attributes of merged variant contexts -- is modifying by removing successfully combined annotations
      * @return  a map containing the keys and raw values for the combined annotations
      */
     //@SuppressWarnings()
-    public Map<String, Object> combineAnnotations(final List<Allele> allelesList, Map<String, List<ReducibleAnnotationData<Object>>> annotationMap) {
+    public Map<String, Object> combineAnnotations(final List<Allele> allelesList, Map<String, List<Object>> annotationMap) {
         Map<String, Object> combinedAnnotations = new HashMap<>();
 
         // go through all the requested reducible info annotationTypes
@@ -153,17 +157,32 @@ public final class VariantAnnotatorEngine {
             if (annotationType instanceof ReducibleAnnotation) {
                 ReducibleAnnotation currentASannotation = (ReducibleAnnotation) annotationType;
                 if (annotationMap.containsKey(currentASannotation.getRawKeyName())) {
-                    final List<ReducibleAnnotationData<Object>> annotationValue = annotationMap.get(currentASannotation.getRawKeyName());
+                    final List<ReducibleAnnotationData> annotationValue = (List<ReducibleAnnotationData>)(List<?>) annotationMap.get(currentASannotation.getRawKeyName());
                     final Map<String, Object> annotationsFromCurrentType = currentASannotation.combineRawData(allelesList, annotationValue);
                     combinedAnnotations.putAll(annotationsFromCurrentType);
                     //remove the combined annotations so that the next method only processes the non-reducible ones
                     annotationMap.remove(currentASannotation.getRawKeyName());
+                }
+            } else {
+                List<String> keys = annotationType.getKeyNames();
+                for (String key : keys) {
+                    List<Comparable<?> > values = (List<Comparable<?>>)(List<?>) annotationMap.get(key);
+                    if (values!= null && values.size() > 0 ) {
+                        final int size = values.size();
+                        if (size == 1) {
+                            combinedAnnotations.put(key, values.get(0));
+                        } else {
+                            final List<?> sorted = values.stream().sorted().collect(Collectors.toList());
+                            combinedAnnotations.put(key, sorted.get(size / 2));
+                        }
+                    }
                 }
             }
         }
         return combinedAnnotations;
     }
 
+//TODO the following methods are not hooked up to any tools
     /**
      * Finalize reducible annotations (those that use raw data in gVCFs)
      * @param vc    the merged VC with the final set of alleles, possibly subset to the number of maxAltAlleles for genotyping
@@ -314,6 +333,23 @@ public final class VariantAnnotatorEngine {
         }
 
         return genotypes;
+    }
+
+    /**
+     * Method which checks if a key is a raw key of the requested reducible annotations
+     * @param key
+     * @return
+     */
+    public boolean isReducibleRawKey(String key) {
+        if (reducableKeys == null) {
+            reducableKeys = new HashSet<>();
+            for (InfoFieldAnnotation annot : infoAnnotations) {
+                if (annot instanceof ReducibleAnnotation) {
+                    reducableKeys.add(((ReducibleAnnotation) annot).getRawKeyName());
+                }
+            }
+        }
+        return reducableKeys.contains(key);
     }
 
     private static final class AnnotationManager {
