@@ -4,7 +4,6 @@ import htsjdk.samtools.util.Locatable;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.barclay.argparser.Argument;
-import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hdf5.HDF5File;
@@ -75,12 +74,15 @@ public final class DenoiseReadCounts extends CommandLineProgram {
     )
     private File inputPanelOfNormalsFile;
 
-    @ArgumentCollection(
+    @Argument(
             doc = "Input annotated-interval file containing annotations for GC content in genomic intervals (output of AnnotateTargets).  " +
                     "Intervals must be identical to and in the same order as those in the input read-count file.  " +
-                    "If a panel of normals containing annotations for GC content is provided, this input will be ignored."
+                    "If a panel of normals containing annotations for GC content is provided, this input will be ignored.",
+            fullName = LegacyCopyNumberArgument.ANNOTATED_INTERVALS_FILE_FULL_NAME,
+            shortName = LegacyCopyNumberArgument.ANNOTATED_INTERVALS_FILE_SHORT_NAME,
+            optional = true
     )
-    private TargetArgumentCollection annotatedIntervalArguments = new TargetArgumentCollection();
+    private File annotatedIntervalsFile = null;
 
     @Argument(
             doc = "Output file for standardized copy-ratio profile.  GC-bias correction will be performed if annotations for GC content are provided.",
@@ -128,8 +130,7 @@ public final class DenoiseReadCounts extends CommandLineProgram {
             try (final HDF5File hdf5PanelOfNormalsFile = new HDF5File(inputPanelOfNormalsFile)) {  //HDF5File implements AutoCloseable
                 final SVDReadCountPanelOfNormals panelOfNormals = HDF5SVDReadCountPanelOfNormals.read(hdf5PanelOfNormalsFile);
 
-                if (annotatedIntervalArguments.readTargetCollection(true) != null &&
-                        panelOfNormals.getOriginalIntervalGCContent() != null) {
+                if (annotatedIntervalsFile != null && panelOfNormals.getOriginalIntervalGCContent() != null) {
                     logger.warn("Panel of normals contains GC-content annotations; ignoring input GC-content annotations...");
                 }
 
@@ -150,8 +151,7 @@ public final class DenoiseReadCounts extends CommandLineProgram {
         } else {    //standardize and perform optional GC-bias correction
             //get GC content (null if not provided)
             final List<Locatable> intervals = readCounts.targets().stream().map(Target::getInterval).collect(Collectors.toList());
-            final double[] intervalGCContent = getIntervalGCContent(logger, intervals,
-                    annotatedIntervalArguments.readTargetCollection(true));
+            final double[] intervalGCContent = validateIntervalGCContent(logger, intervals, annotatedIntervalsFile);
 
             if (intervalGCContent == null) {
                 logger.warn("Neither a panel of normals nor GC-content annotations were provided, so only standardization will be performed...");
@@ -184,14 +184,15 @@ public final class DenoiseReadCounts extends CommandLineProgram {
 
     //TODO move GC-bias correction classes into legacy package, clean up use of TargetCollection, and move this method into appropriate class
     //code is duplicated in CreateReadCountPanelOfNormals for now
-    private static double[] getIntervalGCContent(final Logger logger,
-                                                 final List<Locatable> intervals,
-                                                 final TargetCollection<Target> annotatedIntervals) {
-        if (annotatedIntervals == null) {
+    private static double[] validateIntervalGCContent(final Logger logger,
+                                                      final List<Locatable> intervals,
+                                                      final File annotatedIntervalsFile) {
+        if (annotatedIntervalsFile == null) {
             logger.info("No GC-content annotations for intervals found; GC-bias correction will not be performed...");
             return null;
         }
-        logger.info("Validating and reading GC-content annotations for intervals...");
+        logger.info("Reading and validating GC-content annotations for intervals...");
+        final TargetCollection<Target> annotatedIntervals = TargetArgumentCollection.readTargetCollection(annotatedIntervalsFile);
         Utils.validateArg(annotatedIntervals.targets().stream().map(Target::getInterval).collect(Collectors.toList()).equals(intervals),
                 "Annotated intervals do not match intervals from read-count file.");
         if (!annotatedIntervals.targets().stream().allMatch(t -> t.getAnnotations().hasAnnotation(TargetAnnotation.GC_CONTENT))) {
