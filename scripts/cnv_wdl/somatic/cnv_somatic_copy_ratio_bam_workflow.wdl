@@ -94,13 +94,13 @@ task DenoiseReadCounts {
     String gatk_jar
 
     # Runtime parameters
-    Int? mem = 4
+    Int? mem
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
 
     command {
-        java -Xmx${mem}g -jar ${gatk_jar} DenoiseReadCounts \
+        java -Xmx${default="4" mem}g -jar ${gatk_jar} DenoiseReadCounts \
             --input ${read_counts} \
             --readCountPanelOfNormals ${read_count_pon} \
             --numberOfEigensamples ${default="null" number_of_eigensamples} \
@@ -125,29 +125,29 @@ task DenoiseReadCounts {
 task ModelSegments {
     String entity_id
     File denoised_copy_ratio
-    Int? max_num_segments_per_chromosome = 50
-    Float? kernel_variance = 0.0
-    Int? kernel_approximation_dimension = 100
+    Int? max_num_segments_per_chromosome
+    Float? kernel_variance
+    Int? kernel_approximation_dimension
     Array[Int]? window_sizes = [8, 16, 32, 64, 128, 256]
-    Float? num_changepoints_penalty_linear_factor = 1.0
-    Float? num_changepoints_penalty_log_linear_factor = 1.0
+    Float? num_changepoints_penalty_linear_factor
+    Float? num_changepoints_penalty_log_linear_factor
     String gatk_jar
 
     # Runtime parameters
-    Int? mem = 4
+    Int? mem
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
 
     command {
-        java -Xmx${mem}g -jar ${gatk_jar} ModelSegments \
+        java -Xmx${default="4" mem}g -jar ${gatk_jar} ModelSegments \
             --input ${denoised_copy_ratio} \
-            --maxNumSegmentsPerChromosome ${max_num_segments_per_chromosome} \
-            --kernelVariance ${kernel_variance} \
-            --kernelApproximationDimension ${kernel_approximation_dimension} \
+            --maxNumSegmentsPerChromosome ${default="50" max_num_segments_per_chromosome} \
+            --kernelVariance ${default="0.0" kernel_variance} \
+            --kernelApproximationDimension ${default="100" kernel_approximation_dimension} \
             --windowSizes ${sep= " --windowSizes " window_sizes} \
-            --numChangepointsPenaltyLinearFactor ${num_changepoints_penalty_linear_factor} \
-            --numChangepointsPenaltyLogLinearFactor ${num_changepoints_penalty_log_linear_factor} \
+            --numChangepointsPenaltyLinearFactor ${default="1.0" num_changepoints_penalty_linear_factor} \
+            --numChangepointsPenaltyLogLinearFactor ${default="1.0" num_changepoints_penalty_log_linear_factor} \
             --output ${entity_id}.seg
     }
 
@@ -171,13 +171,13 @@ task CallSegments {
     String gatk_jar
 
     # Runtime parameters
-    Int? mem = 4
+    Int? mem
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
 
     command {
-        java -Xmx${mem}g -jar ${gatk_jar} CallSegments \
+        java -Xmx${default="4" mem}g -jar ${gatk_jar} CallSegments \
             --tangentNormalized ${denoised_copy_ratio} \
             --segments ${copy_ratio_segments} \
             --legacy false \
@@ -207,7 +207,7 @@ task PlotSegmentedCopyRatio {
     String gatk_jar
 
     # Runtime parameters
-    Int? mem = 4
+    Int? mem
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
@@ -217,7 +217,7 @@ task PlotSegmentedCopyRatio {
 
     command {
         mkdir -p ${output_dir_}; \
-        java -Xmx${mem}g -jar ${gatk_jar} PlotSegmentedCopyRatio \
+        java -Xmx${default="4" mem}g -jar ${gatk_jar} PlotSegmentedCopyRatio \
             --preTangentNormalized ${standardized_copy_ratio} \
             --tangentNormalized ${denoised_copy_ratio} \
             --segments ${called_copy_ratio_segments} \

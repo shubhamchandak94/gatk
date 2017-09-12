@@ -5,11 +5,11 @@
 # Pad targets in the target file by the specified amount (this was found to improve sensitivity and specificity)
 task PadTargets {
     File targets
-    Int? padding = 250
+    Int? padding
     String gatk_jar
 
     # Runtime parameters
-    Int? mem = 1
+    Int? mem
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
@@ -20,9 +20,9 @@ task PadTargets {
 
     command <<<
         echo ${filename}; \
-        java -Xmx${mem}g -jar ${gatk_jar} PadTargets \
+        java -Xmx${default="1" mem}g -jar ${gatk_jar} PadTargets \
             --targets ${targets} \
-            --padding ${padding} \
+            --padding ${default="250" padding} \
             --output ${base_filename}.padded.tsv
     >>>
 
@@ -43,18 +43,18 @@ task CollectReadCounts {
     File? padded_targets
     File bam
     File bam_idx
-    Boolean? keep_non_autosomes = false
-    Boolean? disable_all_read_filters = false
-    Boolean? disable_sequence_dictionary_validation = true
-    Boolean? keep_duplicate_reads = true
-    Int? wgs_bin_size = 10000
+    Boolean? keep_non_autosomes
+    Boolean? disable_all_read_filters
+    Boolean? disable_sequence_dictionary_validation
+    Boolean? keep_duplicate_reads
+    Int? wgs_bin_size
     File ref_fasta
     File ref_fasta_fai
     File ref_fasta_dict
     String gatk_jar
 
     # Runtime parameters
-    Int? mem = 4
+    Int? mem
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
@@ -71,18 +71,18 @@ task CollectReadCounts {
     command <<<
         if [ ${is_wgs} = true ]
             then
-                java -Xmx${mem}g -jar ${gatk_jar} SparkGenomeReadCounts \
+                java -Xmx${default="4" mem}g -jar ${gatk_jar} SparkGenomeReadCounts \
                     --input ${bam} \
                     --reference ${ref_fasta} \
-                    --binsize ${wgs_bin_size} \
-                    --keepXYMT ${keep_non_autosomes} \
-                    --disableToolDefaultReadFilters ${disable_all_read_filters} \
-                    --disableSequenceDictionaryValidation ${disable_sequence_dictionary_validation} \
-                    $(if [ ${keep_duplicate_reads} = true ]; then echo " --disableReadFilter NotDuplicateReadFilter "; else echo ""; fi) \
+                    --binsize ${default="10000" wgs_bin_size} \
+                    --keepXYMT ${default="false" keep_non_autosomes} \
+                    --disableToolDefaultReadFilters ${default="false" disable_all_read_filters} \
+                    --disableSequenceDictionaryValidation ${default="true" disable_sequence_dictionary_validation} \
+                    $(if [ ${default="true" keep_duplicate_reads} = true ]; then echo " --disableReadFilter NotDuplicateReadFilter "; else echo ""; fi) \
                     --output ${read_counts_tsv_filename} \
                     --writeHdf5
             else
-                java -Xmx${mem}g -jar ${gatk_jar} CalculateTargetCoverage \
+                java -Xmx${default="4" mem}g -jar ${gatk_jar} CalculateTargetCoverage \
                     --input ${bam} \
                     --reference ${ref_fasta} \
                     --targets ${padded_targets} \
@@ -93,9 +93,9 @@ task CollectReadCounts {
                     --interval_merging_rule OVERLAPPING_ONLY \
                     --interval_padding 0 \
                     --secondsBetweenProgressUpdates 10.0 \
-                    --disableToolDefaultReadFilters ${disable_all_read_filters} \
-                    --disableSequenceDictionaryValidation ${disable_sequence_dictionary_validation} \
-                    $(if [ ${keep_duplicate_reads} = true ]; then echo " --disableReadFilter NotDuplicateReadFilter "; else echo ""; fi) \
+                    --disableToolDefaultReadFilters ${default="false" disable_all_read_filters} \
+                    --disableSequenceDictionaryValidation ${default="true" disable_sequence_dictionary_validation} \
+                    $(if [ ${default="true" keep_duplicate_reads} = true ]; then echo " --disableReadFilter NotDuplicateReadFilter "; else echo ""; fi) \
                     --output ${read_counts_tsv_filename}
         fi
     >>>
@@ -124,13 +124,13 @@ task AnnotateTargets {
     String gatk_jar
 
     # Runtime parameters
-    Int? mem = 4
+    Int? mem
     String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
 
     command {
-        java -Xmx${mem}g -jar ${gatk_jar} AnnotateTargets \
+        java -Xmx${default="4" mem}g -jar ${gatk_jar} AnnotateTargets \
             --targets ${targets} \
             --reference ${ref_fasta} \
             --interval_merging_rule OVERLAPPING_ONLY \

@@ -84,8 +84,8 @@ public class CreateReadCountPanelOfNormals extends SparkCommandLineProgram {
     static final String NUMBER_OF_EIGENSAMPLES_SHORT_NAME = "numEigen";
 
     //default values for filtering (taken from ReCapSeg)
-    private static final double DEFAULT_MINIMUM_INTERVAL_MEDIAN_PERCENTILE = 25.0;
-    private static final double DEFAULT_MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE = 2.0;
+    private static final double DEFAULT_MINIMUM_INTERVAL_MEDIAN_PERCENTILE = 5.0;
+    private static final double DEFAULT_MAXIMUM_ZEROS_IN_SAMPLE_PERCENTAGE = 5.0;
     private static final double DEFAULT_MAXIMUM_ZEROS_IN_INTERVAL_PERCENTAGE = 5.0;
     private static final double DEFAULT_EXTREME_SAMPLE_MEDIAN_PERCENTILE = 2.5;
     private static final double DEFAULT_EXTREME_OUTLIER_TRUNCATION_PERCENTILE = 0.1;
