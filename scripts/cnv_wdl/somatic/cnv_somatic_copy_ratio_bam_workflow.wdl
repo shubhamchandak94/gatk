@@ -203,6 +203,7 @@ task PlotSegmentedCopyRatio {
     File denoised_copy_ratio
     File called_copy_ratio_segments
     File ref_fasta_dict
+    Int? minimum_contig_length
     String? output_dir
     String gatk_jar
 
@@ -222,6 +223,7 @@ task PlotSegmentedCopyRatio {
             --tangentNormalized ${denoised_copy_ratio} \
             --segments ${called_copy_ratio_segments} \
             -SD ${ref_fasta_dict} \
+            --minimumContigLength ${default="2000000" minimum_contig_length} \
             --output ${output_dir_} \
             --outputPrefix ${entity_id}
     }
