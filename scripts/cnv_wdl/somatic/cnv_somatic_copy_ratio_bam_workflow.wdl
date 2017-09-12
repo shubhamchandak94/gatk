@@ -20,7 +20,7 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
     File ref_fasta
     File ref_fasta_dict
     File ref_fasta_fai
-    File read_count_pon
+    File? read_count_pon
     String gatk_jar
     String gatk_docker
 
@@ -89,8 +89,8 @@ workflow CNVSomaticCopyRatioBAMWorkflow {
 task DenoiseReadCounts {
     String entity_id
     File read_counts
-    File read_count_pon
-    Int? number_of_eigensamples #null = use all eigensamples in panel by default
+    File? read_count_pon
+    Int? number_of_eigensamples #use all eigensamples in panel by default
     String gatk_jar
 
     # Runtime parameters
@@ -99,11 +99,13 @@ task DenoiseReadCounts {
     Int? preemptible_attempts
     Int? disk_space_gb
 
+    Int read_count_pon_size = if defined(read_count_pon) then ceil(size(read_count_pon, "GB")) else 0
+
     command {
         java -Xmx${default="4" mem}g -jar ${gatk_jar} DenoiseReadCounts \
             --input ${read_counts} \
-            --readCountPanelOfNormals ${read_count_pon} \
-            --numberOfEigensamples ${default="null" number_of_eigensamples} \
+            ${"--readCountPanelOfNormals " + read_count_pon} \
+            ${"--numberOfEigensamples " + number_of_eigensamples} \
             --standardizedCopyRatioProfile ${entity_id}.standardizedCR.tsv \
             --denoisedCopyRatioProfile ${entity_id}.denoisedCR.tsv
     }
@@ -111,7 +113,7 @@ task DenoiseReadCounts {
     runtime {
         docker: "${gatk_docker}"
         memory: select_first([mem, 5]) + " GB"
-        disks: "local-disk " + select_first([disk_space_gb, ceil(size(read_count_pon, "GB")) + 50]) + " HDD"
+        disks: "local-disk " + select_first([disk_space_gb, read_count_pon_size + 50]) + " HDD"
         preemptible: select_first([preemptible_attempts, 2])
     }
 

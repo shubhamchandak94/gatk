@@ -105,7 +105,7 @@ task CreateReadCountPanelOfNormals {
     Float? extreme_sample_median_percentile
     Float? extreme_outlier_truncation_percentile
     Int? number_of_eigensamples
-    File? annotated_intervals   #null = do not perform explicit GC correction by default
+    File? annotated_intervals   #do not perform explicit GC correction by default
     String gatk_jar
 
     # Runtime parameters
@@ -123,7 +123,7 @@ task CreateReadCountPanelOfNormals {
             --extremeSampleMedianPercentile ${default="2.5" extreme_sample_median_percentile} \
             --extremeOutlierTruncationPercentile ${default="0.1" extreme_outlier_truncation_percentile} \
             --numberOfEigensamples ${default="20" number_of_eigensamples} \
-            --annotatedIntervals ${default="null" annotated_intervals} \
+            ${"--annotatedIntervals " + annotated_intervals} \
             --output ${pon_entity_id}.pon.hdf5
     }
 
