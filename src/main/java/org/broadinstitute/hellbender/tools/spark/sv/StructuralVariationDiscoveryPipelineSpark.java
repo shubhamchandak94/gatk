@@ -74,7 +74,6 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
     protected void runTool( final JavaSparkContext ctx ) {
 
         final SAMFileHeader header = getHeaderForReads();
-        final PipelineOptions pipelineOptions = getAuthenticatedGCSOptions();
 
         // gather evidence, run assembly, and align
         final List<AlignedAssemblyOrExcuse> alignedAssemblyOrExcuseList =
@@ -92,8 +91,8 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
         final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource((com.google.cloud.dataflow.sdk.options.PipelineOptions)null,
                 discoverStageArgs.fastaReference, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
         DiscoverVariantsFromContigAlignmentsSAMSpark
-                .discoverVariantsAndWriteVCF(parsedAlignments, referenceSequenceDictionary,
-                        ctx.broadcast(getReference()), vcfOutputFileName, localLogger);
+                .discoverVariantsAndWriteVCF(parsedAlignments, ctx.broadcast(getReference()), ctx.broadcast(referenceSequenceDictionary),
+                        vcfOutputFileName, localLogger);
     }
 
     public static final class InMemoryAlignmentParser extends AlignedContigGenerator implements Serializable {

@@ -12,6 +12,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscovery
 import org.broadinstitute.hellbender.tools.spark.sv.utils.GATKSVVCFConstants;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -28,29 +29,24 @@ public class AnnotatedVariantProducer implements Serializable {
     /**
      * Given novel adjacency and inferred BND variant types, produce annotated (and mate-connected) VCF BND records.
      * @param novelAdjacencyReferenceLocations  novel adjacency suggesting BND records
-     * @param inferredType                      BND variants of mates to each other, assumed to be of size 2
+     * @param breakendMates                     BND variants of mates to each other, assumed to be of size 2
      * @param contigAlignments                  chimeric alignments of supporting contig
      * @param broadcastReference                reference
      * @throws IOException                      due to reference retrieval
      */
     public static List<VariantContext> produceAnnotatedBNDmatesVcFromNovelAdjacency(final NovelAdjacencyReferenceLocations novelAdjacencyReferenceLocations,
-                                                                                    final List<SvType> inferredType,
+                                                                                    final Tuple2<BreakEndVariantType, BreakEndVariantType> breakendMates,
                                                                                     final Iterable<ChimericAlignment> contigAlignments,
                                                                                     final Broadcast<ReferenceMultiSource> broadcastReference)
             throws IOException {
 
-        Utils.validateArg(inferredType.size() == 2,
-                "Input novel adjacency doesn't seem to suggest mated BND records: \n" +
-                        novelAdjacencyReferenceLocations.toString() + "\n" +
-                        Utils.stream(contigAlignments).map(ChimericAlignment::onErrStringRep).collect(Collectors.toList()));
-
         final VariantContext firstMate =
                 produceAnnotatedVcFromInferredTypeAndRefLocations(novelAdjacencyReferenceLocations.leftJustifiedLeftRefLoc, -1,
-                        novelAdjacencyReferenceLocations.complication, inferredType.get(0), contigAlignments, broadcastReference);
+                        novelAdjacencyReferenceLocations.complication, breakendMates._1, contigAlignments, broadcastReference);
 
         final VariantContext secondMate =
                 produceAnnotatedVcFromInferredTypeAndRefLocations(novelAdjacencyReferenceLocations.leftJustifiedRightRefLoc, -1,
-                        novelAdjacencyReferenceLocations.complication, inferredType.get(1), contigAlignments, broadcastReference);
+                        novelAdjacencyReferenceLocations.complication, breakendMates._2, contigAlignments, broadcastReference);
 
         final VariantContextBuilder builder0 = new VariantContextBuilder(firstMate);
         builder0.attribute(GATKSVVCFConstants.BND_MATEID_STR, secondMate.getID());

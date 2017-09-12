@@ -31,6 +31,7 @@ import scala.Tuple2;
 
 import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 
@@ -97,19 +98,20 @@ public final class SvDiscoverFromLocalAssemblyContigAlignmentsSpark extends GATK
         final JavaRDD<AlignedContig> contigsWithAlignmentsReconstructed =
                 FilterLongReadAlignmentsSAMSpark.filterByScore(reads, header, nonCanonicalChromosomeNamesFile, localLogger)
                         .filter(lr -> lr.alignmentIntervals.size()>1).cache();
+        reads.unpersist();
 
         // divert the long reads by their possible type of SV
         final EnumMap<RawTypes, JavaRDD<AlignedContig>> contigsByPossibleRawTypes =
                 divertReadsByPossiblyRawTypes(contigsWithAlignmentsReconstructed, localLogger);
-
+        contigsWithAlignmentsReconstructed.unpersist();
         if ( !FileUtils.createDirToWriteTo(outputDir) )
             throw new GATKException("Could not create directory " + outputDir + " to write results to.");
-
         if (writeSAMFiles) {
             final Broadcast<SAMFileHeader> headerBroadcast = ctx.broadcast(header);
             contigsByPossibleRawTypes.forEach((k, v) -> writeSAM(v, k.name(), reads, headerBroadcast, outputDir, localLogger));
         }
 
+        // send contigs down different path based on their alignment signatures
         final Broadcast<ReferenceMultiSource> referenceMultiSourceBroadcast = ctx.broadcast(getReference());
         final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource((com.google.cloud.dataflow.sdk.options.PipelineOptions)null,
                 discoverStageArgs.fastaReference, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
@@ -171,10 +173,13 @@ public final class SvDiscoverFromLocalAssemblyContigAlignmentsSpark extends GATK
                 "assumption that input contig's 2 alignments map to the same chr is violated. \n" +
                         contigWithOnlyOneConfigAnd2AlnToSameChrWithoutStrandSwitch.toString());
 
-        final AlignmentInterval intervalOne = contigWithOnlyOneConfigAnd2AlnToSameChrWithoutStrandSwitch.alignmentIntervals.get(0),
-                                intervalTwo = contigWithOnlyOneConfigAnd2AlnToSameChrWithoutStrandSwitch.alignmentIntervals.get(1);
+        final List<AlignmentInterval> deOverlappedTempAlignments =
+                ContigAlignmentsModifier.removeOverlap(contigWithOnlyOneConfigAnd2AlnToSameChrWithoutStrandSwitch.alignmentIntervals.get(0),
+                        contigWithOnlyOneConfigAnd2AlnToSameChrWithoutStrandSwitch.alignmentIntervals.get(1),
+                        null);
 
-        return intervalOne.referenceSpan.getStart() > intervalTwo.referenceSpan.getStart() == intervalOne.forwardStrand;
+        return deOverlappedTempAlignments.get(0).referenceSpan.getStart() > deOverlappedTempAlignments.get(1).referenceSpan.getStart()
+                == deOverlappedTempAlignments.get(0).forwardStrand;
     }
 
     private static boolean isLikelyCpx(final AlignedContig contigWithOnlyOneConfig) {

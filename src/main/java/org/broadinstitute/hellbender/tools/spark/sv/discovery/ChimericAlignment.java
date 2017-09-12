@@ -5,7 +5,9 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.google.common.annotations.VisibleForTesting;
+import htsjdk.samtools.SAMSequenceDictionary;
 import org.broadinstitute.hellbender.exceptions.GATKException;
+import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import scala.Tuple2;
 
@@ -72,8 +74,15 @@ public class ChimericAlignment {
         return Arrays.asList(regionWithLowerCoordOnContig, regionWithHigherCoordOnContig);
     }
 
-    Tuple2<SimpleInterval, SimpleInterval> getCoordSortedReferenceSpans() {
-        if (involvesRefPositionSwitch(regionWithLowerCoordOnContig, regionWithHigherCoordOnContig))
+    /**
+     * Note that this only applies to CA representing novel adjacency between locations on the same chr.
+     * For different chromosome CA, the other is returned but is useless.
+     */
+    Tuple2<SimpleInterval, SimpleInterval> getCoordSortedReferenceSpans(final SAMSequenceDictionary referenceDictionary) {
+
+        final int order = IntervalUtils.compareLocatables(regionWithLowerCoordOnContig.referenceSpan,
+                                                          regionWithHigherCoordOnContig.referenceSpan, referenceDictionary);
+        if (order > 0) //(involvesRefPositionSwitch(regionWithLowerCoordOnContig, regionWithHigherCoordOnContig))
             return new Tuple2<>(regionWithHigherCoordOnContig.referenceSpan, regionWithLowerCoordOnContig.referenceSpan);
         else
             return new Tuple2<>(regionWithLowerCoordOnContig.referenceSpan, regionWithHigherCoordOnContig.referenceSpan);
@@ -103,7 +112,8 @@ public class ChimericAlignment {
      */
     @VisibleForTesting
     public ChimericAlignment(final AlignmentInterval intervalWithLowerCoordOnContig, final AlignmentInterval intervalWithHigherCoordOnContig,
-                             final List<String> insertionMappings, final String sourceContigName) {
+                             final List<String> insertionMappings, final String sourceContigName,
+                             final SAMSequenceDictionary referenceDictionary) {
 
         this.sourceContigName = sourceContigName;
 
@@ -116,19 +126,21 @@ public class ChimericAlignment {
         if (mappedToSameChr) {
             final boolean involvesRefIntervalSwitch = involvesRefPositionSwitch(intervalWithLowerCoordOnContig, intervalWithHigherCoordOnContig);
             this.isForwardStrandRepresentation = isForwardStrandRepresentation(intervalWithLowerCoordOnContig, intervalWithHigherCoordOnContig,
-                    this.strandSwitch, involvesRefIntervalSwitch);
+                                                                                this.strandSwitch, involvesRefIntervalSwitch);
         } else {
             if (strandSwitch == StrandSwitch.NO_SWITCH) {
                 this.isForwardStrandRepresentation = regionWithLowerCoordOnContig.forwardStrand;
             } else {
-                this.isForwardStrandRepresentation = true; // TODO: 9/8/17 placeholder, get it correct later
+                this.isForwardStrandRepresentation = IntervalUtils.compareContigs(intervalWithLowerCoordOnContig.referenceSpan,
+                        intervalWithHigherCoordOnContig.referenceSpan, referenceDictionary) < 0;
             }
         }
 
         this.insertionMappings = insertionMappings;
     }
 
-    //////////// BELOW ARE CODE PATH USED FOR INSERTION, DELETION, AND DUPLICATION (INV OR NOT) AND INVERSION, AND ARE TESTED FOR THAT PURPOSE
+    // =================================================================================================================
+    ////////// BELOW ARE CODE PATH USED FOR INSERTION, DELETION, AND DUPLICATION (INV OR NOT) AND INVERSION, AND ARE TESTED FOR THAT PURPOSE
 
     /**
      * Parse all alignment records for a single locally-assembled contig and generate chimeric alignments if available.
@@ -174,7 +186,8 @@ public class ChimericAlignment {
                 }
             }
 
-            final ChimericAlignment chimericAlignment = new ChimericAlignment(current, next, insertionMappings, alignedContig.contigName);
+            final SAMSequenceDictionary referenceDictionary = null; // don't need this for its intended cases, which are all same CHR mapping
+            final ChimericAlignment chimericAlignment = new ChimericAlignment(current, next, insertionMappings, alignedContig.contigName, referenceDictionary);
             if (!chimericAlignment.isNotSimpleTranslocation())
                 throw new GATKException.ShouldNeverReachHereException("Mapped assembled contigs are sent down the wrong path: " +
                         "contig suggesting \"translocation\" is sent down the insert/deletion path.\n" + alignedContig.toString());
@@ -232,9 +245,9 @@ public class ChimericAlignment {
                                                  final StrandSwitch strandSwitch,
                                                  final boolean involvesReferenceIntervalSwitch) {
 
-        if (strandSwitch == StrandSwitch.NO_SWITCH) {
+        if (strandSwitch == StrandSwitch.NO_SWITCH) { // ins del, easy
             return regionWithLowerCoordOnContig.forwardStrand && regionWithHigherCoordOnContig.forwardStrand;
-        } else {
+        } else { // inversion
             return !involvesReferenceIntervalSwitch;
         }
     }

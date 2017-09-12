@@ -5,10 +5,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.google.common.annotations.VisibleForTesting;
-import htsjdk.samtools.Cigar;
-import htsjdk.samtools.CigarElement;
-import htsjdk.samtools.CigarOperator;
-import htsjdk.samtools.TextCigarCodec;
+import htsjdk.samtools.*;
 import htsjdk.samtools.util.SequenceUtil;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -119,8 +116,8 @@ public final class BreakpointComplications {
      * Given an {@link ChimericAlignment} representing two reference intervals rearranged as two intervals on the locally-assembled contig,
      * identify potential complications such as homology and duplication on the reference and/or on the contig.
      */
-    BreakpointComplications(final ChimericAlignment chimericAlignment, final byte[] contigSeq) {
-        final Tuple2<SimpleInterval, SimpleInterval> referenceSpans = chimericAlignment.getCoordSortedReferenceSpans();
+    BreakpointComplications(final ChimericAlignment chimericAlignment, final byte[] contigSeq, final SAMSequenceDictionary referenceDictionary) {
+        final Tuple2<SimpleInterval, SimpleInterval> referenceSpans = chimericAlignment.getCoordSortedReferenceSpans(referenceDictionary);
         final SimpleInterval leftReferenceSpan  = referenceSpans._1;
         final SimpleInterval rightReferenceSpan = referenceSpans._2;
 
@@ -135,12 +132,19 @@ public final class BreakpointComplications {
         //  under two basic types of SV's: inversion (strand switch necessary) and "translocation" (no strand switch necessary)
         final boolean suggestsSimpleTranslocation = !chimericAlignment.isNotSimpleTranslocation();
         if (suggestsSimpleTranslocation) {
-
+            initForSuspectedTranslocation(chimericAlignment, contigSeq);
         } else if (chimericAlignment.strandSwitch != StrandSwitch.NO_SWITCH) { // TODO: 9/9/17 the case involves an inversion, could be retired once same chr strand-switch BND calls are evaluated.
             initForSimpleInversion(firstAlignmentInterval, secondAlignmentInterval, contigSeq);
         } else {
             initForInsDel(chimericAlignment, leftReferenceSpan, rightReferenceSpan, contigSeq);
         }
+    }
+
+    private void initForSuspectedTranslocation(final ChimericAlignment chimericAlignment, final byte[] contigSeq) {
+        homologyForwardStrandRep = getHomology(chimericAlignment.regionWithLowerCoordOnContig,
+                                               chimericAlignment.regionWithHigherCoordOnContig, contigSeq);
+        insertedSequenceForwardStrandRep = getInsertedSequence(chimericAlignment.regionWithLowerCoordOnContig,
+                                                               chimericAlignment.regionWithHigherCoordOnContig, contigSeq);
     }
 
     // =================================================================================================================

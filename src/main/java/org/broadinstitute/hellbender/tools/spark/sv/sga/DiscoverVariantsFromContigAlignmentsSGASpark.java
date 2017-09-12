@@ -71,8 +71,8 @@ public final class DiscoverVariantsFromContigAlignmentsSGASpark extends GATKSpar
 
         final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource((com.google.cloud.dataflow.sdk.options.PipelineOptions)null,
                 fastaReference, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
-        DiscoverVariantsFromContigAlignmentsSAMSpark.discoverVariantsAndWriteVCF(parsedContigAlignments, referenceSequenceDictionary,
-                ctx.broadcast(getReference()), vcfOutput, localLogger);
+        DiscoverVariantsFromContigAlignmentsSAMSpark.discoverVariantsAndWriteVCF(parsedContigAlignments,
+                ctx.broadcast(getReference()), ctx.broadcast(referenceSequenceDictionary), vcfOutput, localLogger);
     }
 
     public static final class SGATextFormatAlignmentParser extends AlignedContigGenerator {

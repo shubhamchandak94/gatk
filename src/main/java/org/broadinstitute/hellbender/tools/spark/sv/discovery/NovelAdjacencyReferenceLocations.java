@@ -5,10 +5,14 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.google.common.annotations.VisibleForTesting;
+import htsjdk.samtools.SAMSequenceDictionary;
+import org.broadinstitute.hellbender.tools.spark.sv.discovery.prototype.ContigAlignmentsModifier;
+import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import scala.Tuple2;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -26,14 +30,15 @@ public class NovelAdjacencyReferenceLocations {
     public final StrandSwitch strandSwitch;
     public final BreakpointComplications complication;
 
-    public NovelAdjacencyReferenceLocations(final ChimericAlignment chimericAlignment, final byte[] contigSequence) {
+    public NovelAdjacencyReferenceLocations(final ChimericAlignment chimericAlignment, final byte[] contigSequence,
+                                            final SAMSequenceDictionary referenceDictionary) {
 
         // first get strand switch type, then get complications, finally use complications to justify breakpoints
         strandSwitch = chimericAlignment.strandSwitch;
 
-        complication = new BreakpointComplications(chimericAlignment, contigSequence);
+        complication = new BreakpointComplications(chimericAlignment, contigSequence, referenceDictionary);
 
-        final Tuple2<SimpleInterval, SimpleInterval> leftJustifiedBreakpoints = leftJustifyBreakpoints(chimericAlignment, complication);
+        final Tuple2<SimpleInterval, SimpleInterval> leftJustifiedBreakpoints = leftJustifyBreakpoints(chimericAlignment, complication, referenceDictionary);
         leftJustifiedLeftRefLoc = leftJustifiedBreakpoints._1();
         leftJustifiedRightRefLoc = leftJustifiedBreakpoints._2();
     }
@@ -59,59 +64,152 @@ public class NovelAdjacencyReferenceLocations {
      */
     @VisibleForTesting
     static Tuple2<SimpleInterval, SimpleInterval> leftJustifyBreakpoints(final ChimericAlignment ca,
-                                                                         final BreakpointComplications complication) {
+                                                                         final BreakpointComplications complication,
+                                                                         final SAMSequenceDictionary referenceDictionary) {
 
         final int homologyLen = complication.getHomologyForwardStrandRep().length();
 
         final String leftBreakpointRefContig, rightBreakpointRefContig;
         final int leftBreakpointCoord, rightBreakpointCoord;
-        if (complication.hasDuplicationAnnotation()) { // todo : development artifact-- assuming tandem duplication is not co-existing with inversion
-            leftBreakpointRefContig = rightBreakpointRefContig = ca.regionWithLowerCoordOnContig.referenceSpan.getContig();
-            final SimpleInterval leftReferenceInterval, rightReferenceInterval;
-            if (ca.isForwardStrandRepresentation) {
-                leftReferenceInterval = ca.regionWithLowerCoordOnContig.referenceSpan;
-                rightReferenceInterval = ca.regionWithHigherCoordOnContig.referenceSpan;
-            } else {
-                leftReferenceInterval = ca.regionWithHigherCoordOnContig.referenceSpan;
-                rightReferenceInterval = ca.regionWithLowerCoordOnContig.referenceSpan;
-            }
-            if (complication.getDupSeqRepeatNumOnCtg() > complication.getDupSeqRepeatNumOnRef()) {
-                leftBreakpointCoord = leftReferenceInterval.getEnd() - homologyLen
-                        - (complication.getDupSeqRepeatNumOnCtg() - complication.getDupSeqRepeatNumOnRef()) * complication.getDupSeqRepeatUnitRefSpan().size();
-            } else {
-                leftBreakpointCoord = leftReferenceInterval.getEnd() - homologyLen;
-            }
-            rightBreakpointCoord = rightReferenceInterval.getStart() - 1;
-        } else { // inversion and simple deletion & insertion
-            final SimpleInterval leftReferenceInterval, rightReferenceInterval;
-            if (ca.isForwardStrandRepresentation) {
-                leftReferenceInterval  = ca.regionWithLowerCoordOnContig.referenceSpan;
-                rightReferenceInterval = ca.regionWithHigherCoordOnContig.referenceSpan;
-            } else {
-                leftReferenceInterval  = ca.regionWithHigherCoordOnContig.referenceSpan;
-                rightReferenceInterval = ca.regionWithLowerCoordOnContig.referenceSpan;
-            }
-            leftBreakpointRefContig  = leftReferenceInterval.getContig();
-            rightBreakpointRefContig = rightReferenceInterval.getContig();
+        final boolean sameChromosome = ca.regionWithLowerCoordOnContig.referenceSpan.getContig().equals(ca.regionWithHigherCoordOnContig.referenceSpan.getContig());
+        if ( !sameChromosome ) {
             if (ca.strandSwitch == StrandSwitch.NO_SWITCH) {
-                leftBreakpointCoord  = leftReferenceInterval.getEnd() - homologyLen;
-                rightBreakpointCoord = rightReferenceInterval.getStart() - 1;
-            } else if (ca.strandSwitch == StrandSwitch.FORWARD_TO_REVERSE){
-                leftBreakpointCoord  = leftReferenceInterval.getEnd() - homologyLen;
-                rightBreakpointCoord = rightReferenceInterval.getEnd();
+                if (ca.isForwardStrandRepresentation) { // there's no absolute difference between left and right here because they map to different chromosome, left/right could be later defined by dictionary when outputting VCF
+                    if (0 > IntervalUtils.compareContigs(ca.regionWithLowerCoordOnContig.referenceSpan,
+                            ca.regionWithHigherCoordOnContig.referenceSpan, referenceDictionary)) {
+                        leftBreakpointRefContig  = ca.regionWithLowerCoordOnContig.referenceSpan.getContig();
+                        leftBreakpointCoord      = ca.regionWithLowerCoordOnContig.referenceSpan.getEnd() - homologyLen;
+                        rightBreakpointRefContig = ca.regionWithHigherCoordOnContig.referenceSpan.getContig();
+                        rightBreakpointCoord     = ca.regionWithHigherCoordOnContig.referenceSpan.getStart();
+                    } else {
+                        leftBreakpointRefContig  = ca.regionWithHigherCoordOnContig.referenceSpan.getContig();
+                        leftBreakpointCoord      = ca.regionWithHigherCoordOnContig.referenceSpan.getStart();
+                        rightBreakpointRefContig = ca.regionWithLowerCoordOnContig.referenceSpan.getContig();
+                        rightBreakpointCoord     = ca.regionWithLowerCoordOnContig.referenceSpan.getEnd() - homologyLen;
+                    }
+                } else {
+                    if (0 > IntervalUtils.compareContigs(ca.regionWithLowerCoordOnContig.referenceSpan,
+                            ca.regionWithHigherCoordOnContig.referenceSpan, referenceDictionary)) {
+                        leftBreakpointRefContig  = ca.regionWithLowerCoordOnContig.referenceSpan.getContig();
+                        leftBreakpointCoord      = ca.regionWithLowerCoordOnContig.referenceSpan.getStart();
+                        rightBreakpointRefContig = ca.regionWithHigherCoordOnContig.referenceSpan.getContig();
+                        rightBreakpointCoord     = ca.regionWithHigherCoordOnContig.referenceSpan.getEnd() - homologyLen;
+                    } else {
+                        leftBreakpointRefContig  = ca.regionWithHigherCoordOnContig.referenceSpan.getContig();
+                        leftBreakpointCoord      = ca.regionWithHigherCoordOnContig.referenceSpan.getEnd() - homologyLen;
+                        rightBreakpointRefContig = ca.regionWithLowerCoordOnContig.referenceSpan.getContig();
+                        rightBreakpointCoord     = ca.regionWithLowerCoordOnContig.referenceSpan.getStart();
+                    }
+                }
+            } else if (ca.strandSwitch == StrandSwitch.FORWARD_TO_REVERSE) {
+                if (ca.isForwardStrandRepresentation) { // there's no absolute difference between left and right here because they map to different chromosome, left/right could be later defined by dictionary when outputting VCF
+                    leftBreakpointRefContig  = ca.regionWithLowerCoordOnContig.referenceSpan.getContig();
+                    leftBreakpointCoord      = ca.regionWithLowerCoordOnContig.referenceSpan.getEnd() - homologyLen;
+                    rightBreakpointRefContig = ca.regionWithHigherCoordOnContig.referenceSpan.getContig();
+                    rightBreakpointCoord     = ca.regionWithHigherCoordOnContig.referenceSpan.getEnd();
+                } else {
+                    leftBreakpointRefContig  = ca.regionWithHigherCoordOnContig.referenceSpan.getContig();
+                    leftBreakpointCoord      = ca.regionWithHigherCoordOnContig.referenceSpan.getEnd() - homologyLen;
+                    rightBreakpointRefContig = ca.regionWithLowerCoordOnContig.referenceSpan.getContig();
+                    rightBreakpointCoord     = ca.regionWithLowerCoordOnContig.referenceSpan.getEnd();
+                }
             } else {
-                leftBreakpointCoord  = leftReferenceInterval.getStart() - 1;
-                rightBreakpointCoord = rightReferenceInterval.getStart() + homologyLen - 1;
+                if (ca.isForwardStrandRepresentation) { // there's no absolute difference between left and right here because they map to different chromosome, left/right could be later defined by dictionary when outputting VCF
+                    leftBreakpointRefContig  = ca.regionWithLowerCoordOnContig.referenceSpan.getContig();
+                    leftBreakpointCoord      = ca.regionWithLowerCoordOnContig.referenceSpan.getStart();
+                    rightBreakpointRefContig = ca.regionWithHigherCoordOnContig.referenceSpan.getContig();
+                    rightBreakpointCoord     = ca.regionWithHigherCoordOnContig.referenceSpan.getStart() + homologyLen;
+                } else {
+                    leftBreakpointRefContig  = ca.regionWithHigherCoordOnContig.referenceSpan.getContig();
+                    leftBreakpointCoord      = ca.regionWithHigherCoordOnContig.referenceSpan.getStart();
+                    rightBreakpointRefContig = ca.regionWithLowerCoordOnContig.referenceSpan.getContig();
+                    rightBreakpointCoord     = ca.regionWithLowerCoordOnContig.referenceSpan.getStart() + homologyLen;
+                }
+            }
+        } else {
+            leftBreakpointRefContig  = rightBreakpointRefContig = ca.regionWithLowerCoordOnContig.referenceSpan.getContig();
+
+            final AlignmentInterval one = ca.regionWithLowerCoordOnContig,
+                                    two = ca.regionWithHigherCoordOnContig;
+            final List<AlignmentInterval> deOverlappedTempAlignments = ContigAlignmentsModifier.removeOverlap(one, two, null);
+            final AlignmentInterval deOverlappedOne = deOverlappedTempAlignments.get(0),
+                                    deOverlappedTwo = deOverlappedTempAlignments.get(1);
+            final boolean isLikelyTranslocation =
+                    ca.strandSwitch == StrandSwitch.NO_SWITCH
+                            &&
+                    deOverlappedOne.referenceSpan.getStart() > deOverlappedTwo.referenceSpan.getStart() == deOverlappedOne.forwardStrand;
+
+            if (isLikelyTranslocation) {
+                if (ca.isForwardStrandRepresentation) {
+                    leftBreakpointCoord  = ca.regionWithHigherCoordOnContig.referenceSpan.getStart();
+                    rightBreakpointCoord = ca.regionWithLowerCoordOnContig.referenceSpan.getEnd() - homologyLen;
+                } else {
+                    leftBreakpointCoord  = ca.regionWithLowerCoordOnContig.referenceSpan.getStart();
+                    rightBreakpointCoord = ca.regionWithHigherCoordOnContig.referenceSpan.getEnd() - homologyLen;
+                }
+            } else if (complication.hasDuplicationAnnotation()) { // todo : development artifact-- assuming tandem duplication is not co-existing with inversion
+                final SimpleInterval leftReferenceInterval, rightReferenceInterval;
+                if (ca.isForwardStrandRepresentation) {
+                    leftReferenceInterval  = ca.regionWithLowerCoordOnContig.referenceSpan;
+                    rightReferenceInterval = ca.regionWithHigherCoordOnContig.referenceSpan;
+                } else {
+                    leftReferenceInterval  = ca.regionWithHigherCoordOnContig.referenceSpan;
+                    rightReferenceInterval = ca.regionWithLowerCoordOnContig.referenceSpan;
+                }
+                if (complication.getDupSeqRepeatNumOnCtg() > complication.getDupSeqRepeatNumOnRef()) {
+                    leftBreakpointCoord = leftReferenceInterval.getEnd() - homologyLen
+                            - (complication.getDupSeqRepeatNumOnCtg() - complication.getDupSeqRepeatNumOnRef()) * complication.getDupSeqRepeatUnitRefSpan().size();
+                } else {
+                    leftBreakpointCoord = leftReferenceInterval.getEnd() - homologyLen;
+                }
+                rightBreakpointCoord = rightReferenceInterval.getStart() - 1;
+            } else { // inversion and simple deletion & insertion
+                final SimpleInterval leftReferenceInterval, rightReferenceInterval;
+                if (ca.isForwardStrandRepresentation) {
+                    leftReferenceInterval  = ca.regionWithLowerCoordOnContig.referenceSpan;
+                    rightReferenceInterval = ca.regionWithHigherCoordOnContig.referenceSpan;
+                } else {
+                    leftReferenceInterval  = ca.regionWithHigherCoordOnContig.referenceSpan;
+                    rightReferenceInterval = ca.regionWithLowerCoordOnContig.referenceSpan;
+                }
+                if (ca.strandSwitch == StrandSwitch.NO_SWITCH) {
+                    leftBreakpointCoord  = leftReferenceInterval.getEnd() - homologyLen;
+                    rightBreakpointCoord = rightReferenceInterval.getStart() - 1;
+                } else if (ca.strandSwitch == StrandSwitch.FORWARD_TO_REVERSE){
+                    leftBreakpointCoord  = leftReferenceInterval.getEnd() - homologyLen;
+                    rightBreakpointCoord = rightReferenceInterval.getEnd();
+                } else {
+                    leftBreakpointCoord  = leftReferenceInterval.getStart() - 1;
+                    rightBreakpointCoord = rightReferenceInterval.getStart() + homologyLen - 1;
+                }
             }
         }
 
-        Utils.validate(leftBreakpointCoord <= rightBreakpointCoord,
-                "Inferred novel adjacency reference locations have left location after right location : " +
-                        leftBreakpointCoord + "\t" + rightBreakpointCoord + ca.onErrStringRep() + "\n" + complication.toString());
-
         final SimpleInterval leftBreakpoint = new SimpleInterval(leftBreakpointRefContig, leftBreakpointCoord, leftBreakpointCoord);
         final SimpleInterval rightBreakpoint = new SimpleInterval(rightBreakpointRefContig, rightBreakpointCoord, rightBreakpointCoord);
+
+        validateInferredLocations(leftBreakpoint, rightBreakpoint, referenceDictionary, ca, complication);
+
         return new Tuple2<>(leftBreakpoint, rightBreakpoint);
+    }
+
+    private static void validateInferredLocations(final SimpleInterval leftBreakpoint, final SimpleInterval rightBreakpoint,
+                                                  final SAMSequenceDictionary referenceSequenceDictionary,
+                                                  final ChimericAlignment ca, final BreakpointComplications complication) {
+
+        Utils.validate(IntervalUtils.isBefore(leftBreakpoint, rightBreakpoint, referenceSequenceDictionary) ||
+                leftBreakpoint.equals(rightBreakpoint),
+        "Inferred novel adjacency reference locations have left location after right location : left " +
+                leftBreakpoint + "\tright " + rightBreakpoint + "\t"  + ca.onErrStringRep() + "\n" + complication.toString());
+
+        Utils.validate(leftBreakpoint.getEnd() <= referenceSequenceDictionary.getSequence(leftBreakpoint.getContig()).getSequenceLength(),
+                "Inferred breakpoint beyond reference sequence length: inferred location: " + leftBreakpoint +
+                        "\tref contig length: " + referenceSequenceDictionary.getSequence(leftBreakpoint.getContig()).getSequenceLength() + "\n"
+                        + ca.onErrStringRep() + "\n" + complication.toString());
+        Utils.validate(rightBreakpoint.getEnd() <= referenceSequenceDictionary.getSequence(rightBreakpoint.getContig()).getSequenceLength(),
+                "Inferred breakpoint beyond reference sequence length: inferred location: " + rightBreakpoint +
+                        "\tref contig length: " + referenceSequenceDictionary.getSequence(rightBreakpoint.getContig()).getSequenceLength() + "\n"
+                        + ca.onErrStringRep() + "\n" + complication.toString());
     }
 
 
