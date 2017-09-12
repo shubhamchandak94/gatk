@@ -11,7 +11,7 @@ workflow Mutect2_Panel {
 	File ref_dict
     String gatk_docker
     File? gatk4_jar_override
-    Int preemptible_attempts
+    Int? preemptible_attempts
     File picard_jar
     String? m2_extra_args
     String pon_name

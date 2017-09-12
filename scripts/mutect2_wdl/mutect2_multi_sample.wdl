@@ -27,7 +27,12 @@ import "mutect2.wdl" as m2
 task CreateOutputList {
     String output_name
 	Array[String] vcfs
-    Int preemptible_attempts
+
+
+	  # Runtime parameters
+      Int? mem
+      Int? preemptible_attempts
+      Int? disk_space_gb
 
 	command {
 		for vcf in ${sep=" " vcfs}; do
@@ -38,8 +43,9 @@ task CreateOutputList {
 
 	runtime {
         docker: "broadinstitute/genomes-in-the-cloud:2.2.4-1469632282"
-        memory: "1 GB"
-        preemptible: "${preemptible_attempts}"
+        memory: select_first([mem, 1]) + " GB"
+        disks: "local-disk " + select_first([disk_space_gb, 100]) + " HDD"
+        preemptible: select_first([preemptible_attempts, 2])
 	}
 
 	output {

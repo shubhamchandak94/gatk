@@ -226,7 +226,7 @@ task M2 {
   }
 
   output {
-    File output_vcf = select_first(glob("*.vcf"))
+    File output_vcf = glob("*.vcf")[0]
   }
 }
 
@@ -308,7 +308,7 @@ task Filter {
   String gatk4_jar
   File? gatk4_jar_override
   File unfiltered_vcf
-  String filtered_vcf = sub(unfiltered_vcf, "\\.vcf$", "-filtered.vcf")
+  String filtered_vcf_name = sub(unfiltered_vcf, "\\.vcf$", "-filtered.vcf")
   File? intervals
   File? pre_adapter_metrics
   File? tumor_bam
@@ -349,10 +349,10 @@ task Filter {
     # FilterByOrientationBias must come after all of the other filtering.
     if [[ ! -z "${pre_adapter_metrics}" ]]; then
         java -Xmx4g -jar $GATK_JAR FilterByOrientationBias -A ${sep=" -A " artifact_modes} \
-            -V filtered.vcf -P ${pre_adapter_metrics} --output ${filtered_vcf}
+            -V filtered.vcf -P ${pre_adapter_metrics} --output ${filtered_vcf_name}
     else
-        mv filtered.vcf ${filtered_vcf}
-        mv filtered.vcf.idx "${filtered_vcf}.idx"
+        mv filtered.vcf ${filtered_vcf_name}
+        mv filtered.vcf.idx "${filtered_vcf_name}.idx"
     fi
   }
 
@@ -364,8 +364,8 @@ task Filter {
   }
 
   output {
-    File filtered_vcf = "${filtered_vcf}"
-    File filtered_vcf_index = "${filtered_vcf}.idx"
+    File filtered_vcf = "${filtered_vcf_name}"
+    File filtered_vcf_index = "${filtered_vcf_name}.idx"
     File contamination_table = "contamination.table"
   }
 }
@@ -416,7 +416,6 @@ task SplitIntervals {
 
 task oncotate_m2 {
     File m2_vcf
-    String oncotator_docker
     File? onco_ds_tar_gz
     String? onco_ds_local_db_dir
     String? oncotator_exe
@@ -477,6 +476,6 @@ task oncotate_m2 {
     }
 
     output {
-        File oncotated_m2_maf=select_first(glob("*..maf.annotated"))
+        File oncotated_m2_maf=glob("*.maf.annotated")[0]
     }
 }
