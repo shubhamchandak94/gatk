@@ -61,16 +61,6 @@ workflow Mutect2 {
   String basic_bash_docker = "ubuntu:16.04"
   String oncotator_docker
 
-  call ProcessOptionalArguments {
-    input:
-      tumor_sample_name = tumor_sample_name,
-      normal_bam = normal_bam,
-      normal_sample_name = normal_sample_name,
-      preemptible_attempts = preemptible_attempts,
-      docker = basic_bash_docker
-  }
-
-
   call SplitIntervals {
     input:
       gatk4_jar = gatk4_jar,
@@ -103,7 +93,6 @@ workflow Mutect2 {
         pon_index = pon_index,
         gnomad = gnomad,
         gnomad_index = gnomad_index,
-        output_vcf_name = ProcessOptionalArguments.output_name,
         gatk4_jar_override = gatk4_jar_override,
         preemptible_attempts = preemptible_attempts,
         gatk_docker = gatk_docker,
@@ -115,7 +104,6 @@ workflow Mutect2 {
     input:
       gatk4_jar = gatk4_jar,
       input_vcfs = M2.output_vcf,
-      output_vcf_name = ProcessOptionalArguments.output_name,
       gatk4_jar_override = gatk4_jar_override,
       preemptible_attempts = preemptible_attempts,
       gatk_docker = gatk_docker
@@ -139,7 +127,6 @@ workflow Mutect2 {
       gatk4_jar = gatk4_jar,
       gatk4_jar_override = gatk4_jar_override,
       unfiltered_vcf = MergeVCFs.output_vcf,
-      output_vcf_name = ProcessOptionalArguments.output_name,
       intervals = intervals,
       gatk_docker = gatk_docker,
       preemptible_attempts = preemptible_attempts,
@@ -200,7 +187,6 @@ task M2 {
   File? pon_index
   File? gnomad
   File? gnomad_index
-  String output_vcf_name
   File? gatk4_jar_override
   String? m2_extra_args
 
@@ -218,12 +204,16 @@ task M2 {
       GATK_JAR=${gatk4_jar_override}
   fi
 
+  java -Xmx4g -jar $GATK_JAR GetSampleName -I ${tumor_bam} -O tumor_name.txt
+  output_vcf=`cat tumor_name.txt`-tumor-only.vcf
+
   if [[ "_${normal_bam}" == *.bam ]]; then
       java -Xmx4g -jar $GATK_JAR GetSampleName -I ${normal_bam} -O normal_name.txt
       normal_command_line="-I ${normal_bam} -normal `cat normal_name.txt`"
+      output_vcf=`cat tumor_name.txt`-vs-`cat normal_name.txt`.vcf
   fi
 
-  java -Xmx4g -jar $GATK_JAR GetSampleName -I ${tumor_bam} -O tumor_name.txt
+
 
   java -Xmx4g -jar $GATK_JAR Mutect2 \
     -R ${ref_fasta} \
@@ -233,7 +223,7 @@ task M2 {
     ${"--germline-resource " + gnomad} \
     ${"-pon " + pon} \
     ${"-L " + intervals} \
-    -O "${output_vcf_name}.vcf" \
+    -O $output_vcf \
     ${m2_extra_args}
   >>>
 
@@ -245,48 +235,16 @@ task M2 {
   }
 
   output {
-    File output_vcf = "${output_vcf_name}.vcf"
-  }
-}
-
-# HACK: cromwell can't handle the optional normal sample name in output or input --
-# string interpolation of optionals only works inside a command block
-# thus we use this hack
-task ProcessOptionalArguments {
-  String tumor_sample_name
-  String? normal_bam
-  String? normal_sample_name
-
-  # Runtime parameters
-  Int? mem
-  String docker
-  Int? preemptible_attempts
-  Int? disk_space_gb
-
-  command {
-      if [[ "_${normal_bam}" == *.bam ]]; then
-        echo "${tumor_sample_name}-vs-${normal_sample_name}" > name.tmp
-      else
-        echo "${tumor_sample_name}-tumor-only" > name.tmp
-      fi
-  }
-
-  runtime {
-        docker: "${docker}"
-        memory: select_first([mem, 1]) + " GB"
-        disks: "local-disk " + select_first([disk_space_gb, 10]) + " HDD"
-        preemptible: select_first([preemptible_attempts, 2])
-  }
-
-  output {
-      String output_name = read_string("name.tmp")
+    File output_vcf = select_first(glob("*.vcf"))
   }
 }
 
 task MergeVCFs {
   String gatk4_jar
   Array[File] input_vcfs
-  String output_vcf_name
+
+  #the scattered M2 task yields identical vcf names that have nothing to do with the scatter index, so we just pick the first
+  String output_vcf_name = select_first(input_vcfs)
   File? gatk4_jar_override
 
   # Runtime parameters
@@ -294,6 +252,7 @@ task MergeVCFs {
   String gatk_docker
   Int? preemptible_attempts
   Int? disk_space_gb
+
 
   # using MergeVcfs instead of GatherVcfs so we can create indices
   # WARNING 2015-10-28 15:01:48 GatherVcfs  Index creation not currently supported when gathering block compressed VCFs.
@@ -304,7 +263,7 @@ task MergeVCFs {
         GATK_JAR=${gatk4_jar_override}
     fi
 
-    java -Xmx2g -jar $GATK_JAR MergeVcfs -I ${sep=' -I ' input_vcfs} -O ${output_vcf_name}.vcf
+    java -Xmx2g -jar $GATK_JAR MergeVcfs -I ${sep=' -I ' input_vcfs} -O ${output_vcf_name}
   }
 
   runtime {
@@ -315,8 +274,8 @@ task MergeVCFs {
   }
 
   output {
-    File output_vcf = "${output_vcf_name}.vcf"
-    File output_vcf_index = "${output_vcf_name}.vcf.idx"
+    File output_vcf = "${output_vcf_name}"
+    File output_vcf_index = "${output_vcf_name}.idx"
   }
 }
 
@@ -358,7 +317,7 @@ task Filter {
   String gatk4_jar
   File? gatk4_jar_override
   File unfiltered_vcf
-  String output_vcf_name
+  String filtered_vcf = sub(unfiltered_vcf, "\\.vcf$", "-filtered.vcf")
   File? intervals
   File? pre_adapter_metrics
   File? tumor_bam
@@ -399,10 +358,10 @@ task Filter {
     # FilterByOrientationBias must come after all of the other filtering.
     if [[ ! -z "${pre_adapter_metrics}" ]]; then
         java -Xmx4g -jar $GATK_JAR FilterByOrientationBias -A ${sep=" -A " artifact_modes} \
-            -V filtered.vcf -P ${pre_adapter_metrics} --output "${output_vcf_name}-filtered.vcf"
+            -V filtered.vcf -P ${pre_adapter_metrics} --output ${filtered_vcf}
     else
-        mv filtered.vcf "${output_vcf_name}-filtered.vcf"
-        mv filtered.vcf.idx "${output_vcf_name}-filtered.vcf.idx"
+        mv filtered.vcf ${filtered_vcf}
+        mv filtered.vcf.idx "${filtered_vcf}.idx"
     fi
   }
 
@@ -414,8 +373,8 @@ task Filter {
   }
 
   output {
-    File filtered_vcf = "${output_vcf_name}-filtered.vcf"
-    File filtered_vcf_index = "${output_vcf_name}-filtered.vcf.idx"
+    File filtered_vcf = "${filtered_vcf}"
+    File filtered_vcf_index = "${filtered_vcf}.idx"
     File contamination_table = "contamination.table"
   }
 }
