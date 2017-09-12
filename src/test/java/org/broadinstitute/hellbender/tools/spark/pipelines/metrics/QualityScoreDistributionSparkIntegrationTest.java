@@ -27,7 +27,7 @@ public class QualityScoreDistributionSparkIntegrationTest  extends CommandLinePr
 
     //Note: we don't test the contents of the chart pdf
 
-    private static final File TEST_DATA_DIR = new File(getTestDataDir(), "picard/analysis/QualityScoreDistribution");
+    private static final File TEST_DATA_DIR = new File(getTestDataDir(), "../metrics/analysis/QualityScoreDistribution");
 
     @Override
     public String getTestedClassName() {

@@ -17,8 +17,7 @@ import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
 import org.broadinstitute.hellbender.metrics.MetricsUtils;
-import org.broadinstitute.hellbender.tools.picard.analysis.BaseDistributionByCycleMetrics;
-import org.broadinstitute.hellbender.tools.picard.analysis.CollectBaseDistributionByCycle;
+import org.broadinstitute.hellbender.metrics.analysis.BaseDistributionByCycleMetrics;
 import org.broadinstitute.hellbender.utils.R.RScriptExecutor;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.Resource;
@@ -39,6 +38,8 @@ import java.util.List;
 public final class CollectBaseDistributionByCycleSpark extends GATKSparkTool {
 
     private static final long serialVersionUID = 1L;
+
+    private final static String R_SCRIPT = "baseDistributionByCycle.R";
 
     @Argument(doc = "uri for the output file: a local file path",
             shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME, fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME,
@@ -229,7 +230,7 @@ public final class CollectBaseDistributionByCycleSpark extends GATKSparkTool {
                 plotSubtitle = StringUtil.asEmptyIfNull(readGroups.get(0).getLibrary());
             }
             final RScriptExecutor executor = new RScriptExecutor();
-            executor.addScript(new Resource(CollectBaseDistributionByCycle.R_SCRIPT, CollectBaseDistributionByCycle.class));
+            executor.addScript(new Resource(R_SCRIPT, CollectBaseDistributionByCycleSpark.class));
             executor.addArgs(out, chartOutput.getAbsolutePath(), inputFileName, plotSubtitle);
             executor.exec();
         }

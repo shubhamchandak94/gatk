@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.picard.analysis.artifacts;
+package org.broadinstitute.hellbender.utils.artifacts;
 
 import htsjdk.samtools.metrics.MetricBase;
 import htsjdk.samtools.util.QualityUtil;

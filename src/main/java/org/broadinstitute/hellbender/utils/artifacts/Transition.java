@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.picard.analysis.artifacts;
+package org.broadinstitute.hellbender.utils.artifacts;
 
 import htsjdk.samtools.util.SequenceUtil;
 

@@ -14,7 +14,7 @@ import java.util.Iterator;
 import java.util.List;
 
 public final class CollectBaseDistributionByCycleSparkIntegrationTest extends CommandLineProgramTest {
-    private static final File TEST_DATA_DIR = new File(getTestDataDir(), "picard/analysis/CollectBaseDistributionByCycle");
+    private static final File TEST_DATA_DIR = new File(getTestDataDir(), "../metrics/analysis/CollectBaseDistributionByCycle");
 
     //Note: the 'expected' results in this test come from running picard 1.130
     //Note: these tests use the same data and results as the non-spark ones, by design

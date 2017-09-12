@@ -18,7 +18,6 @@ import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
 import org.broadinstitute.hellbender.metrics.MetricsUtils;
-import org.broadinstitute.hellbender.tools.picard.analysis.MeanQualityByCycle;
 import org.broadinstitute.hellbender.utils.R.RScriptExecutor;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.Resource;
@@ -49,6 +48,8 @@ summary = "Program to generate a data table and pdf chart of " +
 public final class MeanQualityByCycleSpark extends GATKSparkTool {
 
     private static final long serialVersionUID = 1l;
+
+    private final static String R_SCRIPT = "meanQualityByCycle.R";
 
     @Argument(doc = "uri for the output file: a local file path",
             shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME, fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME,
@@ -242,7 +243,7 @@ public final class MeanQualityByCycleSpark extends GATKSparkTool {
                 plotSubtitle = StringUtil.asEmptyIfNull(readGroups.get(0).getLibrary());
             }
             final RScriptExecutor executor = new RScriptExecutor();
-            executor.addScript(new Resource(MeanQualityByCycle.R_SCRIPT, MeanQualityByCycle.class));
+            executor.addScript(new Resource(MeanQualityByCycleSpark.R_SCRIPT, MeanQualityByCycleSpark.class));
             executor.addArgs(out, chartOutput.getAbsolutePath(), inputFileName, plotSubtitle);
             executor.exec();
         }

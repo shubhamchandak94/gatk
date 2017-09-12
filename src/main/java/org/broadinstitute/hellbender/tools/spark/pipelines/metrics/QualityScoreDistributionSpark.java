@@ -18,7 +18,6 @@ import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
 import org.broadinstitute.hellbender.metrics.MetricsUtils;
-import org.broadinstitute.hellbender.tools.picard.analysis.QualityScoreDistribution;
 import org.broadinstitute.hellbender.utils.R.RScriptExecutor;
 import org.broadinstitute.hellbender.utils.io.Resource;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
@@ -43,6 +42,8 @@ import java.util.List;
 @BetaFeature
 public final class QualityScoreDistributionSpark extends GATKSparkTool {
     private static final long serialVersionUID = 1l;
+
+    static final private String R_SCRIPT = "qualityScoreDistribution.R";
 
     @Argument(doc = "uri for the output file: a local file path",
             shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME, fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME,
@@ -177,7 +178,7 @@ public final class QualityScoreDistributionSpark extends GATKSparkTool {
             //out is the metrics file
             //chartOutput is the pdf file with the graph
             final RScriptExecutor executor = new RScriptExecutor();
-            executor.addScript(new Resource(QualityScoreDistribution.R_SCRIPT, QualityScoreDistribution.class));
+            executor.addScript(new Resource(R_SCRIPT, QualityScoreDistributionSpark.class));
             executor.addArgs(out, chartOutput.getAbsolutePath(), inputFileName, plotSubtitle);
             executor.exec();
         }

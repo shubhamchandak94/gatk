@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.picard.interval;
+package org.broadinstitute.hellbender.utils.interval;
 
 import htsjdk.samtools.util.Interval;
 import htsjdk.samtools.util.IntervalList;

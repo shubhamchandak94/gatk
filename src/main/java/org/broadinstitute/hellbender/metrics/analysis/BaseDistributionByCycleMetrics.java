@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.picard.analysis;
+package org.broadinstitute.hellbender.metrics.analysis;
 
 import htsjdk.samtools.metrics.MetricBase;
 

@@ -70,8 +70,8 @@ public interface CommandLineProgramTester {
             }
         }
         List<String> argsWithVerbosity = new ArrayList<>(args);
-        argsWithVerbosity.add("--" + StandardArgumentDefinitions.VERBOSITY_NAME);
-        argsWithVerbosity.add(Log.LogLevel.ERROR.name());
+//        argsWithVerbosity.add("--" + StandardArgumentDefinitions.VERBOSITY_NAME);
+//        argsWithVerbosity.add(Log.LogLevel.ERROR.name());
         return argsWithVerbosity;
     }
 

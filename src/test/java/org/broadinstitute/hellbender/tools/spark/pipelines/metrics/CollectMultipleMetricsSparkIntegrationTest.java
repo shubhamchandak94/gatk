@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Set;
 
 public final class CollectMultipleMetricsSparkIntegrationTest extends CommandLineProgramTest{
-    private static final File TEST_DATA_DIR = new File(getTestDataDir(), "picard/analysis/CollectInsertSizeMetrics");
+    private static final File TEST_DATA_DIR = new File(getTestDataDir(), "../metrics/analysis/CollectInsertSizeMetrics");
 
     @Override
     public String getTestedClassName() {

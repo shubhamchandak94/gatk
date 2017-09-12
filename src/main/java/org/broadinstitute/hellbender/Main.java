@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender;
 
+import org.broadinstitute.hellbender.cmdline.PicardCommandLineProgramExecutor;
 import com.google.cloud.storage.StorageException;
 import htsjdk.samtools.util.StringUtil;
 import org.broadinstitute.barclay.argparser.BetaFeature;
@@ -40,6 +41,10 @@ public class Main {
          * to think about number formatting issues.
          */
         Utils.forceJVMLocaleToUSEnglish();
+
+        // When we run picard tools, make sure they use Barclay syntax
+        // This should be replaced with a config setting when PR .... is in
+        System.setProperty("picard.useLegacyParser", "false");
     }
 
     /**
@@ -88,6 +93,7 @@ public class Main {
     protected List<String> getPackageList() {
         final List<String> packageList = new ArrayList<>();
         packageList.addAll(Arrays.asList("org.broadinstitute.hellbender"));
+        packageList.addAll(Arrays.asList("picard"));
         return packageList;
     }
 
@@ -237,20 +243,40 @@ public class Main {
         return "true".equals(System.getenv(STACK_TRACE_ON_USER_EXCEPTION_PROPERTY)) || Boolean.getBoolean(STACK_TRACE_ON_USER_EXCEPTION_PROPERTY);
     }
 
+    // Return a list of Picard tool classes which we want to mask in favor of a like-named GATK tool. Otherwise
+    // we get name collisions.
+    private static Set<String> getMaskedPicardToolClasses() {
+        final Set<String> maskedPicardToolClasses = new HashSet<>();
+
+        // First, add our Picard executor shim, since it has CommandLineProgramProperties of it's own
+        maskedPicardToolClasses.add("org.broadinstitute.hellbender.cmdline.PicardCommandLineProgramExecutor");
+        maskedPicardToolClasses.add("picard.vcf.GatherVcfs");
+        return maskedPicardToolClasses;
+    }
     /**
      * Returns the command line program specified, or prints the usage and exits with exit code 1 *
      */
     private static CommandLineProgram extractCommandLineProgram(final String[] args, final List<String> packageList, final List<Class<? extends CommandLineProgram>> classList, final String commandLineName) {
+
         /** Get the set of classes that are our command line programs **/
         final ClassFinder classFinder = new ClassFinder();
         for (final String pkg : packageList) {
+            classFinder.find(pkg, picard.cmdline.CommandLineProgram.class);
             classFinder.find(pkg, CommandLineProgram.class);
         }
         String missingAnnotationClasses = "";
         final Set<Class<?>> toCheck = classFinder.getClasses();
         toCheck.addAll(classList);
         final Map<String, Class<?>> simpleNameToClass = new LinkedHashMap<>();
+        final Set<String> maskedPicardToolClasses = getMaskedPicardToolClasses();
         for (final Class<?> clazz : toCheck) {
+            String name = clazz.getName();
+            if (name.startsWith("picard")) {
+                int i = 37;
+            }
+            if (maskedPicardToolClasses.contains(clazz.getName())) {
+                continue;
+            }
             // No interfaces, synthetic, primitive, local, or abstract classes.
             if (ClassUtils.canMakeInstances(clazz)) {
                 final CommandLineProgramProperties property = getProgramProperty(clazz);
@@ -260,7 +286,7 @@ public class Main {
                     else missingAnnotationClasses += ", " + clazz.getSimpleName();
                 } else { /** We should check for missing annotations later **/
                     if (simpleNameToClass.containsKey(clazz.getSimpleName())) {
-                        throw new RuntimeException("Simple class name collision: " + clazz.getSimpleName());
+                        throw new RuntimeException("Simple class name collision: " + clazz.getName());
                     }
                     simpleNameToClass.put(clazz.getSimpleName(), clazz);
                 }
@@ -282,7 +308,15 @@ public class Main {
                 if (simpleNameToClass.containsKey(args[0])) {
                     final Class<?> clazz = simpleNameToClass.get(args[0]);
                     try {
-                        return (CommandLineProgram) clazz.newInstance();
+                        if (clazz.getName().startsWith("picard.")) {
+                            // wrap the PicardCommandLineProgram in a PicardCommandLineProgramExecutor
+                            @SuppressWarnings("unchecked")
+                            Class<? extends picard.cmdline.CommandLineProgram> picardClazz =
+                                    (Class<? extends picard.cmdline.CommandLineProgram>) clazz;
+                            return new PicardCommandLineProgramExecutor(picardClazz.newInstance());
+                        } else {
+                            return (CommandLineProgram) clazz.newInstance();
+                        }
                     } catch (final InstantiationException | IllegalAccessException e) {
                         throw new RuntimeException(e);
                     }
