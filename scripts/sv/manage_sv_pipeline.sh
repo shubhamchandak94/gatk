@@ -141,6 +141,8 @@ PATH="${GATK_DIR}/scripts/sv:${PATH}"
 # configure caching .jar files
 export GATK_GCS_STAGING=${GATK_GCS_STAGING:-"gs://${PROJECT_NAME}/${GCS_USER}/staging/"}
 
+echo
+
 # set cluster name based on user and target bam file
 # (NOTE: can override by defining SV_CLUSTER_NAME)
 SANITIZED_BAM=$(basename "${GCS_BAM}" | awk '{print tolower($0)}' | sed 's/[^a-z0-9]/-/g')
@@ -172,6 +174,10 @@ GCS_REFERENCE_IMAGE="/mnt/1/reference/$(basename ${GCS_REFERENCE_IMAGE})"
 LOCAL_LOG_FILE=${SV_LOCAL_LOG_FILE:-"${TMPDIR}sv-discovery-${SANITIZED_BAM}.log"}
 
 # check if GATK jar was compiled from the current .git hash
+echo
+if [[ ! -f ${GATK_DIR}/build/libs/gatk-spark.jar ]]; then
+    echo "Cannot find GATK spark jar, maybe you forgot to build? Given GATK dir.: ${GATK_DIR}"
+fi
 GATK_GIT_HASH=$(readlink ${GATK_DIR}/build/libs/gatk-spark.jar | cut -d- -f5 | cut -c2-)
 CURRENT_GIT_HASH=$(git -C ${GATK_DIR} rev-parse --short HEAD | cut -c1-7)
 if [ "${QUIET}" != "Y" ] && [ "${GATK_GIT_HASH}" != "${CURRENT_GIT_HASH}" ]; then
@@ -191,6 +197,7 @@ GIT_BRANCH=$(git -C ${GATK_DIR} branch --contains ${GATK_GIT_HASH} | rev | cut -
 # set output directory to datetime-git branch-git hash stamped folder
 OUTPUT_DIR="/results/$(date "+%Y-%m-%d_%H.%M.%S")-${GIT_BRANCH}-${GATK_GIT_HASH}"
 
+
 # call create_cluster, using default_init
 while true; do
     echo "#############################################################" 2>&1 | tee -a ${LOCAL_LOG_FILE}
@@ -206,8 +213,10 @@ while true; do
                     INIT_ARGS="${INIT_SCRIPT} gs://${GCS_SAVE_PATH}/init/"
                 fi
 
-                echo "create_cluster.sh ${GATK_DIR} ${PROJECT_NAME} ${CLUSTER_NAME} ${GCS_REFERENCE_DIR} ${GCS_BAM_DIR} ${INIT_ARGS} 2>&1 | tee -a ${LOCAL_LOG_FILE}" | tee -a ${LOCAL_LOG_FILE}
-                create_cluster.sh ${GATK_DIR} ${PROJECT_NAME} ${CLUSTER_NAME} ${GCS_REFERENCE_DIR} ${GCS_BAM_DIR} ${INIT_ARGS} 2>&1 | tee -a ${LOCAL_LOG_FILE}
+                MAX_IDLE_MINUTES=${MAX_IDLE_MINUTES:-60m}
+
+                echo "create_cluster.sh ${GATK_DIR} ${PROJECT_NAME} ${CLUSTER_NAME} ${MAX_IDLE_MINUTES} ${GCS_REFERENCE_DIR} ${GCS_BAM_DIR} ${INIT_ARGS} 2>&1 | tee -a ${LOCAL_LOG_FILE}" | tee -a ${LOCAL_LOG_FILE}
+                create_cluster.sh ${GATK_DIR} ${PROJECT_NAME} ${CLUSTER_NAME} ${MAX_IDLE_MINUTES} ${GCS_REFERENCE_DIR} ${GCS_BAM_DIR} ${INIT_ARGS} 2>&1 | tee -a ${LOCAL_LOG_FILE}
                 break
                 ;;
         [Nn]*)  break
